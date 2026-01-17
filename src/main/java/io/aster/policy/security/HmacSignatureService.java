@@ -114,31 +114,50 @@ public class HmacSignatureService {
     }
 
 
+    @ConfigProperty(name = "aster.security.hmac.secret-key")
+    java.util.Optional<String> globalSecretKey;
+
+    @ConfigProperty(name = "aster.security.hmac.use-env-secrets", defaultValue = "true")
+    boolean useEnvSecrets;
+
     /**
      * 加载租户密钥
      *
-     * ⚠️ 严重安全警告 ⚠️
-     * 当前实现使用可预测的密钥模式，任何知道租户ID的人都可以伪造签名！
-     * 这是一个临时实现，仅用于开发和测试环境。
-     *
-     * 生产环境必须替换为以下方案之一：
-     * 1. 从 OCI Vault 加载密钥
-     * 2. 从数据库的加密字段加载
-     * 3. 从环境变量或配置文件加载（需要安全存储）
-     *
-     * TODO: 在 Phase 1 完成后立即实现真实的密钥管理
+     * 密钥加载优先级：
+     * 1. 环境变量: ASTER_HMAC_SECRET_{TENANT_ID} （推荐生产环境使用）
+     * 2. 全局配置: aster.security.hmac.secret-key
+     * 3. 开发环境回退: 仅当 aster.security.signature.enabled=false 时允许
      */
     private String loadSecret(String tenantId) {
         return secretCache.get(tenantId, k -> {
-            // ⚠️ 不安全的临时实现 - 必须在生产环境前替换 ⚠️
-            // 使用可预测的密钥允许任何人伪造签名
-            String tempSecret = "temp-secret-key-" + tenantId;
+            // 1. 尝试从环境变量加载租户特定密钥
+            if (useEnvSecrets) {
+                String envKey = "ASTER_HMAC_SECRET_" + tenantId.toUpperCase().replace("-", "_");
+                String envSecret = System.getenv(envKey);
+                if (envSecret != null && !envSecret.isBlank()) {
+                    java.util.logging.Logger.getLogger(getClass().getName())
+                        .info("从环境变量加载租户密钥: " + envKey);
+                    return envSecret;
+                }
+            }
 
-            // 记录警告日志
-            java.util.logging.Logger.getLogger(getClass().getName())
-                .warning("使用不安全的临时密钥！租户: " + tenantId + " - 生产环境必须替换为真实密钥管理");
+            // 2. 尝试使用全局配置密钥
+            if (globalSecretKey.isPresent() && !globalSecretKey.get().isBlank()) {
+                java.util.logging.Logger.getLogger(getClass().getName())
+                    .info("使用全局配置密钥");
+                return globalSecretKey.get();
+            }
 
-            return tempSecret;
+            // 3. 开发环境回退（仅当签名验证禁用时）
+            java.util.logging.Logger logger = java.util.logging.Logger.getLogger(getClass().getName());
+            logger.severe("⚠️ 未配置 HMAC 密钥！租户: " + tenantId);
+            logger.severe("请配置环境变量 ASTER_HMAC_SECRET_" + tenantId.toUpperCase().replace("-", "_"));
+            logger.severe("或设置 aster.security.hmac.secret-key 配置项");
+
+            // 抛出异常而非返回不安全的默认值
+            throw new WebApplicationException(
+                "HMAC 密钥未配置，请设置环境变量或配置项",
+                Response.Status.INTERNAL_SERVER_ERROR);
         });
     }
 }

@@ -5,15 +5,22 @@ import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.Provider;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 租户过滤器，拦截所有请求并验证 X-Tenant-Id header。
  *
- * <p>规则：
+ * <p>验证规则：
  * <ul>
  *   <li>缺失 X-Tenant-Id → 400 Bad Request（除豁免路径外）</li>
- *   <li>空字符串或仅空白 → 400 Bad Request（除豁免路径外）</li>
+ *   <li>空字符串或仅空白 → 400 Bad Request</li>
+ *   <li>格式不符合规范 → 400 Bad Request</li>
+ *   <li>租户不在白名单中（如启用） → 403 Forbidden</li>
  *   <li>有效 tenant ID → 填充 TenantContext</li>
  * </ul>
  *
@@ -22,6 +29,13 @@ import org.jboss.logging.Logger;
  *   <li>/q/* - Quarkus 管理端点（health, metrics, openapi）</li>
  *   <li>/graphql/schema.graphql - GraphQL schema 端点</li>
  * </ul>
+ *
+ * <p>安全增强：
+ * <ul>
+ *   <li>租户 ID 格式验证（仅允许字母、数字、连字符、下划线）</li>
+ *   <li>可选的租户白名单验证</li>
+ *   <li>防止租户 ID 注入攻击</li>
+ * </ul>
  */
 @Provider
 public class TenantFilter implements ContainerRequestFilter {
@@ -29,8 +43,32 @@ public class TenantFilter implements ContainerRequestFilter {
     private static final Logger LOG = Logger.getLogger(TenantFilter.class);
     private static final String TENANT_HEADER = "X-Tenant-Id";
 
+    /**
+     * 租户 ID 格式正则表达式
+     * 仅允许：字母、数字、连字符、下划线，长度 1-64
+     */
+    private static final Pattern TENANT_ID_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]{1,64}$");
+
     @Inject
     TenantContext tenantContext;
+
+    /**
+     * 是否启用租户白名单验证
+     */
+    @ConfigProperty(name = "aster.tenant.whitelist.enabled", defaultValue = "false")
+    boolean whitelistEnabled;
+
+    /**
+     * 允许的租户 ID 白名单（逗号分隔）
+     */
+    @ConfigProperty(name = "aster.tenant.whitelist.tenants")
+    Optional<String> allowedTenants;
+
+    /**
+     * 是否启用严格的租户 ID 格式验证
+     */
+    @ConfigProperty(name = "aster.tenant.strict-format", defaultValue = "true")
+    boolean strictFormat;
 
     @Override
     public void filter(ContainerRequestContext requestContext) {
@@ -58,8 +96,23 @@ public class TenantFilter implements ContainerRequestFilter {
             return;
         }
 
-        // 验证 tenant ID 格式（可选：添加更严格的验证）
-        if (tenantId.length() > 255) {
+        // 去除首尾空白
+        tenantId = tenantId.trim();
+
+        // 验证租户 ID 格式（防止注入攻击）
+        if (strictFormat && !TENANT_ID_PATTERN.matcher(tenantId).matches()) {
+            LOG.warnf("Invalid tenant ID format: %s (must match pattern: %s)",
+                sanitizeForLog(tenantId), TENANT_ID_PATTERN.pattern());
+            requestContext.abortWith(
+                Response.status(Response.Status.BAD_REQUEST)
+                    .entity("Invalid tenant ID format. Only alphanumeric characters, hyphens, and underscores are allowed (max 64 characters).")
+                    .build()
+            );
+            return;
+        }
+
+        // 兼容旧版：宽松模式下仅验证长度
+        if (!strictFormat && tenantId.length() > 255) {
             LOG.warnf("Tenant ID too long: %d characters", tenantId.length());
             requestContext.abortWith(
                 Response.status(Response.Status.BAD_REQUEST)
@@ -69,8 +122,43 @@ public class TenantFilter implements ContainerRequestFilter {
             return;
         }
 
+        // 可选：验证租户是否在白名单中
+        if (whitelistEnabled && !isTenantAllowed(tenantId)) {
+            LOG.warnf("Tenant not in whitelist: %s", sanitizeForLog(tenantId));
+            requestContext.abortWith(
+                Response.status(Response.Status.FORBIDDEN)
+                    .entity("Tenant not authorized")
+                    .build()
+            );
+            return;
+        }
+
         // 设置租户上下文
         tenantContext.setCurrentTenant(tenantId);
         LOG.debugf("Tenant context initialized: %s for path: %s", tenantId, path);
+    }
+
+    /**
+     * 检查租户是否在白名单中
+     */
+    private boolean isTenantAllowed(String tenantId) {
+        if (!whitelistEnabled || allowedTenants.isEmpty()) {
+            return true;
+        }
+
+        Set<String> allowed = Set.of(allowedTenants.get().split(","));
+        return allowed.contains(tenantId);
+    }
+
+    /**
+     * 清理日志输出（防止日志注入）
+     */
+    private String sanitizeForLog(String input) {
+        if (input == null) {
+            return "null";
+        }
+        // 截断过长的输入，移除控制字符
+        String sanitized = input.length() > 100 ? input.substring(0, 100) + "..." : input;
+        return sanitized.replaceAll("[\\r\\n\\t]", "_");
     }
 }

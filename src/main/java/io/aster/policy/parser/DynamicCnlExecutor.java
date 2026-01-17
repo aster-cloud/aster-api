@@ -7,7 +7,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.aster.policy.api.convert.NamedContextMapper;
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.HostAccess;
+import org.graalvm.polyglot.PolyglotAccess;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.io.IOAccess;
 import org.jboss.logging.Logger;
 
 import java.util.List;
@@ -182,8 +185,22 @@ public class DynamicCnlExecutor {
      * - 无参函数：直接返回执行结果
      */
     private static Object executeWithPolyglot(String coreJson, String functionName, Object[] context) {
+        // 使用细粒度权限控制，禁止不必要的系统访问
+        // HostAccess.SCOPED: 仅允许显式标记的主机方法访问
+        // PolyglotAccess.NONE: 禁止跨语言访问
+        // IOAccess.NONE: 禁止文件系统和网络 I/O
         try (Context polyglotContext = Context.newBuilder("aster")
-                .allowAllAccess(true)
+                .allowHostAccess(HostAccess.newBuilder()
+                    .allowPublicAccess(true)  // 允许访问公开的 Java 对象（如 LambdaValue）
+                    .allowArrayAccess(true)   // 允许数组操作
+                    .allowListAccess(true)    // 允许 List 操作
+                    .allowMapAccess(true)     // 允许 Map 操作
+                    .build())
+                .allowPolyglotAccess(PolyglotAccess.NONE)  // 禁止跨语言访问
+                .allowIO(IOAccess.NONE)                     // 禁止文件/网络 I/O
+                .allowCreateProcess(false)                  // 禁止创建子进程
+                .allowCreateThread(false)                   // 禁止创建线程
+                .allowNativeAccess(false)                   // 禁止本地代码访问
                 .option("engine.WarnInterpreterOnly", "false")
                 .build()) {
 

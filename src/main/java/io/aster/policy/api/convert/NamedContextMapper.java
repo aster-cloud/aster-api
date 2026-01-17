@@ -1,0 +1,211 @@
+package io.aster.policy.api.convert;
+
+import aster.core.ir.CoreModel;
+import org.jboss.logging.Logger;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 命名参数上下文映射器
+ *
+ * 将命名参数格式的上下文转换为位置参数数组，供 CNL 运行时使用。
+ *
+ * 支持两种上下文格式：
+ * 1. 命名格式（推荐）：Map<参数名, 参数值>
+ *    示例：{ "申请": { "编号": "A001", "金额": 50000 }, "年龄": 25 }
+ *
+ * 2. 位置格式（兼容）：Object[]
+ *    示例：[{ "编号": "A001", "金额": 50000 }, 25]
+ *
+ * 命名格式的优势：
+ * - 用户无需记住参数顺序
+ * - 支持动态生成表单（基于参数名和类型）
+ * - 更易读、易维护
+ */
+public class NamedContextMapper {
+
+    private static final Logger LOG = Logger.getLogger(NamedContextMapper.class);
+
+    /**
+     * 映射结果
+     */
+    public record MappingResult(
+        /** 位置参数数组（供运行时使用） */
+        Object[] positionalArgs,
+        /** 是否使用了命名格式 */
+        boolean wasNamedFormat,
+        /** 警告信息（如未知参数名） */
+        List<String> warnings,
+        /** 错误信息（如缺少必需参数） */
+        String error
+    ) {
+        public static MappingResult success(Object[] args, boolean named, List<String> warnings) {
+            return new MappingResult(args, named, warnings, null);
+        }
+
+        public static MappingResult error(String errorMessage) {
+            return new MappingResult(new Object[0], false, List.of(), errorMessage);
+        }
+
+        public boolean hasError() {
+            return error != null && !error.isEmpty();
+        }
+
+        public boolean success() {
+            return !hasError();
+        }
+    }
+
+    /**
+     * 将上下文映射为位置参数数组
+     *
+     * @param context 上下文（Map 表示命名格式，List/Array 表示位置格式）
+     * @param params  函数参数定义列表
+     * @return 映射结果
+     */
+    public static MappingResult mapContext(Object context, List<CoreModel.Param> params) {
+        if (context == null) {
+            // 空上下文 -> 空数组
+            return MappingResult.success(new Object[0], false, List.of());
+        }
+
+        if (params == null || params.isEmpty()) {
+            // 无参数定义，返回原样包装
+            if (context instanceof List<?> list) {
+                return MappingResult.success(list.toArray(), false, List.of());
+            }
+            if (context.getClass().isArray()) {
+                return MappingResult.success((Object[]) context, false, List.of());
+            }
+            // 单一值包装为数组
+            return MappingResult.success(new Object[] { context }, false, List.of());
+        }
+
+        // 检测上下文格式
+        if (context instanceof Map<?, ?> map) {
+            return tryNamedMapping(map, params);
+        }
+
+        if (context instanceof List<?> list) {
+            // 位置格式
+            return MappingResult.success(list.toArray(), false, List.of());
+        }
+
+        if (context.getClass().isArray()) {
+            // 位置格式
+            return MappingResult.success((Object[]) context, false, List.of());
+        }
+
+        // 单一值，按单参数处理
+        return MappingResult.success(new Object[] { context }, false, List.of());
+    }
+
+    /**
+     * 尝试命名映射
+     *
+     * 检测 Map 的键是否与参数名匹配，如果匹配则按名称提取参数值。
+     */
+    private static MappingResult tryNamedMapping(Map<?, ?> map, List<CoreModel.Param> params) {
+        // 收集参数名
+        List<String> paramNames = params.stream()
+            .map(p -> p.name)
+            .toList();
+
+        // 检测是否为命名格式：至少有一个键与参数名匹配
+        boolean isNamedFormat = false;
+        for (Object key : map.keySet()) {
+            if (key instanceof String keyStr && paramNames.contains(keyStr)) {
+                isNamedFormat = true;
+                break;
+            }
+        }
+
+        if (!isNamedFormat) {
+            // 不是命名格式，按单参数 Map 处理（向后兼容）
+            LOG.debugf("上下文 Map 键与参数名不匹配，按单参数处理");
+            return MappingResult.success(new Object[] { map }, false, List.of());
+        }
+
+        // 命名格式：按参数顺序提取值
+        LOG.debugf("检测到命名格式上下文，参数名: %s", paramNames);
+
+        Object[] positionalArgs = new Object[params.size()];
+        List<String> warnings = new ArrayList<>();
+        List<String> missingParams = new ArrayList<>();
+
+        for (int i = 0; i < params.size(); i++) {
+            CoreModel.Param param = params.get(i);
+            String paramName = param.name;
+
+            if (map.containsKey(paramName)) {
+                positionalArgs[i] = map.get(paramName);
+                LOG.debugf("参数 '%s' (位置 %d) = %s", paramName, i, positionalArgs[i]);
+            } else {
+                // 缺少参数
+                missingParams.add(paramName);
+                positionalArgs[i] = null;
+                LOG.warnf("缺少参数: '%s' (位置 %d)", paramName, i);
+            }
+        }
+
+        // 检查未知参数
+        for (Object key : map.keySet()) {
+            if (key instanceof String keyStr && !paramNames.contains(keyStr)) {
+                warnings.add("未知参数: '" + keyStr + "'");
+                LOG.warnf("未知参数: '%s'", keyStr);
+            }
+        }
+
+        // 如果缺少必需参数，返回错误
+        if (!missingParams.isEmpty()) {
+            String errorMsg = "缺少必需参数: " + String.join(", ", missingParams);
+            LOG.errorf(errorMsg);
+            return MappingResult.error(errorMsg);
+        }
+
+        return MappingResult.success(positionalArgs, true, warnings);
+    }
+
+    /**
+     * 提取函数参数信息
+     *
+     * @param module       Core IR 模块
+     * @param functionName 函数名
+     * @return 参数列表，如果函数不存在返回空列表
+     */
+    public static List<CoreModel.Param> extractFunctionParams(CoreModel.Module module, String functionName) {
+        if (module == null || module.decls == null) {
+            return List.of();
+        }
+
+        for (CoreModel.Decl decl : module.decls) {
+            if (decl instanceof CoreModel.Func func && func.name.equals(functionName)) {
+                return func.params != null ? func.params : List.of();
+            }
+        }
+
+        return List.of();
+    }
+
+    /**
+     * 查找模块中的第一个函数
+     *
+     * @param module Core IR 模块
+     * @return 第一个函数声明，如果没有返回 null
+     */
+    public static CoreModel.Func findFirstFunction(CoreModel.Module module) {
+        if (module == null || module.decls == null) {
+            return null;
+        }
+
+        for (CoreModel.Decl decl : module.decls) {
+            if (decl instanceof CoreModel.Func func) {
+                return func;
+            }
+        }
+
+        return null;
+    }
+}

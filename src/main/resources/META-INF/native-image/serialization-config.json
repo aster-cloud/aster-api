@@ -1,0 +1,146 @@
+{
+  "types": [
+    {
+      "name": "io.aster.audit.entity.AnomalyActionEntity"
+    },
+    {
+      "name": "io.aster.audit.entity.AnomalyActionPayload"
+    },
+    {
+      "name": "io.aster.audit.entity.AnomalyReportEntity"
+    },
+    {
+      "name": "io.aster.audit.inbox.InboxEvent"
+    },
+    {
+      "name": "io.aster.audit.outbox.GenericOutboxEntity"
+    },
+    {
+      "name": "io.aster.audit.rest.model.AnomalyActionResponse"
+    },
+    {
+      "name": "io.aster.audit.rest.model.AnomalyDetailResponse"
+    },
+    {
+      "name": "io.aster.audit.rest.model.AnomalyReplayRequest"
+    },
+    {
+      "name": "io.aster.audit.rest.model.AnomalyStatusUpdateRequest"
+    },
+    {
+      "name": "io.aster.audit.rest.model.VerificationResult"
+    },
+    {
+      "name": "io.aster.ecommerce.rest.model.OrderItem"
+    },
+    {
+      "name": "io.aster.ecommerce.rest.model.OrderRequest"
+    },
+    {
+      "name": "io.aster.ecommerce.rest.model.OrderResponse"
+    },
+    {
+      "name": "io.aster.ecommerce.rest.model.OrderStatusResponse"
+    },
+    {
+      "name": "io.aster.policy.api.model.BatchEvaluationResult"
+    },
+    {
+      "name": "io.aster.policy.api.model.BatchRequest"
+    },
+    {
+      "name": "io.aster.policy.api.model.CompositionStep"
+    },
+    {
+      "name": "io.aster.policy.api.model.ConstructorMetadata"
+    },
+    {
+      "name": "io.aster.policy.api.model.EvaluationAttempt"
+    },
+    {
+      "name": "io.aster.policy.api.model.ParameterInfo"
+    },
+    {
+      "name": "io.aster.policy.api.model.PolicyCompositionResult"
+    },
+    {
+      "name": "io.aster.policy.api.model.PolicyEvaluationResult"
+    },
+    {
+      "name": "io.aster.policy.api.model.PolicyMetadata"
+    },
+    {
+      "name": "io.aster.policy.api.model.PolicyValidationResult"
+    },
+    {
+      "name": "io.aster.policy.api.model.StepResult"
+    },
+    {
+      "name": "io.aster.policy.entity.AuditLog"
+    },
+    {
+      "name": "io.aster.policy.entity.PolicyVersion"
+    },
+    {
+      "name": "io.aster.policy.graphql.types.PolicyTypes$Policy"
+    },
+    {
+      "name": "io.aster.policy.graphql.types.PolicyTypes$PolicyInput"
+    },
+    {
+      "name": "io.aster.policy.graphql.types.PolicyTypes$PolicyRule"
+    },
+    {
+      "name": "io.aster.policy.graphql.types.PolicyTypes$PolicyRuleInput"
+    },
+    {
+      "name": "io.aster.policy.graphql.types.PolicyTypes$PolicyRuleSet"
+    },
+    {
+      "name": "io.aster.policy.graphql.types.PolicyTypes$PolicyRuleSetInput"
+    },
+    {
+      "name": "io.aster.policy.rest.model.BatchEvaluationRequest"
+    },
+    {
+      "name": "io.aster.policy.rest.model.BatchEvaluationResponse"
+    },
+    {
+      "name": "io.aster.policy.rest.model.CacheClearRequest"
+    },
+    {
+      "name": "io.aster.policy.rest.model.CacheClearResponse"
+    },
+    {
+      "name": "io.aster.policy.rest.model.EvaluationRequest"
+    },
+    {
+      "name": "io.aster.policy.rest.model.EvaluationResponse"
+    },
+    {
+      "name": "io.aster.policy.rest.model.PolicyVersionInfo"
+    },
+    {
+      "name": "io.aster.policy.rest.model.RollbackRequest"
+    },
+    {
+      "name": "io.aster.policy.rest.model.RollbackResponse"
+    },
+    {
+      "name": "io.aster.policy.rest.model.ValidationRequest"
+    },
+    {
+      "name": "io.aster.policy.rest.model.ValidationResponse"
+    },
+    {
+      "name": "io.aster.workflow.WorkflowEventEntity"
+    },
+    {
+      "name": "io.aster.workflow.WorkflowStateEntity"
+    },
+    {
+      "name": "io.aster.workflow.WorkflowTimerEntity"
+    }
+  ],
+  "lambdaCapturingTypes": []
+}

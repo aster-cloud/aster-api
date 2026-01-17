@@ -1,0 +1,33 @@
+####
+# Dockerfile for JVM-based deployment of Quarkus Policy API
+#
+# Build: ../../gradlew :quarkus-policy-api:build -Dquarkus.package.type=uber-jar
+# Docker build: podman build -f Dockerfile.jvm -t aster/policy-api:test .
+# Run: podman run -p 8080:8080 aster/policy-api:test
+####
+
+FROM azul/zulu-openjdk-alpine:25-jre
+
+LABEL maintainer="Aster Lang Project"
+LABEL description="Quarkus Policy API - GraphQL Backend"
+
+# 创建工作目录
+WORKDIR /work/
+
+# 复制 Quarkus uber-jar
+COPY build/aster-api-unspecified-runner.jar /work/app.jar
+
+# 创建数据目录
+RUN mkdir -p /work/data
+
+# 暴露端口
+EXPOSE 8080
+
+# 设置环境变量
+ENV JAVA_OPTS="-Xmx512m -Xms256m"
+ENV QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://localhost:5432/aster_policy
+ENV QUARKUS_DATASOURCE_REACTIVE_URL=postgresql://localhost:5432/aster_policy
+ENV QUARKUS_REDIS_HOSTS=redis://localhost:6379
+
+# 运行应用
+CMD ["sh", "-c", "java $JAVA_OPTS -jar /work/app.jar"]

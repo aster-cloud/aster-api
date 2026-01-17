@@ -1,0 +1,61 @@
+# 更新时间：2025-11-13 20:11 NZST
+# 执行者：Codex
+# 说明：Phase 3.8 AnomalyMetrics 告警规则，基于 Quarkus Micrometer 暴露的 Prometheus 指标
+groups:
+  - name: anomaly-rollback-alerts
+    interval: 30s
+    rules:
+      - alert: RollbackFailureRate
+        expr: |
+          rate(anomaly_rollback_failed_total[5m])
+            / clamp_min(rate(anomaly_rollback_attempts_total[5m]), 0.0001) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          service: policy-api
+          component: anomaly-action
+        annotations:
+          summary: 回滚失败率超过 20%
+          description: >
+            过去 5 分钟内的失败率已超过 20%，请排查回滚脚本、依赖服务或输入数据，
+            可能导致阶段 3.8 回滚路径不可用。
+
+      - alert: RollbackExecutionSlow
+        expr: >
+          histogram_quantile(0.95, rate(anomaly_rollback_execution_duration_bucket[5m]))
+            > 5
+        for: 10m
+        labels:
+          severity: warning
+          service: policy-api
+          component: anomaly-action
+        annotations:
+          summary: 回滚执行时长 P95 超过 5 秒
+          description: >
+            过去 10 分钟的 95 百分位执行时长超过 5 秒，表明依赖服务或数据库出现性能退化。
+
+      - alert: RollbackSuccessRateLow
+        expr: |
+          rate(anomaly_rollback_success_total[1h])
+            / clamp_min(rate(anomaly_rollback_attempts_total[1h]), 0.0001) < 0.8
+        for: 30m
+        labels:
+          severity: critical
+          service: policy-api
+          component: anomaly-action
+        annotations:
+          summary: 回滚成功率低于 80%
+          description: >
+            过去 1 小时的成功率低于 80%，说明 Phase 3.8 设计目标未满足，需要立即回滚或切换兜底方案。
+
+      - alert: NoRollbackActivity
+        expr: rate(anomaly_rollback_attempts_total[1h]) == 0
+        for: 1h
+        labels:
+          severity: info
+          service: policy-api
+          component: anomaly-action
+        annotations:
+          summary: 1 小时内无回滚活动
+          description: >
+            过去 1 小时未观测到回滚尝试，若业务仍有异常请求，请检查调度器或事件总线是否停滞。

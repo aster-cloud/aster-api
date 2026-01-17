@@ -1,0 +1,13 @@
+{
+  "resources": {
+    "includes": [
+      { "pattern": "db/migration/.*" },
+      { "pattern": "policies/.*\\.aster" },
+      { "pattern": "META-INF/.*" },
+      { "pattern": ".*\\.json" },
+      { "pattern": ".*\\.ya?ml" },
+      { "pattern": ".*\\.properties" }
+    ]
+  },
+  "bundles": []
+}

@@ -1,0 +1,94 @@
+# syntax=docker/dockerfile:1.7
+#
+# Quarkus Policy API - E2E Test Image (JVM mode for fast builds)
+#
+# 用途: E2E 测试专用，使用 JVM 模式快速构建（~2分钟 vs Native ~15分钟）
+# Stage 1: Node builder 生成 policy-rules-merged.jar 及配套类文件
+# Stage 2: Gradle builder 构建 uber-jar (非 native)
+# Stage 3: JVM Runtime
+
+# ============================================
+# Stage 1: Node builder (emit .aster → jar)
+# ============================================
+FROM node:25-bookworm AS node-builder
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends bash git python3 make g++ curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "amd64" ]; then \
+        JDK_URL="https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.1%2B8/OpenJDK25U-jdk_x64_linux_hotspot_25.0.1_8.tar.gz"; \
+    elif [ "$ARCH" = "arm64" ]; then \
+        JDK_URL="https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.1%2B8/OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.1_8.tar.gz"; \
+    else \
+        echo "Unsupported architecture: $ARCH" && exit 1; \
+    fi && \
+    curl -fsSL "$JDK_URL" -o /tmp/openjdk25.tar.gz && \
+    mkdir -p /usr/lib/jvm/java-25-temurin && \
+    tar -xzf /tmp/openjdk25.tar.gz -C /usr/lib/jvm/java-25-temurin --strip-components=1 && \
+    rm /tmp/openjdk25.tar.gz
+
+ENV JAVA_HOME=/usr/lib/jvm/java-25-temurin
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
+WORKDIR /workspace
+
+COPY package.json package-lock.json tsconfig.json ./
+RUN npm ci
+
+COPY . .
+
+# 预先编译 test/generators.ts 以满足 TypeScript 中对 .js 模块的依赖
+RUN npx tsc test/generators.ts --module ES2022 --target ES2022 --outDir test --declaration false --skipLibCheck
+
+# 构建 TypeScript CLI + 通过 Gradle 生成策略 JAR
+RUN npm run build && \
+    chmod +x gradlew && \
+    ./gradlew -g build/.gradle :quarkus-policy-api:generateAsterJar \
+      --no-daemon --stacktrace \
+      -Dorg.gradle.configuration-cache=false
+
+# ============================================
+# Stage 2: Gradle JVM builder (uber-jar, NOT native)
+# ============================================
+FROM eclipse-temurin:25-jdk AS gradle-builder
+
+WORKDIR /workspace
+
+COPY . .
+# jvm-classes 现在位于 build/aster-out/jvm-classes（隔离目录解决并行构建竞态条件）
+COPY --from=node-builder /workspace/build/aster-out ./build/aster-out
+
+ENV SKIP_GENERATE_ASTER_JAR=true
+
+# 构建 uber-jar（JVM 模式，比 native 快 10 倍+）
+RUN chmod +x gradlew && \
+    ./gradlew :quarkus-policy-api:build \
+      -Dquarkus.package.jar.type=uber-jar \
+      -x test \
+      -Dorg.gradle.configuration-cache=false \
+      --no-daemon --stacktrace
+
+# ============================================
+# Stage 3: Minimal JVM runtime
+# ============================================
+FROM eclipse-temurin:25-jre-alpine
+
+ENV APP_HOME=/app
+WORKDIR ${APP_HOME}
+
+# 复制 uber-jar
+COPY --from=gradle-builder --chown=65534:65534 /workspace/quarkus-policy-api/build/quarkus-policy-api-unspecified-runner.jar ${APP_HOME}/app.jar
+
+USER 65534:65534
+
+EXPOSE 8080
+
+ENV JAVA_OPTS="-Xmx512m -Xms256m"
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
+
+LABEL maintainer="Aster Lang Team" \
+      org.opencontainers.image.title="Aster Policy API E2E (JVM)" \
+      org.opencontainers.image.description="E2E test image using JVM mode for fast builds"

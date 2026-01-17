@@ -1,0 +1,88 @@
+# syntax=docker/dockerfile:1.7
+# Quarkus Policy API - Native Production Image (musl static build)
+
+# ============================================
+# Stage 1: Node builder (emit .aster → jar)
+# ============================================
+FROM node:25-bookworm AS node-builder
+ARG TARGETARCH
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends bash git python3 make g++ curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN if [ "$TARGETARCH" = "amd64" ]; then JDK_ARCH=linux/x64; else JDK_ARCH=linux/aarch64; fi \
+    && curl -fsSL https://api.adoptium.net/v3/binary/latest/25/ea/${JDK_ARCH}/jdk/hotspot/normal/eclipse -o /tmp/openjdk25.tar.gz \
+    && mkdir -p /usr/lib/jvm/java-25-temurin \
+    && tar -xzf /tmp/openjdk25.tar.gz -C /usr/lib/jvm/java-25-temurin --strip-components=1 \
+    && rm /tmp/openjdk25.tar.gz
+
+ENV JAVA_HOME=/usr/lib/jvm/java-25-temurin
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
+WORKDIR /workspace
+
+COPY package.json package-lock.json tsconfig.json ./
+RUN npm ci
+
+COPY . .
+
+RUN npx tsc test/generators.ts --module ES2022 --target ES2022 --outDir test --declaration false --skipLibCheck
+
+RUN npm run build && \
+    FILES=$(find quarkus-policy-api/src/main/resources/policies -name '*.aster' -type f | sort | tr '\n' ' ') && \
+    npm run emit:class -- ${FILES} && \
+    npm run jar:jvm
+
+# ============================================
+# Stage 2: Gradle native builder (musl)
+# ============================================
+FROM ghcr.io/graalvm/native-image-community:25-muslib AS gradle-builder
+ARG UPX_VERSION=5.0.2
+
+USER root
+WORKDIR /workspace
+
+RUN microdnf install -y unzip zip findutils curl binutils xz musl-devel musl-gcc zlib-static libstdc++-static && \
+    microdnf clean all && \
+    curl -fsSL https://github.com/upx/upx/releases/download/v${UPX_VERSION}/upx-${UPX_VERSION}-amd64_linux.tar.xz -o /tmp/upx.tar.xz && \
+    tar -xf /tmp/upx.tar.xz -C /tmp && \
+    mv /tmp/upx-${UPX_VERSION}-amd64_linux/upx /usr/local/bin/upx && \
+    chmod +x /usr/local/bin/upx && \
+    rm -rf /tmp/upx.tar.xz /tmp/upx-${UPX_VERSION}-amd64_linux
+
+ENV JAVA_HOME=/usr/lib64/graalvm/graalvm-community-java25
+ENV GRAALVM_HOME=/usr/lib64/graalvm/graalvm-community-java25
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+ENV GRADLE_OPTS="-Dorg.gradle.java.installations.paths=${JAVA_HOME}"
+ENV ORG_GRADLE_PROJECT_org_gradle_java_installations_paths=${JAVA_HOME}
+ENV ORG_GRADLE_PROJECT_org_gradle_java_installations_auto_download=false
+ENV ORG_GRADLE_PROJECT_org_gradle_java_installations_auto_detect=false
+ENV ORG_GRADLE_PROJECT_org_gradle_configuration_cache=false
+
+COPY . .
+# jvm-classes 现在位于 build/aster-out/jvm-classes（隔离目录解决并行构建竞态条件）
+COPY --from=node-builder /workspace/build/aster-out ./build/aster-out
+ENV SKIP_GENERATE_ASTER_JAR=true
+
+RUN chmod +x gradlew && \
+    ./gradlew :quarkus-policy-api:build \
+      -Dquarkus.package.type=native \
+      -Dquarkus.native.additional-build-args="--static,--libc=musl,--no-fallback,-H:+StripDebugInfo,-H:+RemoveUnusedSymbols,-H:+ReportExceptionStackTraces,--initialize-at-run-time=io.micrometer.common.util.internal.logging.Slf4JLoggerFactory" \
+      -x test \
+      -Dorg.gradle.configuration-cache=false \
+      --no-daemon --stacktrace
+
+RUN strip -s /workspace/quarkus-policy-api/build/quarkus-policy-api-unspecified-runner && \
+    upx --best --lzma /workspace/quarkus-policy-api/build/quarkus-policy-api-unspecified-runner >/dev/null
+
+# ============================================
+# Stage 3: Minimal runtime image (static binary)
+# ============================================
+FROM gcr.io/distroless/static-debian12:nonroot
+
+WORKDIR /app
+COPY --from=gradle-builder --chown=nonroot:nonroot /workspace/quarkus-policy-api/build/quarkus-policy-api-unspecified-runner /app/policy-api
+
+EXPOSE 8080
+ENTRYPOINT ["/app/policy-api"]

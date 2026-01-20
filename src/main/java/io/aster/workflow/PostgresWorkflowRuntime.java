@@ -190,6 +190,19 @@ public class PostgresWorkflowRuntime implements WorkflowRuntime {
     }
 
     /**
+     * 检查当前线程是否处于显式的工作流上下文中。
+     *
+     * 用于区分以下两种情况：
+     * 1. 显式绑定的工作流上下文（需要确定性计时）
+     * 2. 全局默认上下文（普通策略执行，使用正常计时）
+     *
+     * @return true 如果当前线程有显式绑定的 DeterminismContext
+     */
+    public boolean isInWorkflowContext() {
+        return determinismCache.get() != null;
+    }
+
+    /**
      * 获取当前线程绑定的确定性上下文。
      *
      * @return 当无上下文绑定时返回全局默认上下文

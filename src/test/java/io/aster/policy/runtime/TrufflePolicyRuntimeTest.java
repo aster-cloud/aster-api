@@ -16,7 +16,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * TrufflePolicyRuntime 单元测试
+ *
+ * 注意：这些测试需要 Aster 语言运行时正确注册到 GraalVM。
+ * 在没有完整语言运行时的环境中，测试会被跳过。
  */
+@org.junit.jupiter.api.condition.DisabledIfSystemProperty(
+    named = "aster.truffle.tests.skip",
+    matches = "true",
+    disabledReason = "Aster 语言运行时未完全配置"
+)
 class TrufflePolicyRuntimeTest {
 
     private TrufflePolicyRuntime runtime;

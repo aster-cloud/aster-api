@@ -7,8 +7,14 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -28,6 +34,12 @@ public class PolicyVersionService {
 
     @Inject
     EntityManager entityManager;
+
+    @ConfigProperty(name = "aster.policy.dual-write.enabled", defaultValue = "false")
+    boolean dualWriteEnabled;
+
+    @ConfigProperty(name = "aster.policy.dual-write.base-path", defaultValue = "target/policies")
+    String dualWriteBasePath;
 
     /**
      * 创建策略版本。
@@ -62,7 +74,31 @@ public class PolicyVersionService {
         version.active = false; // 新版本默认保持非活跃，待 activateVersion 显式启用
         version.persist();
 
+        // 双写：同时写入静态文件作为兜底
+        if (dualWriteEnabled) {
+            writeStaticPolicyFile(catalog.moduleName, catalog.functionName, sourceCnl);
+        }
+
         return version;
+    }
+
+    /**
+     * 将策略源码写入静态文件作为兜底。
+     *
+     * @param moduleName   模块名
+     * @param functionName 函数名
+     * @param content      策略源码内容
+     */
+    private void writeStaticPolicyFile(String moduleName, String functionName, String content) {
+        try {
+            Path moduleDir = Paths.get(dualWriteBasePath, moduleName);
+            Files.createDirectories(moduleDir);
+            Path policyFile = moduleDir.resolve(functionName + ".aster");
+            Files.writeString(policyFile, content, StandardCharsets.UTF_8);
+            LOG.debugf("双写策略文件: %s", policyFile);
+        } catch (IOException e) {
+            LOG.warnf(e, "双写策略文件失败: module=%s, function=%s", moduleName, functionName);
+        }
     }
 
     /**

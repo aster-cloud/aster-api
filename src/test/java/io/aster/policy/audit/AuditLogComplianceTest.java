@@ -1,6 +1,6 @@
 package io.aster.policy.audit;
 
-import com.wontlost.aster.policy.PIIRedactor;
+import io.aster.policy.common.PIIRedactor;
 import io.aster.policy.entity.AuditLog;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;

@@ -20,10 +20,12 @@ import io.aster.policy.entity.PolicyVersion;
 import io.aster.policy.repository.PolicySourceRepository;
 import io.aster.policy.runtime.ExecutionResult;
 import io.aster.policy.runtime.TrufflePolicyRuntime;
+import io.aster.policy.tenant.TenantContext;
 import io.aster.workflow.DeterminismContext;
 import io.aster.workflow.PostgresWorkflowRuntime;
 import io.quarkus.cache.Cache;
 import io.quarkus.cache.CacheInvalidateAll;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.annotation.PostConstruct;
@@ -69,6 +71,9 @@ public class PolicyEvaluationService {
     @Inject
     io.aster.policy.cache.CompiledPolicyCache compiledPolicyCache;
 
+    @Inject
+    TenantContext tenantContext;
+
     @ConfigProperty(name = "aster.policy.dynamic-loading.enabled", defaultValue = "false")
     boolean dynamicLoadingEnabled;
 
@@ -102,11 +107,28 @@ public class PolicyEvaluationService {
 
         Object[] normalizedContext = normalizeContext(tenantId, context);
 
-        // 动态加载模式下，获取 versionId 以确保缓存键包含版本信息
-        String versionId = null;
+        // 动态加载模式下，需要在 worker pool 中获取 versionId 以避免阻塞 IO 线程
+        // 使用 QuarkusTransaction.requiringNew() 确保在独立事务中执行，避免并发访问时的会话共享问题
         if (dynamicLoadingEnabled) {
-            versionId = loadVersionId(tenantId, policyModule, policyFunction);
+            return Uni.createFrom().item(() -> QuarkusTransaction.requiringNew()
+                    .call(() -> loadVersionId(tenantId, policyModule, policyFunction)))
+                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+                .chain(versionId -> evaluatePolicyWithVersionId(tenantId, policyModule, policyFunction, versionId, normalizedContext));
         }
+
+        // 非动态加载模式，直接使用 null versionId
+        return evaluatePolicyWithVersionId(tenantId, policyModule, policyFunction, null, normalizedContext);
+    }
+
+    /**
+     * 内部方法：使用已解析的 versionId 评估策略
+     */
+    private Uni<PolicyEvaluationResult> evaluatePolicyWithVersionId(
+            String tenantId,
+            String policyModule,
+            String policyFunction,
+            String versionId,
+            Object[] normalizedContext) {
 
         final PolicyCacheKey cacheKey = new PolicyCacheKey(tenantId, policyModule, policyFunction, versionId, normalizedContext);
 
@@ -132,15 +154,17 @@ public class PolicyEvaluationService {
 
         return Uni.createFrom().item(() -> {
             try {
+                // 检测是否处于工作流确定性上下文中
                 DeterminismContext context = resolveDeterminismContext();
                 boolean deterministicTiming = context != null;
-                long startMarker = deterministicTiming
-                    ? context.random().nextLong("PolicyEvaluationService:start")
-                    : System.nanoTime();
 
-                // 使用动态执行路径
+                // 始终使用 System.nanoTime() 记录开始时间，确保时间计算准确
+                long startMarker = System.nanoTime();
+
+                // 使用动态执行路径，在独立事务中执行以确保并发批量评估的线程安全
                 LOG.debugf("使用动态执行路径: %s.%s", cacheKey.getPolicyModule(), cacheKey.getPolicyFunction());
-                PolicyEvaluationResult result = evaluateDynamic(cacheKey, startMarker, deterministicTiming);
+                PolicyEvaluationResult result = QuarkusTransaction.requiringNew()
+                    .call(() -> evaluateDynamic(cacheKey, startMarker, deterministicTiming));
 
                 return result;
             } catch (Throwable e) {
@@ -267,11 +291,12 @@ public class PolicyEvaluationService {
             }
 
             // 4. 计算执行时间
-            DeterminismContext context = resolveDeterminismContext();
-            long endMarker = deterministicTiming
-                ? context.random().nextLong("PolicyEvaluationService:end")
-                : System.nanoTime();
-            long durationNanos = endMarker - startMarker;
+            // 注意：始终使用 System.nanoTime() 计算实际执行时间，
+            // 确定性计时仅用于工作流重放场景的输入参数，不应影响性能指标
+            long endMarker = System.nanoTime();
+            long durationNanos = deterministicTiming
+                ? 0L  // 确定性模式下返回 0，表示时间不确定
+                : Math.max(0, endMarker - startMarker);  // 确保非负
 
             return new PolicyEvaluationResult(
                 executionResult.result(),
@@ -375,11 +400,21 @@ public class PolicyEvaluationService {
     }
 
     /**
-     * 根据当前 workflow 上下文决定是否启用确定性随机计时
+     * 根据当前 workflow 上下文决定是否启用确定性随机计时。
+     *
+     * 仅当显式处于工作流上下文中时才返回 DeterminismContext，
+     * 避免普通策略执行时误用全局默认上下文导致计时错误。
+     *
+     * @return DeterminismContext 如果处于工作流上下文中，否则返回 null
      */
     private DeterminismContext resolveDeterminismContext() {
         try {
-            return workflowRuntime != null ? workflowRuntime.getDeterminismContext() : null;
+            // 使用 isInWorkflowContext() 检查是否有显式绑定的上下文
+            // 避免误用全局默认上下文（非 replay 模式）
+            if (workflowRuntime != null && workflowRuntime.isInWorkflowContext()) {
+                return workflowRuntime.getDeterminismContext();
+            }
+            return null;
         } catch (Exception ignored) {
             return null;
         }
@@ -553,9 +588,10 @@ public class PolicyEvaluationService {
     public Uni<PolicyValidationResult> validatePolicy(String policyModule, String policyFunction) {
         return Uni.createFrom().item(() -> {
             try {
-                // 从数据库查找策略
+                // 从数据库查找策略（使用当前租户上下文）
+                String currentTenant = tenantContext.getCurrentTenant();
                 java.util.Optional<PolicyCatalog> catalog = policySourceRepository.findActiveCatalog(
-                    null, // 验证时不需要租户ID
+                    currentTenant,
                     policyModule,
                     policyFunction
                 );
@@ -606,12 +642,15 @@ public class PolicyEvaluationService {
                 String returnType = metadata.getReturnType() != null ? metadata.getReturnType() : "unknown";
                 String returnTypeFullName = returnType;
 
-                // 参数信息（从 schema 字符串中无法精确解析，返回空列表）
-                java.util.List<ParameterInfo> parameters = new java.util.ArrayList<>();
+                // 从 Core JSON 解析参数信息
+                java.util.List<ParameterInfo> parameters = extractParametersFromCoreJson(
+                    compilationResult.getCoreJson(),
+                    policyFunction
+                );
 
                 return new PolicyValidationResult(
                     true,
-                    "Policy exists and is valid",
+                    "Policy exists and is valid and callable",
                     policyModule,
                     policyFunction,
                     parameters,
@@ -630,6 +669,64 @@ public class PolicyEvaluationService {
                 );
             }
         }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+    }
+
+    /**
+     * 从 Core JSON 解析函数参数信息
+     *
+     * Core JSON 结构示例:
+     * {
+     *   "decls": [
+     *     {
+     *       "@type": "Func",
+     *       "name": "evaluateLoanEligibility",
+     *       "params": [
+     *         { "name": "申请", "type": "..." },
+     *         { "name": "年龄", "type": "..." }
+     *       ]
+     *     }
+     *   ]
+     * }
+     */
+    private java.util.List<ParameterInfo> extractParametersFromCoreJson(String coreJson, String functionName) {
+        java.util.List<ParameterInfo> parameters = new java.util.ArrayList<>();
+        if (coreJson == null || coreJson.isBlank()) {
+            return parameters;
+        }
+
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(coreJson);
+            com.fasterxml.jackson.databind.JsonNode decls = root.get("decls");
+
+            if (decls == null || !decls.isArray()) {
+                return parameters;
+            }
+
+            for (com.fasterxml.jackson.databind.JsonNode decl : decls) {
+                // 支持两种格式：@type (旧版) 和 kind (新版 Core IR)
+                String type = decl.has("@type") ? decl.get("@type").asText()
+                    : (decl.has("kind") ? decl.get("kind").asText() : null);
+                String name = decl.has("name") ? decl.get("name").asText() : null;
+
+                // 查找 Func 类型声明
+                if ("Func".equals(type) && functionName.equals(name)) {
+                    com.fasterxml.jackson.databind.JsonNode params = decl.get("params");
+                    if (params != null && params.isArray()) {
+                        for (com.fasterxml.jackson.databind.JsonNode param : params) {
+                            String paramName = param.has("name") ? param.get("name").asText() : "unknown";
+                            String paramType = param.has("type") ? param.get("type").toString() : "Object";
+                            parameters.add(new ParameterInfo(paramName, paramType, paramType));
+                        }
+                    }
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            LOG.warnf(e, "解析 Core JSON 参数信息失败: %s", functionName);
+        }
+
+        return parameters;
     }
 
 }

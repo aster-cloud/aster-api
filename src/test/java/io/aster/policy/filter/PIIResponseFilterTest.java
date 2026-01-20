@@ -26,11 +26,12 @@ public class PIIResponseFilterTest {
 
     @Test
     void testEmailRedactionInResponse() {
-        // 构造包含 Email 的请求（通过 X-Tenant-Id header）
-        String tenantWithEmail = "test@example.com";
+        // 使用有效的租户 ID 格式（符合 TenantFilter 的正则要求）
+        // 租户 ID 只允许字母、数字、连字符和下划线
+        String tenantId = "test-pii-filter";
 
         given()
-            .header("X-Tenant-Id", tenantWithEmail)
+            .header("X-Tenant-Id", tenantId)
             .when()
             .get("/api/audit")
             .then()

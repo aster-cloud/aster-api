@@ -1,26 +1,30 @@
 package io.aster.policy.test;
 
-import com.redis.testcontainers.RedisContainer;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
-import org.testcontainers.utility.DockerImageName;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 
+import java.time.Duration;
 import java.util.Map;
 
 /**
  * Redis Testcontainer 资源管理器
  *
- * 为测试环境提供 Redis 容器，支持分布式缓存失效测试
+ * 为测试环境提供 Redis 容器，支持分布式缓存失效测试。
+ * 每次测试创建新容器，测试完成后自动移除。
  */
 public class RedisTestResource implements QuarkusTestResourceLifecycleManager {
 
-    private RedisContainer redisContainer;
+    private GenericContainer<?> redisContainer;
 
     @Override
     public Map<String, String> start() {
-        // 使用官方 Redis 镜像，兼容 Docker 和 Podman
-        redisContainer = new RedisContainer(DockerImageName.parse("redis:7-alpine"))
+        // 使用 GenericContainer 避免 RedisContainer 的 Podman 兼容问题
+        redisContainer = new GenericContainer<>("redis:7-alpine")
             .withExposedPorts(6379)
-            .withReuse(true);  // 复用容器提高测试速度
+            .withReuse(false)  // 禁用复用，每次新建容器
+            .withStartupTimeout(Duration.ofSeconds(120))
+            .waitingFor(Wait.forListeningPort());
 
         redisContainer.start();
 
@@ -28,8 +32,6 @@ public class RedisTestResource implements QuarkusTestResourceLifecycleManager {
 
         System.out.println("[Redis Testcontainer] Started: " + redisHost);
 
-        // 配置 Quarkus Redis 连接
-        // 移除 value-type 显式配置，让 Quarkus 自动推导类型（避免 ClassCastException）
         return Map.of(
             "quarkus.redis.hosts", redisHost
         );
@@ -37,7 +39,7 @@ public class RedisTestResource implements QuarkusTestResourceLifecycleManager {
 
     @Override
     public void stop() {
-        if (redisContainer != null) {
+        if (redisContainer != null && redisContainer.isRunning()) {
             System.out.println("[Redis Testcontainer] Stopping");
             redisContainer.stop();
         }

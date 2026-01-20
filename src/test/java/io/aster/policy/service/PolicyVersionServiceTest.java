@@ -93,6 +93,7 @@ abstract class BasePolicyVersionServiceTest {
 
     static final String MODULE_NAME = "aster.finance.loan";
     static final String FUNCTION_NAME = "evaluateLoanEligibility";
+    static final String TEST_TENANT = "tenant-default";
 
     @Inject
     protected PolicyVersionService versionService;
@@ -102,8 +103,15 @@ abstract class BasePolicyVersionServiceTest {
     @BeforeEach
     @Transactional
     void initData() {
-        PolicyVersion.deleteAll();
-        PolicyCatalog.deleteAll();
+        // 仅清理本测试创建的数据（按租户隔离），保留 V99 种子数据
+        // 1. 先清除测试租户的 PolicyCatalog 的 defaultVersionId 外键引用
+        PolicyCatalog.update("defaultVersionId = null where tenantId = ?1", TEST_TENANT);
+        // 2. 删除测试租户的 PolicyArtifact（通过关联 PolicyVersion）
+        io.aster.policy.entity.PolicyArtifact.delete("policyVersionId in (select id from PolicyVersion where tenantId = ?1)", TEST_TENANT);
+        // 3. 删除测试租户的 PolicyVersion
+        PolicyVersion.delete("tenantId = ?1", TEST_TENANT);
+        // 4. 最后删除测试租户的 PolicyCatalog
+        PolicyCatalog.delete("tenantId = ?1", TEST_TENANT);
         cleanStaticArtifacts();
         catalog = persistCatalog();
     }
@@ -115,7 +123,7 @@ abstract class BasePolicyVersionServiceTest {
     private PolicyCatalog persistCatalog() {
         PolicyCatalog entity = new PolicyCatalog();
         entity.id = UUID.randomUUID();
-        entity.tenantId = "tenant-default";
+        entity.tenantId = TEST_TENANT;
         entity.moduleName = MODULE_NAME;
         entity.functionName = FUNCTION_NAME;
         entity.domain = "finance";

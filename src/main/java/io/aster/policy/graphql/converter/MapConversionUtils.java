@@ -65,12 +65,21 @@ public final class MapConversionUtils {
 
     /**
      * 通过反射读取对象字段并转换为指定类型。
+     * 支持 Map 和 POJO 两种类型的对象。
      */
+    @SuppressWarnings("unchecked")
     public static <T> T getFieldValue(Object obj, String fieldName, Class<T> type) {
         Objects.requireNonNull(obj, "目标对象不能为空");
         Objects.requireNonNull(fieldName, "字段名称不能为空");
         Objects.requireNonNull(type, "目标类型不能为空");
 
+        // 如果是 Map 类型，直接通过键获取值
+        if (obj instanceof Map<?, ?> map) {
+            Object value = map.get(fieldName);
+            return castValue(value, type, false, "字段 " + fieldName);
+        }
+
+        // 否则使用反射读取对象字段
         Field field = findField(obj.getClass(), fieldName);
         if (field == null) {
             return null;
@@ -103,6 +112,7 @@ public final class MapConversionUtils {
         return null;
     }
 
+    @SuppressWarnings("unchecked")
     private static <T> T castValue(Object value, Class<T> targetType, boolean required, String label) {
         if (value == null) {
             if (required) {
@@ -115,6 +125,21 @@ public final class MapConversionUtils {
         }
         if (targetType == String.class) {
             return targetType.cast(String.valueOf(value));
+        }
+        // 支持数值类型之间的转换
+        if (value instanceof Number number) {
+            if (targetType == Integer.class || targetType == int.class) {
+                return (T) Integer.valueOf(number.intValue());
+            }
+            if (targetType == Long.class || targetType == long.class) {
+                return (T) Long.valueOf(number.longValue());
+            }
+            if (targetType == Double.class || targetType == double.class) {
+                return (T) Double.valueOf(number.doubleValue());
+            }
+            if (targetType == Float.class || targetType == float.class) {
+                return (T) Float.valueOf(number.floatValue());
+            }
         }
         throw new IllegalArgumentException(label + " 类型不匹配，期望 " + targetType.getSimpleName()
             + " 实际 " + value.getClass().getName());

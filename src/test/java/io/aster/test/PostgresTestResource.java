@@ -28,17 +28,21 @@ import java.util.Map;
  */
 public class PostgresTestResource implements QuarkusTestResourceLifecycleManager {
 
-    private static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine")
-        .withDatabaseName("test")
-        .withUsername("test")
-        .withPassword("test")
-        .withReuse(true)  // 共享容器，加速测试
-        .withStartupTimeout(Duration.ofSeconds(180))  // 容器启动超时（拉取镜像时需要）
-        .withCommand("postgres", "-c", "fsync=off", "-c", "synchronous_commit=off");  // 测试性能优化
+    private PostgreSQLContainer<?> postgres;
 
     @Override
     public Map<String, String> start() {
+        // 每次测试创建新容器，测试完成后自动移除
+        postgres = new PostgreSQLContainer<>("postgres:17-alpine")
+            .withDatabaseName("test")
+            .withUsername("test")
+            .withPassword("test")
+            .withReuse(false)  // 禁用复用，每次新建容器
+            .withStartupTimeout(Duration.ofSeconds(180))
+            .withCommand("postgres", "-c", "fsync=off", "-c", "synchronous_commit=off");
+
         postgres.start();
+
         String reactiveUrl = String.format(
             "postgresql://%s:%d/%s",
             postgres.getHost(),
@@ -56,6 +60,9 @@ public class PostgresTestResource implements QuarkusTestResourceLifecycleManager
 
     @Override
     public void stop() {
-        // 容器自动停止（reuse=true 时跳过）
+        // 测试完成后停止并移除容器
+        if (postgres != null && postgres.isRunning()) {
+            postgres.stop();
+        }
     }
 }

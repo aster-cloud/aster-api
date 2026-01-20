@@ -9,6 +9,8 @@ import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Value;
 import org.jboss.logging.Logger;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -43,10 +45,10 @@ public class TrufflePolicyRuntime {
         LOG.infof("创建 Context 池，大小: %d", poolSize);
 
         for (int i = 0; i < poolSize; i++) {
+            // 注意：engine 选项已在 sharedEngine 上设置，Context 不能重复设置
             Context ctx = Context.newBuilder("aster")
                 .engine(sharedEngine)
                 .allowAllAccess(true)
-                .option("engine.WarnInterpreterOnly", "false")
                 .build();
 
             contextPool.offer(ctx);
@@ -161,12 +163,23 @@ public class TrufflePolicyRuntime {
             return array;
         }
         if (value.hasMembers()) {
-            // 返回 Value 本身，让调用方处理
-            return value;
+            // 转换为 Java Map，确保可被 Jackson 序列化
+            Map<String, Object> map = new HashMap<>();
+            for (String key : value.getMemberKeys()) {
+                Value memberValue = value.getMember(key);
+                map.put(key, convertValue(memberValue));
+            }
+            return map;
         }
 
-        // 默认返回 host object
-        return value.isHostObject() ? value.asHostObject() : value;
+        // 返回 host object 或尝试转字符串
+        if (value.isHostObject()) {
+            return value.asHostObject();
+        }
+
+        // 无法转换的 Value 类型，返回其字符串表示以避免序列化问题
+        LOG.warnf("无法转换 Truffle Value 类型: %s，返回字符串表示", value.getMetaObject());
+        return value.toString();
     }
 
     @PreDestroy

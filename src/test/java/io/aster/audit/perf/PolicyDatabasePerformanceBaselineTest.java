@@ -10,6 +10,7 @@ import io.aster.audit.service.PolicyAuditService;
 import io.aster.common.dto.PagedResult;
 import io.aster.perf.PerfStats;
 import io.aster.perf.SystemMetrics;
+import io.aster.policy.entity.PolicyCatalog;
 import io.aster.policy.entity.PolicyVersion;
 import io.aster.policy.tenant.TenantContext;
 import io.aster.workflow.WorkflowEventEntity;
@@ -64,12 +65,27 @@ public class PolicyDatabasePerformanceBaselineTest {
 
     private DatasetSummary dataset;
 
+    private static final List<String> TEST_TENANTS = List.of("tenant-alpha", "tenant-beta", "tenant-gamma");
+    private static final List<String> TEST_POLICY_IDS = List.of("policy-0", "policy-1", "policy-2");
+
     @BeforeEach
     @Transactional
     void resetAndSeedDataset() {
-        WorkflowEventEntity.deleteAll();
-        WorkflowStateEntity.deleteAll();
-        PolicyVersion.deleteAll();
+        // 仅清理本测试创建的数据（按租户和策略隔离），保留 V99 种子数据
+        // WorkflowEventEntity 没有 tenantId 字段，需要通过 workflow_state 关联删除
+        TEST_TENANTS.forEach(tenant -> {
+            // 先找到需要删除的 workflow IDs
+            List<WorkflowStateEntity> states = WorkflowStateEntity.list("tenantId = ?1", tenant);
+            for (WorkflowStateEntity state : states) {
+                WorkflowEventEntity.delete("workflowId = ?1", state.workflowId);
+            }
+            WorkflowStateEntity.delete("tenantId = ?1", tenant);
+        });
+        // 清理本测试创建的策略版本
+        TEST_POLICY_IDS.forEach(policyId -> {
+            io.aster.policy.entity.PolicyArtifact.delete("policyVersionId in (select id from PolicyVersion where policyId = ?1)", policyId);
+            PolicyVersion.delete("policyId = ?1", policyId);
+        });
         dataset = seedDataset(DEFAULT_WORKFLOW_ROWS);
     }
 

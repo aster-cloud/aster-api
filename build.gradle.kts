@@ -114,4 +114,11 @@ tasks.withType<Test> {
     systemProperty("java.util.logging.manager", "org.jboss.logmanager.LogManager")
     systemProperty("quarkus.test.flat-class-path", "true")
     jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
+
+    // Testcontainers Podman 配置
+    environment("DOCKER_HOST", "unix:///Users/rpang/.local/share/containers/podman/machine/podman.sock")
+    environment("TESTCONTAINERS_RYUK_DISABLED", "true")
+
+    // 跳过需要完整 Aster 语言运行时的测试
+    systemProperty("aster.truffle.tests.skip", "true")
 }

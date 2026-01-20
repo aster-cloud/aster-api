@@ -1,6 +1,6 @@
 package io.aster.policy.integration;
 
-import com.wontlost.aster.policy.PIIRedactor;
+import io.aster.policy.common.PIIRedactor;
 import io.aster.test.PostgresTestResource;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;

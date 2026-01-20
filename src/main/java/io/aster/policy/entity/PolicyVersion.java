@@ -242,6 +242,36 @@ public class PolicyVersion extends PanacheEntityBase {
     }
 
     /**
+     * JPA 持久化前回调
+     * 确保必填字段有默认值
+     */
+    @PrePersist
+    public void prePersist() {
+        if (this.createdAt == null) {
+            this.createdAt = Instant.now();
+        }
+        if (this.version == null) {
+            this.version = Instant.now().toEpochMilli();
+        }
+        if (this.status == null) {
+            this.status = VersionStatus.DRAFT;
+        }
+        if (this.isDefault == null) {
+            this.isDefault = false;
+        }
+        if (this.active == null) {
+            this.active = true;
+        }
+        // 确保 sourceHash 有值（非空约束）
+        if (this.sourceHash == null && this.content != null) {
+            this.sourceHash = computeSourceHash(this.content);
+        } else if (this.sourceHash == null) {
+            // 如果没有内容，使用空字符串的哈希
+            this.sourceHash = computeSourceHash("");
+        }
+    }
+
+    /**
      * 创建新版本
      *
      * @param policyId     策略ID

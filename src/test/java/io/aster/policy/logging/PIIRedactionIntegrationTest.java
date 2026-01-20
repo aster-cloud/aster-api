@@ -1,6 +1,6 @@
 package io.aster.policy.logging;
 
-import com.wontlost.aster.policy.PIIRedactor;
+import io.aster.policy.common.PIIRedactor;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

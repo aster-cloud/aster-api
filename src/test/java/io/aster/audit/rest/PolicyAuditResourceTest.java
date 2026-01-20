@@ -5,6 +5,7 @@ import io.aster.policy.entity.PolicyVersion;
 import io.aster.policy.service.PolicyVersionService;
 import io.aster.workflow.PostgresEventStore;
 import io.aster.workflow.PostgresWorkflowRuntime;
+import io.aster.workflow.WorkflowStateEntity;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -66,6 +67,20 @@ public class PolicyAuditResourceTest {
         workflowRuntime.schedule(workflowId1, null, metadata);
         workflowRuntime.schedule(workflowId2, null, metadata);
 
+        // 设置 policyVersionId 以便 getVersionUsage 可以查询到
+        WorkflowStateEntity state1 = WorkflowStateEntity.find("workflowId = ?1", UUID.fromString(workflowId1)).firstResult();
+        WorkflowStateEntity state2 = WorkflowStateEntity.find("workflowId = ?1", UUID.fromString(workflowId2)).firstResult();
+        if (state1 != null) {
+            state1.policyVersionId = testVersion.id;
+            state1.policyActivatedAt = Instant.now();
+            state1.persist();
+        }
+        if (state2 != null) {
+            state2.policyVersionId = testVersion.id;
+            state2.policyActivatedAt = Instant.now();
+            state2.persist();
+        }
+
         // 记录事件
         eventStore.appendEvent(workflowId1, "WorkflowStarted", "{}");
         eventStore.appendEvent(workflowId2, "WorkflowStarted", "{}");
@@ -77,7 +92,6 @@ public class PolicyAuditResourceTest {
     @Test
     void testGetVersionUsage_DefaultPagination() {
         given()
-            .header("X-Tenant-Id", TEST_TENANT_ID)
             .header("X-Tenant-Id", TEST_TENANT_ID)
             .when().get("/api/audit/policy-versions/{versionId}/usage", testVersion.id)
             .then()

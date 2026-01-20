@@ -1,7 +1,5 @@
 package io.aster.policy.performance;
 
-import com.wontlost.aster.finance.dto.loan.ApplicantProfile;
-import com.wontlost.aster.finance.dto.loan.LoanApplication;
 import io.aster.policy.api.PolicyEvaluationService;
 import io.aster.policy.api.model.PolicyEvaluationResult;
 import io.quarkus.test.junit.QuarkusTest;
@@ -9,6 +7,8 @@ import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,19 +26,22 @@ class PolicyEvaluationPerformanceTest {
     @Inject
     PolicyEvaluationService policyEvaluationService;
 
+    /**
+     * 创建贷款申请上下文（使用 Map 替代 DTO）
+     */
     private Object[] loanContext() {
-        LoanApplication application = new LoanApplication(
-            "APP-PERF-1001",
-            250_000,
-            84,
-            "购房"
+        Map<String, Object> application = Map.of(
+            "applicationId", "APP-PERF-1001",
+            "requestedAmount", 250_000,
+            "loanTermMonths", 84,
+            "purpose", "购房"
         );
-        ApplicantProfile applicant = new ApplicantProfile(
-            37,
-            760,
-            520_000,
-            6_500,
-            7
+        Map<String, Object> applicant = Map.of(
+            "age", 37,
+            "creditScore", 760,
+            "annualIncome", 520_000,
+            "monthlyDebt", 6_500,
+            "employmentYears", 7
         );
         return new Object[]{application, applicant};
     }

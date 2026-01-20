@@ -2,6 +2,7 @@ package io.aster.policy.multitenant;
 
 import io.aster.audit.entity.AnomalyReportEntity;
 import io.aster.policy.entity.AuditLog;
+import io.aster.policy.entity.PolicyCatalog;
 import io.aster.policy.entity.PolicyVersion;
 import io.aster.test.PostgresTestResource;
 import io.aster.workflow.WorkflowStateEntity;
@@ -47,10 +48,15 @@ class MultiTenantIsolationTest {
     @BeforeEach
     @Transactional
     void setupTenants() {
-        AuditLog.deleteAll();
-        WorkflowStateEntity.deleteAll();
-        AnomalyReportEntity.deleteAll();
-        PolicyVersion.deleteAll();
+        // 仅清理本测试创建的数据（按租户和策略模块隔离），保留 V99 种子数据
+        TENANTS.forEach(tenant -> {
+            AuditLog.delete("tenantId = ?1", tenant);
+            WorkflowStateEntity.delete("tenantId = ?1", tenant);
+            AnomalyReportEntity.delete("tenantId = ?1", tenant);
+        });
+        // 清理本测试创建的共享策略版本（policyId = policy-shared）
+        io.aster.policy.entity.PolicyArtifact.delete("policyVersionId in (select id from PolicyVersion where policyId = 'policy-shared')");
+        PolicyVersion.delete("policyId = ?1", "policy-shared");
 
         baseTime = Instant.now().minusSeconds(600);
         sharedVersionId = persistSharedPolicyVersion();
@@ -133,8 +139,31 @@ class MultiTenantIsolationTest {
     @Test
     void sqlInjectionLikeTenantHeaderShouldNotReturnData() {
         String maliciousTenant = TENANT_ALPHA + "' OR '1'='1";
-        List<Map<String, Object>> payload = fetchAuditLogs(maliciousTenant);
-        assertTrue(payload.isEmpty(), "SQL 注入形式的 header 不应匹配任意租户数据");
+        // 恶意租户 header 应该被拒绝（返回 400），或者返回空结果（200）
+        // 两种行为都是安全的，不应返回其他租户的数据
+        int status = given()
+            .header("X-Tenant-Id", maliciousTenant)
+            .when()
+            .get("/api/audit")
+            .then()
+            .extract()
+            .statusCode();
+
+        // 接受 400（拒绝恶意输入）或 200（返回空结果）两种安全行为
+        if (status == 200) {
+            List<Map<String, Object>> payload = toMapList(given()
+                .header("X-Tenant-Id", maliciousTenant)
+                .when()
+                .get("/api/audit")
+                .then()
+                .statusCode(200)
+                .extract()
+                .jsonPath()
+                .getList("", Map.class));
+            assertTrue(payload.isEmpty(), "SQL 注入形式的 header 不应匹配任意租户数据");
+        } else {
+            assertEquals(400, status, "恶意租户 header 应被拒绝（400）或返回空结果（200）");
+        }
     }
 
     @Test

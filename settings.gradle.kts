@@ -30,3 +30,20 @@ includeBuild("../aster-lang-validation") {
         substitute(module("cloud.aster-lang:aster-lang-validation")).using(project(":"))
     }
 }
+
+// 语言包模块 - 独立项目（通过 SPI 注册到 LexiconRegistry）
+includeBuild("../aster-lang-en") {
+    dependencySubstitution {
+        substitute(module("cloud.aster-lang:aster-lang-en")).using(project(":"))
+    }
+}
+includeBuild("../aster-lang-zh") {
+    dependencySubstitution {
+        substitute(module("cloud.aster-lang:aster-lang-zh")).using(project(":"))
+    }
+}
+includeBuild("../aster-lang-de") {
+    dependencySubstitution {
+        substitute(module("cloud.aster-lang:aster-lang-de")).using(project(":"))
+    }
+}

@@ -68,6 +68,11 @@ dependencies {
     implementation("cloud.aster-lang:aster-lang-runtime:0.0.1")
     implementation("cloud.aster-lang:aster-lang-truffle:0.0.1")
 
+    // 语言包（通过 SPI 自动发现并注册到 LexiconRegistry）
+    runtimeOnly("cloud.aster-lang:aster-lang-en:0.0.1")
+    runtimeOnly("cloud.aster-lang:aster-lang-zh:0.0.1")
+    runtimeOnly("cloud.aster-lang:aster-lang-de:0.0.1")
+
     // Aster 验证模块 - 独立项目
     implementation("cloud.aster-lang:aster-lang-validation:0.0.1")
 

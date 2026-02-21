@@ -59,15 +59,15 @@ class NaturalLanguageParserTest {
     @Test
     void testAutoInsuranceNaturalLanguageCnl() throws Exception {
         String source = """
-            This module is insurance.auto.
+            Module insurance.auto.
 
-            Define Driver with id, age, yearsLicensed, accidents, violations.
+            a Driver has id, age, yearsLicensed, accidents, violations.
 
-            Define Vehicle with vin, year, value, safetyRating.
+            a Vehicle has vin, year, value, safetyRating.
 
-            Define Quote with approved, premium, deductible, reason.
+            a Quote has approved, premium, deductible, reason.
 
-            To generateQuote with driver, vehicle, produce:
+            Rule generateQuote given driver, vehicle:
               If driver.age less than 18:
                 Return Quote with approved = false, premium = 0, deductible = 0, reason = "Driver under 18".
               If driver.accidents greater than 3:
@@ -77,14 +77,14 @@ class NaturalLanguageParserTest {
               Let finalPremium be basePremium times riskFactor divided by 100.
               Return Quote with approved = true, premium = finalPremium, deductible = 500, reason = "Approved".
 
-            To calculateBase with driver, vehicle, produce:
+            Rule calculateBase given driver, vehicle:
               If driver.age less than 25:
                 Return 300.
               If driver.age less than 65:
                 Return 200.
               Return 250.
 
-            To calculateRisk with driver, produce:
+            Rule calculateRisk given driver:
               Let base be 100.
               If driver.accidents greater than 0:
                 Let base be base plus driver.accidents times 20.
@@ -118,7 +118,7 @@ class NaturalLanguageParserTest {
         assertTrue(coreJson.contains("insurance.auto"));
         assertTrue(coreJson.contains("generateQuote"));
 
-        System.out.println("=== 自然语言 CNL 直接解析成功 ===");
+        System.out.println("=== 自然语言 CNL 直接解析成功（新语法）===");
         System.out.println("模块名: " + module.name());
         System.out.println("声明数: " + module.decls().size());
         System.out.println("Core JSON 长度: " + coreJson.length());
@@ -126,11 +126,11 @@ class NaturalLanguageParserTest {
 
     @Test
     void testNaturalLanguageOperators() {
-        // 测试各种自然语言运算符
+        // 测试各种自然语言运算符（使用新语法）
         String source = """
-            This module is test.
+            Module test.
 
-            To testOperators with a, b, produce:
+            Rule testOperators given a, b:
               If a less than b:
                 Return 1.
               If a greater than b:
@@ -158,12 +158,12 @@ class NaturalLanguageParserTest {
     @Test
     void testWithCallSyntax() {
         String source = """
-            This module is test.
+            Module test.
 
-            To helper with x, produce:
+            Rule helper given x:
               Return x times 2.
 
-            To main produce:
+            Rule main:
               Let result be helper with 10.
               Return result.
             """;

@@ -750,16 +750,15 @@ public class PolicyEvaluationResource {
     /**
      * 从 CNL 中提取模块名称
      *
-     * 匹配 "This module is <module_name>." 语法
+     * 匹配 "Module <module_name>." 语法
      *
      * @param cnl CNL 格式的策略代码
      * @return 模块名称
      * @throws IllegalArgumentException 如果无法提取模块名称
      */
     private String extractModule(String cnl) {
-        // 匹配 "This module is <module_name>." 或 "// module <module_name>"
-        // 使用 [\w.]+ 匹配模块名，但用 \\.? 可选匹配句号（然后不包含在组中）
-        Pattern modulePattern = Pattern.compile("(?:This module is|// module)\\s+([\\w.]+?)(?:\\.\\s|\\s|$)", Pattern.CASE_INSENSITIVE);
+        // 匹配 "Module <module_name>." 或 "// module <module_name>"
+        Pattern modulePattern = Pattern.compile("(?:Module|// module)\\s+([\\w.]+?)(?:\\.\\s|\\s|$)", Pattern.CASE_INSENSITIVE);
         Matcher matcher = modulePattern.matcher(cnl);
 
         if (matcher.find()) {
@@ -772,15 +771,15 @@ public class PolicyEvaluationResource {
     /**
      * 从 CNL 中提取函数名称
      *
-     * 匹配 "To <function_name> with..." 或 "func <function_name>(...)" 语法
+     * 匹配 "Rule <function_name> given..." 或 "func <function_name>(...)" 语法
      *
      * @param cnl CNL 格式的策略代码
      * @return 函数名称
      * @throws IllegalArgumentException 如果无法提取函数名称
      */
     private String extractFunction(String cnl) {
-        // 匹配 "To <function_name> with" 或 "func <function_name>("
-        Pattern functionPattern = Pattern.compile("(?:To|func)\\s+(\\w+)\\s*(?:with|\\()", Pattern.CASE_INSENSITIVE);
+        // 匹配 "Rule <function_name> given" 或 "Rule <function_name>:" 或 "func <function_name>("
+        Pattern functionPattern = Pattern.compile("(?:Rule|func)\\s+(\\w+)\\s*(?:given|\\(|:)", Pattern.CASE_INSENSITIVE);
         Matcher matcher = functionPattern.matcher(cnl);
 
         if (matcher.find()) {

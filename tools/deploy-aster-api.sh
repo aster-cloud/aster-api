@@ -23,7 +23,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
 DOCKERFILE_PATH="${PROJECT_ROOT}/Dockerfile.jvm"
-GRADLE_CMD=(./gradlew build --no-build-cache --no-configuration-cache -Dquarkus.package.jar.type=uber-jar -x test -x compileTestJava)
+GRADLE_CMD=(./gradlew build --no-build-cache --no-configuration-cache -Dquarkus.package.jar.type=fast-jar -x test -x compileTestJava)
 IMAGE_REPO="wontlost/aster-api"
 DEPLOYMENT_NAME="aster-api"
 POD_SELECTOR="app=aster-api"

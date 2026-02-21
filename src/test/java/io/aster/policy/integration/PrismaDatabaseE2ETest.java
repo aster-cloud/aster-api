@@ -122,14 +122,15 @@ class PrismaDatabaseE2ETest {
     @Transactional
     void test4_createPolicyVersion() {
         String cnlSource = """
-            define function testPolicy
-                given request is a Request
-                where request has amount
+            Module test.policy.
 
-            if amount of request is greater than 1000 then
-                return with Decision where approved is false and reason is "Amount too high"
-            otherwise
-                return with Decision where approved is true and reason is "Approved"
+            a Request has amount.
+            a Decision has approved, reason.
+
+            Rule testPolicy given request: Request:
+              If request.amount greater than 1000:
+                Return Decision with approved = false, reason = "Amount too high".
+              Return Decision with approved = true, reason = "Approved".
             """;
 
         PolicyVersion version = new PolicyVersion();

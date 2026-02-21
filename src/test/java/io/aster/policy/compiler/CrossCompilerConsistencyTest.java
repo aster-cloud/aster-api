@@ -148,10 +148,10 @@ class CrossCompilerConsistencyTest {
     void shouldProduceConsistentCoreJsonBetweenCompilers() throws IOException {
         // 使用 Java 编译器编译简单的 CNL 源代码
         String cnlSource = """
-            define function greet
-                given name is a Text
+            Module test.greet.
 
-            return with Text where value is "Hello, " plus name
+            Rule greet given name: Text:
+              Return "Hello, " plus name.
             """;
 
         // 使用 Java InProcessCnlParser 编译

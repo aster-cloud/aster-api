@@ -3,10 +3,8 @@ package io.aster.policy.parser;
 import aster.core.ast.Decl;
 import aster.core.ast.Module;
 import aster.core.canonicalizer.Canonicalizer;
-import aster.core.lexicon.EnUsLexicon;
 import aster.core.lexicon.Lexicon;
 import aster.core.lexicon.LexiconRegistry;
-import aster.core.lexicon.ZhCnLexicon;
 import aster.core.parser.AstBuilder;
 import aster.core.parser.AsterCustomLexer;
 import aster.core.parser.AsterParser;
@@ -155,7 +153,7 @@ public class InProcessCnlParser {
      */
     private static Lexicon getLexiconForLocale(String locale) {
         if (locale == null || locale.isBlank()) {
-            return EnUsLexicon.INSTANCE;
+            return LexiconRegistry.getInstance().getDefault();
         }
 
         String normalizedLocale = locale.toLowerCase().replace("_", "-");
@@ -168,11 +166,11 @@ public class InProcessCnlParser {
 
         // 回退到常见 locale 前缀匹配
         if (normalizedLocale.startsWith("zh")) {
-            return ZhCnLexicon.INSTANCE;
+            return registry.getOrThrow("zh-CN");
         } else {
             // 对于不支持的 locale，回退到英语
             LOG.warnf("Unsupported locale '%s', falling back to en-US", locale);
-            return EnUsLexicon.INSTANCE;
+            return registry.getDefault();
         }
     }
 

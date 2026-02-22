@@ -68,27 +68,27 @@ class NaturalLanguageParserTest {
             a Quote has approved, premium, deductible, reason.
 
             Rule generateQuote given driver, vehicle:
-              If driver.age less than 18:
-                Return Quote with approved = false, premium = 0, deductible = 0, reason = "Driver under 18".
-              If driver.accidents greater than 3:
-                Return Quote with approved = false, premium = 0, deductible = 0, reason = "Too many accidents".
+              If driver.age less than 18
+                Return Quote with approved set to false, premium set to 0, deductible set to 0, reason set to "Driver under 18".
+              If driver.accidents greater than 3
+                Return Quote with approved set to false, premium set to 0, deductible set to 0, reason set to "Too many accidents".
               Let basePremium be calculateBase with driver, vehicle.
               Let riskFactor be calculateRisk with driver.
               Let finalPremium be basePremium times riskFactor divided by 100.
-              Return Quote with approved = true, premium = finalPremium, deductible = 500, reason = "Approved".
+              Return Quote with approved set to true, premium set to finalPremium, deductible set to 500, reason set to "Approved".
 
             Rule calculateBase given driver, vehicle:
-              If driver.age less than 25:
+              If driver.age less than 25
                 Return 300.
-              If driver.age less than 65:
+              If driver.age less than 65
                 Return 200.
               Return 250.
 
             Rule calculateRisk given driver:
               Let base be 100.
-              If driver.accidents greater than 0:
+              If driver.accidents greater than 0
                 Let base be base plus driver.accidents times 20.
-              If driver.violations greater than 0:
+              If driver.violations greater than 0
                 Let base be base plus driver.violations times 10.
               Return base.
             """;
@@ -131,9 +131,9 @@ class NaturalLanguageParserTest {
             Module test.
 
             Rule testOperators given a, b:
-              If a less than b:
+              If a less than b
                 Return 1.
-              If a greater than b:
+              If a greater than b
                 Return 2.
               Let sum be a plus b.
               Let diff be a minus b.

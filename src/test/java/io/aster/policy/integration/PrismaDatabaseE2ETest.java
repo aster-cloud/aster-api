@@ -127,10 +127,10 @@ class PrismaDatabaseE2ETest {
             a Request has amount.
             a Decision has approved, reason.
 
-            Rule testPolicy given request: Request:
-              If request.amount greater than 1000:
-                Return Decision with approved = false, reason = "Amount too high".
-              Return Decision with approved = true, reason = "Approved".
+            Rule testPolicy given request as Request:
+              If request.amount greater than 1000
+                Return Decision with approved set to false, reason set to "Amount too high".
+              Return Decision with approved set to true, reason set to "Approved".
             """;
 
         PolicyVersion version = new PolicyVersion();

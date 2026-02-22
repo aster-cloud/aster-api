@@ -150,7 +150,7 @@ class CrossCompilerConsistencyTest {
         String cnlSource = """
             Module test.greet.
 
-            Rule greet given name: Text:
+            Rule greet given name as Text:
               Return "Hello, " plus name.
             """;
 

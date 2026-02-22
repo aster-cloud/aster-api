@@ -11,6 +11,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.apache.commons.codec.digest.DigestUtils;
 
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -39,7 +40,7 @@ public class AuditEventListener {
         try {
             AuditLog log = new AuditLog();
             log.eventType = event.eventType().name();
-            log.timestamp = event.timestamp();
+            log.timestamp = event.timestamp().truncatedTo(ChronoUnit.MICROS);
             String tenant = event.tenantId();
             if (tenant == null || tenant.isBlank()) {
                 tenant = "system";

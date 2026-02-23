@@ -1,6 +1,7 @@
 package io.aster.policy.api.schema;
 
 import aster.core.ast.Module;
+import aster.core.inference.TypeInference;
 import aster.core.ir.CoreModel;
 import aster.core.lowering.CoreLowering;
 import io.aster.policy.parser.InProcessCnlParser;
@@ -356,16 +357,23 @@ public class ParameterSchemaExtractor {
 
     /**
      * 判断是否为基本类型
+     *
+     * 委托 TypeInference.isPrimitiveType() 处理规范名（Int, Float, Bool 等），
+     * 补充英文别名（integer, decimal, string 等）。
+     * 中文/德语类型名由 Canonicalizer 在解析阶段翻译为英文规范名，
+     * Core IR 中不会出现非英文类型名，因此无需匹配。
      */
-    private static boolean isPrimitiveType(String typeName) {
+    static boolean isPrimitiveType(String typeName) {
+        if (typeName == null || typeName.isBlank()) {
+            return false;
+        }
+        if (TypeInference.isPrimitiveType(typeName)) {
+            return true;
+        }
         return switch (typeName.toLowerCase()) {
-            // 英文基本类型
-            case "int", "integer", "long", "double", "float", "decimal",
-                 "string", "text", "bool", "boolean", "date", "datetime", "time" -> true;
-            // 中文基本类型
-            case "整数", "长整数", "小数", "浮点数", "文本", "字符串", "布尔", "日期", "时间", "日期时间" -> true;
-            // 德语基本类型
-            case "ganzzahl", "langzahl", "dezimal", "zeichenkette", "wahrheitswert", "datum", "zeit" -> true;
+            case "int", "float", "bool", "text", "long", "double",
+                 "integer", "decimal", "string", "boolean",
+                 "date", "datetime", "time", "number" -> true;
             default -> false;
         };
     }

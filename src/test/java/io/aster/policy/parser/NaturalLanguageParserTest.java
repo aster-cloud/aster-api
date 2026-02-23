@@ -2,7 +2,9 @@ package io.aster.policy.parser;
 
 import aster.core.ast.Decl;
 import aster.core.ast.Module;
+import aster.core.canonicalizer.Canonicalizer;
 import aster.core.ir.CoreModel;
+import aster.core.lexicon.LexiconRegistry;
 import aster.core.lowering.CoreLowering;
 import aster.core.parser.AstBuilder;
 import aster.core.parser.AsterCustomLexer;
@@ -153,6 +155,23 @@ class NaturalLanguageParserTest {
         CoreLowering lowering = new CoreLowering();
         CoreModel.Module coreModule = lowering.lowerModule(module);
         assertNotNull(coreModule);
+    }
+
+    @Test
+    void testChineseConstructionFieldCanonicalization() {
+        // 回归测试：中文 construction field 含字符串值时，不应出现双句号
+        Canonicalizer canon = new Canonicalizer(
+            LexiconRegistry.getInstance().getOrThrow("zh-CN"));
+
+        String input = "返回 决定 包含 批准 将 设为 假, 理由 将 设为 「申请人未成年」。";
+        String canonicalized = canon.canonicalize(input);
+
+        assertFalse(canonicalized.contains("set to."),
+            "DOT 不应紧跟 'to'，实际: " + canonicalized);
+        assertTrue(canonicalized.endsWith("."),
+            "应以单个句号结尾，实际: " + canonicalized);
+        assertEquals("Return 决定 has 批准 set to false, 理由 set to \"申请人未成年\".",
+            canonicalized);
     }
 
     @Test

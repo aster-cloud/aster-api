@@ -89,7 +89,7 @@ public class PolicyRollbackResourceTest {
             .header("X-Tenant-Id", "test-tenant")
             .header("X-User-Id", "test-user")
         .when()
-            .post("/api/policies/" + testPolicyId + "/rollback")
+            .post("/api/v1/policies/" + testPolicyId + "/rollback")
         .then()
             .statusCode(200)
             .body("success", is(true))
@@ -115,7 +115,7 @@ public class PolicyRollbackResourceTest {
             .header("X-Tenant-Id", "test-tenant")
             .header("X-User-Id", "test-user")
         .when()
-            .post("/api/policies/" + testPolicyId + "/rollback")
+            .post("/api/v1/policies/" + testPolicyId + "/rollback")
         .then()
             .statusCode(200)
             .body("success", is(true));
@@ -143,7 +143,7 @@ public class PolicyRollbackResourceTest {
             .header("X-Tenant-Id", "test-tenant")
             .header("X-User-Id", "test-user")
         .when()
-            .post("/api/policies/" + testPolicyId + "/rollback")
+            .post("/api/v1/policies/" + testPolicyId + "/rollback")
         .then()
             .statusCode(200)
             .body("success", is(false))
@@ -166,7 +166,7 @@ public class PolicyRollbackResourceTest {
             .header("X-Tenant-Id", "test-tenant")
             .header("X-User-Id", "test-user")
         .when()
-            .post("/api/policies/" + testPolicyId + "/rollback")
+            .post("/api/v1/policies/" + testPolicyId + "/rollback")
         .then()
             .statusCode(400);
     }
@@ -186,7 +186,7 @@ public class PolicyRollbackResourceTest {
             .header("X-Tenant-Id", "test-tenant")
             .header("X-User-Id", "test-user")
         .when()
-            .post("/api/policies/" + testPolicyId + "/rollback");
+            .post("/api/v1/policies/" + testPolicyId + "/rollback");
 
         // 等待审计日志异步写入
         waitForAuditLog();

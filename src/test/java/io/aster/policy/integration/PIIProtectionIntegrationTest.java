@@ -139,7 +139,7 @@ public class PIIProtectionIntegrationTest {
         given()
             .header("X-Tenant-Id", "test-tenant")
             .when()
-            .get("/api/audit")
+            .get("/api/v1/audit")
             .then()
             .statusCode(200)
             .contentType(ContentType.JSON);
@@ -150,7 +150,7 @@ public class PIIProtectionIntegrationTest {
             .queryParam("start", "2025-01-15T10:00:00Z")
             .queryParam("end", "2025-01-15T11:00:00Z")
             .when()
-            .get("/api/audit/verify-chain")
+            .get("/api/v1/audit/verify-chain")
             .then()
             .statusCode(200)
             .contentType(ContentType.JSON)

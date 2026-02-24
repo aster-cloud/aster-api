@@ -288,7 +288,7 @@ public class IdempotencyIntegrationTest {
         }
         return request
             .when()
-            .patch("/api/audit/anomalies/" + anomalyId + "/status")
+            .patch("/api/v1/audit/anomalies/" + anomalyId + "/status")
             .andReturn();
     }
 

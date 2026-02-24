@@ -101,6 +101,15 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Generate image tag
+        id: meta
+        run: |
+          VERSION=$(grep '^version' aster-api/gradle.properties 2>/dev/null | cut -d= -f2 || echo "0.0.0")
+          SHA=$(echo "${{ github.sha }}" | head -c 7)
+          TAG="${VERSION}-${SHA}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Image tag: ${TAG}"
+
       - name: Build & Push Docker Image
         uses: docker/build-push-action@v6
         with:
@@ -108,11 +117,13 @@ jobs:
           file: Dockerfile.jvm
           platforms: linux/arm64
           push: true
-          tags: wontlost/aster-api:jvm-latest
+          tags: |
+            wontlost/aster-api:${{ steps.meta.outputs.tag }}
+            wontlost/aster-api:jvm-latest
 
       - name: Deploy to K3S
         run: |
           mkdir -p ~/.kube
           printf '%s' "${{ secrets.KUBECONFIG }}" > ~/.kube/config
-          kubectl rollout restart deployment/aster-api -n aster-cloud
+          kubectl set image deployment/aster-api aster-api=wontlost/aster-api:${{ steps.meta.outputs.tag }} -n aster-cloud
           kubectl rollout status deployment/aster-api -n aster-cloud --timeout=300s

@@ -38,7 +38,7 @@ class DebugApiTest {
             .contentType(ContentType.JSON)
             .body(request)
             .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
             .then()
             .statusCode(200)
             .extract()

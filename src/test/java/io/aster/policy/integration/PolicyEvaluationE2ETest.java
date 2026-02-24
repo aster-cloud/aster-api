@@ -72,7 +72,7 @@ class PolicyEvaluationE2ETest {
             .contentType(ContentType.JSON)
             .body(context)
             .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
             .then()
             .statusCode(200)
             .body("result.approved", equalTo(true))
@@ -121,7 +121,7 @@ class PolicyEvaluationE2ETest {
             .contentType(ContentType.JSON)
             .body(context)
             .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
             .then()
             .statusCode(200)
             .body("result.approved", equalTo(true))
@@ -173,7 +173,7 @@ class PolicyEvaluationE2ETest {
             .contentType(ContentType.JSON)
             .body(contextA)
             .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
             .then()
             .statusCode(200)
             .body("result.approved", equalTo(true));
@@ -206,7 +206,7 @@ class PolicyEvaluationE2ETest {
             .contentType(ContentType.JSON)
             .body(contextB)
             .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
             .then()
             .statusCode(200)
             .body("result.approved", equalTo(true));
@@ -215,14 +215,14 @@ class PolicyEvaluationE2ETest {
         await().atMost(Duration.ofSeconds(3)).until(() -> {
             var response = given()
                 .header("X-Tenant-Id", TENANT_A)
-                .get("/api/audit/type/POLICY_EVALUATION");
+                .get("/api/v1/audit/type/POLICY_EVALUATION");
             return response.statusCode() == 200 && response.jsonPath().getList("$").size() >= 2;
         });
 
         // 验证审计日志 - 通过 REST API 查询
         given()
             .header("X-Tenant-Id", TENANT_A)
-            .get("/api/audit/type/POLICY_EVALUATION")
+            .get("/api/v1/audit/type/POLICY_EVALUATION")
             .then()
             .statusCode(200)
             .body("size()", greaterThanOrEqualTo(2))  // 至少 2 条日志
@@ -243,7 +243,7 @@ class PolicyEvaluationE2ETest {
         given()
             .header("X-Tenant-Id", TENANT_A)
             .when()
-            .get("/api/audit")
+            .get("/api/v1/audit")
             .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -263,7 +263,7 @@ class PolicyEvaluationE2ETest {
         given()
             .header("X-Tenant-Id", TENANT_A)
             .when()
-            .get("/api/audit/type/POLICY_EVALUATION")
+            .get("/api/v1/audit/type/POLICY_EVALUATION")
             .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -282,7 +282,7 @@ class PolicyEvaluationE2ETest {
         given()
             .header("X-Tenant-Id", TENANT_A)
             .when()
-            .get("/api/audit/policy/" + POLICY_MODULE + "/" + POLICY_FUNCTION)
+            .get("/api/v1/audit/policy/" + POLICY_MODULE + "/" + POLICY_FUNCTION)
             .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -397,7 +397,7 @@ class PolicyEvaluationE2ETest {
             .contentType(ContentType.JSON)
             .body(batchContext)
             .when()
-            .post("/api/policies/evaluate/batch")
+            .post("/api/v1/policies/evaluate/batch")
             .then()
             .statusCode(200)
             .body("results", hasSize(2))

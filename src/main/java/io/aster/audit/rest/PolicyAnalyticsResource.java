@@ -12,6 +12,8 @@ import io.aster.policy.tenant.TenantContext;
 import io.quarkus.hibernate.orm.panache.PanacheQuery;
 import io.smallrye.common.annotation.Blocking;
 import io.smallrye.mutiny.Uni;
+import io.aster.policy.security.rbac.RequireRole;
+import io.aster.policy.security.rbac.Role;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
@@ -39,8 +41,9 @@ import java.util.stream.Collectors;
  * - POST /api/audit/anomalies/{id}/actions/verify - 手动触发验证
  * - PATCH /api/audit/anomalies/{id}/status - 更新异常状态
  */
-@Path("/api/audit")
+@Path("/api/v1/audit")
 @Produces(MediaType.APPLICATION_JSON)
+@RequireRole(Role.ADMIN)
 public class PolicyAnalyticsResource {
 
     @Inject

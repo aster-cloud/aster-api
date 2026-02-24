@@ -5,6 +5,8 @@ import aster.runtime.workflow.WorkflowState;
 import io.aster.workflow.dto.WorkflowEventDTO;
 import io.aster.workflow.dto.WorkflowMetricsDTO;
 import io.aster.workflow.dto.WorkflowStateDTO;
+import io.aster.policy.security.rbac.RequireRole;
+import io.aster.policy.security.rbac.Role;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -18,9 +20,10 @@ import java.util.stream.Collectors;
  *
  * 提供 workflow 事件查询、状态查询和指标接口，满足审计和可观测性要求。
  */
-@Path("/api/workflows")
+@Path("/api/v1/workflows")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
+@RequireRole(Role.MEMBER)
 public class WorkflowAuditResource {
 
     @Inject

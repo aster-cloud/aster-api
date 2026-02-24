@@ -60,7 +60,7 @@ public class TamperDetectionIntegrationTest {
             .queryParam("start", start.toString())
             .queryParam("end", end.toString())
             .when()
-            .get("/api/audit/verify-chain")
+            .get("/api/v1/audit/verify-chain")
             .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -96,7 +96,7 @@ public class TamperDetectionIntegrationTest {
             .queryParam("start", start.toString())
             .queryParam("end", end.toString())
             .when()
-            .get("/api/audit/verify-chain")
+            .get("/api/v1/audit/verify-chain")
             .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -114,7 +114,7 @@ public class TamperDetectionIntegrationTest {
             .queryParam("start", "2025-01-15T10:00:00Z")
             // 缺少 end 参数
             .when()
-            .get("/api/audit/verify-chain")
+            .get("/api/v1/audit/verify-chain")
             .then()
             .statusCode(400)
             .body("error", containsString("Missing required parameters"));
@@ -125,7 +125,7 @@ public class TamperDetectionIntegrationTest {
             .queryParam("start", "invalid-time")
             .queryParam("end", "2025-01-15T10:00:00Z")
             .when()
-            .get("/api/audit/verify-chain")
+            .get("/api/v1/audit/verify-chain")
             .then()
             .statusCode(400)
             .body("error", containsString("Invalid time format"));
@@ -139,7 +139,7 @@ public class TamperDetectionIntegrationTest {
             .queryParam("start", start.toString())
             .queryParam("end", end.toString())
             .when()
-            .get("/api/audit/verify-chain")
+            .get("/api/v1/audit/verify-chain")
             .then()
             .statusCode(400)
             .body("error", containsString("Time range too large"));

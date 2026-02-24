@@ -8,9 +8,11 @@ import jakarta.ws.rs.ext.Provider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
+
 import java.time.Instant;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * 全局异常处理器
@@ -44,7 +46,8 @@ public class GlobalExceptionMapper implements ExceptionMapper<Throwable> {
 
     @Override
     public Response toResponse(Throwable exception) {
-        String traceId = UUID.randomUUID().toString();
+        SpanContext spanCtx = Span.current().getSpanContext();
+        String traceId = spanCtx.isValid() ? spanCtx.getTraceId() : java.util.UUID.randomUUID().toString();
 
         // 记录异常日志
         LOG.errorf(exception, "请求处理失败 [traceId=%s]: %s", traceId, exception.getMessage());

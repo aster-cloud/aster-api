@@ -67,7 +67,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
         .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -118,7 +118,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
         .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -162,7 +162,7 @@ public class PolicyEvaluationResourceTest {
             .header("X-Tenant-Id", "tenant1")
             .body(requestBody)
         .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
         .then()
             .statusCode(200)
             .body("result", notNullValue())
@@ -174,7 +174,7 @@ public class PolicyEvaluationResourceTest {
             .header("X-Tenant-Id", "tenant2")
             .body(requestBody)
         .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
         .then()
             .statusCode(200)
             .body("result", notNullValue())
@@ -244,7 +244,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .post("/api/policies/evaluate/batch")
+            .post("/api/v1/policies/evaluate/batch")
         .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -295,7 +295,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .post("/api/policies/evaluate/batch")
+            .post("/api/v1/policies/evaluate/batch")
         .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -323,7 +323,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .post("/api/policies/validate")
+            .post("/api/v1/policies/validate")
         .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -348,7 +348,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .post("/api/policies/validate")
+            .post("/api/v1/policies/validate")
         .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -373,7 +373,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .post("/api/policies/validate")
+            .post("/api/v1/policies/validate")
         .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -412,7 +412,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
         .then()
             .statusCode(200);
 
@@ -422,7 +422,7 @@ public class PolicyEvaluationResourceTest {
             .header("X-Tenant-Id", "tenant1")
             .body("{}")
         .when()
-            .delete("/api/policies/cache")
+            .delete("/api/v1/policies/cache")
         .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -444,7 +444,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .delete("/api/policies/cache")
+            .delete("/api/v1/policies/cache")
         .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -467,7 +467,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .delete("/api/policies/cache")
+            .delete("/api/v1/policies/cache")
         .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -490,7 +490,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
         .then()
             .statusCode(400); // Jakarta Validation 错误
     }
@@ -509,7 +509,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
         .then()
             .statusCode(400); // Jakarta Validation 错误
     }
@@ -528,7 +528,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
         .then()
             .statusCode(400); // Jakarta Validation 错误
     }
@@ -559,7 +559,7 @@ public class PolicyEvaluationResourceTest {
             .contentType(ContentType.JSON)
             .body("{\"requests\": " + requestsJson.toString() + "}")
         .when()
-            .post("/api/policies/evaluate/batch")
+            .post("/api/v1/policies/evaluate/batch")
         .then()
             .statusCode(400); // Jakarta Validation 错误
     }
@@ -577,7 +577,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .post("/api/policies/evaluate/batch")
+            .post("/api/v1/policies/evaluate/batch")
         .then()
             .statusCode(400); // Jakarta Validation 错误
     }
@@ -600,7 +600,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
         .then()
             .statusCode(200)
             .contentType(ContentType.JSON)
@@ -639,7 +639,7 @@ public class PolicyEvaluationResourceTest {
                 }
                 """)
         .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
         .then()
             .statusCode(200)
             .body("result", notNullValue())

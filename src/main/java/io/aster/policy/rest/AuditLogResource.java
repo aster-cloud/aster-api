@@ -5,6 +5,8 @@ import io.aster.audit.chain.ChainVerificationResult;
 import io.aster.policy.entity.AuditLog;
 import io.smallrye.mutiny.Uni;
 import io.vertx.ext.web.RoutingContext;
+import io.aster.policy.security.rbac.RequireRole;
+import io.aster.policy.security.rbac.Role;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
@@ -29,8 +31,9 @@ import java.util.List;
  *
  * 注意：所有API都通过 X-Tenant-Id 实现多租户隔离
  */
-@Path("/api/audit")
+@Path("/api/v1/audit")
 @Produces(MediaType.APPLICATION_JSON)
+@RequireRole(Role.ADMIN)
 public class AuditLogResource {
 
     private static final Logger LOG = Logger.getLogger(AuditLogResource.class);

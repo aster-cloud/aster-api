@@ -27,7 +27,7 @@ public class RequestSignatureFilter {
     @Inject
     NonceService nonceService;
 
-    @ConfigProperty(name = "aster.security.signature.enabled", defaultValue = "false")
+    @ConfigProperty(name = "aster.security.signature.enabled", defaultValue = "true")
     boolean signatureEnabled;
 
     @ServerRequestFilter(priority = Priorities.AUTHENTICATION)

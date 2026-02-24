@@ -66,7 +66,7 @@ class SimplePolicyE2ETest {
             .contentType(ContentType.JSON)
             .body(request)
             .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
             .then()
             .statusCode(200)
             .body("result.approved", equalTo(true))
@@ -77,14 +77,14 @@ class SimplePolicyE2ETest {
         await().atMost(Duration.ofSeconds(3)).until(() -> {
             var response = given()
                 .header("X-Tenant-Id", TENANT_A)
-                .get("/api/audit/type/POLICY_EVALUATION");
+                .get("/api/v1/audit/type/POLICY_EVALUATION");
             return response.statusCode() == 200 && response.jsonPath().getList("$").size() > 0;
         });
 
         // 通过 REST API 查询审计日志
         given()
             .header("X-Tenant-Id", TENANT_A)
-            .get("/api/audit/type/POLICY_EVALUATION")
+            .get("/api/v1/audit/type/POLICY_EVALUATION")
             .then()
             .statusCode(200)
             .body("size()", equalTo(1))
@@ -125,7 +125,7 @@ class SimplePolicyE2ETest {
             .header("X-Tenant-Id", TENANT_A)
             .contentType(ContentType.JSON)
             .body(requestA)
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
             .then()
             .statusCode(200)
             .body("result.approved", equalTo(true));
@@ -135,7 +135,7 @@ class SimplePolicyE2ETest {
             .header("X-Tenant-Id", TENANT_B)
             .contentType(ContentType.JSON)
             .body(requestB)
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
             .then()
             .statusCode(200)
             .body("result.approved", equalTo(true));
@@ -176,7 +176,7 @@ class SimplePolicyE2ETest {
             .contentType(ContentType.JSON)
             .body(request)
             .when()
-            .post("/api/policies/evaluate")
+            .post("/api/v1/policies/evaluate")
             .then()
             .statusCode(200)
             .body("result.approved", equalTo(true))

@@ -105,7 +105,7 @@ public class PolicyAnalyticsResourceTest {
             .queryParam("granularity", "hour")
             .queryParam("from", Instant.now().minus(1, ChronoUnit.DAYS).toString())
             .queryParam("to", Instant.now().toString())
-            .when().get("/api/audit/stats/version-usage")
+            .when().get("/api/v1/audit/stats/version-usage")
             .then()
             .statusCode(200)
             .body("$", notNullValue())
@@ -123,7 +123,7 @@ public class PolicyAnalyticsResourceTest {
             .queryParam("granularity", "day")
             .queryParam("from", Instant.now().minus(7, ChronoUnit.DAYS).toString())
             .queryParam("to", Instant.now().toString())
-            .when().get("/api/audit/stats/version-usage")
+            .when().get("/api/v1/audit/stats/version-usage")
             .then()
             .statusCode(200)
             .body("$", notNullValue());
@@ -139,7 +139,7 @@ public class PolicyAnalyticsResourceTest {
             .queryParam("versionId", versionA.id)
             .queryParam("granularity", "day")
             .queryParam("tenantId", "test-tenant")
-            .when().get("/api/audit/stats/version-usage")
+            .when().get("/api/v1/audit/stats/version-usage")
             .then()
             .statusCode(200)
             .body("$", notNullValue());
@@ -154,7 +154,7 @@ public class PolicyAnalyticsResourceTest {
             .header("X-Tenant-Id", "test-tenant")
             .queryParam("versionId", versionA.id)
             .queryParam("granularity", "invalid")
-            .when().get("/api/audit/stats/version-usage")
+            .when().get("/api/v1/audit/stats/version-usage")
             .then()
             .statusCode(400);
     }
@@ -169,7 +169,7 @@ public class PolicyAnalyticsResourceTest {
             .queryParam("versionId", versionA.id)
             .queryParam("from", Instant.now().minus(100, ChronoUnit.DAYS).toString())
             .queryParam("to", Instant.now().toString())
-            .when().get("/api/audit/stats/version-usage")
+            .when().get("/api/v1/audit/stats/version-usage")
             .then()
             .statusCode(400);
     }
@@ -182,7 +182,7 @@ public class PolicyAnalyticsResourceTest {
         given()
             .header("X-Tenant-Id", "test-tenant")
             .queryParam("granularity", "day")
-            .when().get("/api/audit/stats/version-usage")
+            .when().get("/api/v1/audit/stats/version-usage")
             .then()
             .statusCode(400);
     }
@@ -200,7 +200,7 @@ public class PolicyAnalyticsResourceTest {
         given()
             .header("X-Tenant-Id", "test-tenant")
             .queryParam("days", 30)
-            .when().get("/api/audit/anomalies")
+            .when().get("/api/v1/audit/anomalies")
             .then()
             .statusCode(200)
             .body("$", notNullValue());
@@ -219,7 +219,7 @@ public class PolicyAnalyticsResourceTest {
             .queryParam("size", 10)
             .queryParam("type", "HIGH_FAILURE_RATE")
             .queryParam("days", 7)
-            .when().get("/api/audit/anomalies")
+            .when().get("/api/v1/audit/anomalies")
             .then()
             .statusCode(200)
             .body("$", notNullValue());
@@ -233,7 +233,7 @@ public class PolicyAnalyticsResourceTest {
         given()
             .header("X-Tenant-Id", "test-tenant")
             .queryParam("page", 0)  // page must be >= 1
-            .when().get("/api/audit/anomalies")
+            .when().get("/api/v1/audit/anomalies")
             .then()
             .statusCode(400);
     }
@@ -246,7 +246,7 @@ public class PolicyAnalyticsResourceTest {
         given()
             .header("X-Tenant-Id", "test-tenant")
             .queryParam("days", 500)
-            .when().get("/api/audit/anomalies")
+            .when().get("/api/v1/audit/anomalies")
             .then()
             .statusCode(400);
     }
@@ -263,7 +263,7 @@ public class PolicyAnalyticsResourceTest {
             .queryParam("versionA", versionA.id)
             .queryParam("versionB", versionB.id)
             .queryParam("days", 7)
-            .when().get("/api/audit/compare")
+            .when().get("/api/v1/audit/compare")
             .then()
             .statusCode(200)
             .body("versionAId", is(versionA.id.intValue()))
@@ -282,7 +282,7 @@ public class PolicyAnalyticsResourceTest {
         given()
             .header("X-Tenant-Id", "test-tenant")
             .queryParam("versionA", versionA.id)
-            .when().get("/api/audit/compare")
+            .when().get("/api/v1/audit/compare")
             .then()
             .statusCode(400);
     }
@@ -296,7 +296,7 @@ public class PolicyAnalyticsResourceTest {
             .header("X-Tenant-Id", "test-tenant")
             .queryParam("versionA", versionA.id)
             .queryParam("versionB", versionA.id)
-            .when().get("/api/audit/compare")
+            .when().get("/api/v1/audit/compare")
             .then()
             .statusCode(400);
     }
@@ -311,7 +311,7 @@ public class PolicyAnalyticsResourceTest {
             .queryParam("versionA", versionA.id)
             .queryParam("versionB", versionB.id)
             .queryParam("days", 100)
-            .when().get("/api/audit/compare")
+            .when().get("/api/v1/audit/compare")
             .then()
             .statusCode(400);
     }

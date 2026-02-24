@@ -93,7 +93,7 @@ public class PolicyAuditResourceTest {
     void testGetVersionUsage_DefaultPagination() {
         given()
             .header("X-Tenant-Id", TEST_TENANT_ID)
-            .when().get("/api/audit/policy-versions/{versionId}/usage", testVersion.id)
+            .when().get("/api/v1/audit/policy-versions/{versionId}/usage", testVersion.id)
             .then()
             .statusCode(200)
             .body("items.size()", greaterThan(0))
@@ -111,7 +111,7 @@ public class PolicyAuditResourceTest {
         given()
             .header("X-Tenant-Id", TEST_TENANT_ID)
             .queryParam("status", "READY")
-            .when().get("/api/audit/policy-versions/{versionId}/usage", testVersion.id)
+            .when().get("/api/v1/audit/policy-versions/{versionId}/usage", testVersion.id)
             .then()
             .statusCode(200)
             .body("items", notNullValue());
@@ -125,7 +125,7 @@ public class PolicyAuditResourceTest {
         given()
             .header("X-Tenant-Id", TEST_TENANT_ID)
             .queryParam("page", -1)
-            .when().get("/api/audit/policy-versions/{versionId}/usage", testVersion.id)
+            .when().get("/api/v1/audit/policy-versions/{versionId}/usage", testVersion.id)
             .then()
             .statusCode(400);
     }
@@ -138,7 +138,7 @@ public class PolicyAuditResourceTest {
         given()
             .header("X-Tenant-Id", TEST_TENANT_ID)
             .queryParam("size", 101)
-            .when().get("/api/audit/policy-versions/{versionId}/usage", testVersion.id)
+            .when().get("/api/v1/audit/policy-versions/{versionId}/usage", testVersion.id)
             .then()
             .statusCode(400);
     }
@@ -157,7 +157,7 @@ public class PolicyAuditResourceTest {
             .queryParam("to", to.toString())
             .queryParam("page", 0)
             .queryParam("size", 10)
-            .when().get("/api/audit/policy-versions/{versionId}/timeline", testVersion.id)
+            .when().get("/api/v1/audit/policy-versions/{versionId}/timeline", testVersion.id)
             .then()
             .statusCode(200)
             .body("items", notNullValue())
@@ -174,7 +174,7 @@ public class PolicyAuditResourceTest {
             .header("X-Tenant-Id", TEST_TENANT_ID)
             .queryParam("page", 0)
             .queryParam("size", 10)
-            .when().get("/api/audit/policy-versions/{versionId}/timeline", testVersion.id)
+            .when().get("/api/v1/audit/policy-versions/{versionId}/timeline", testVersion.id)
             .then()
             .statusCode(400);
     }
@@ -193,7 +193,7 @@ public class PolicyAuditResourceTest {
             .queryParam("to", to.toString())
             .queryParam("page", 0)
             .queryParam("size", 10)
-            .when().get("/api/audit/policy-versions/{versionId}/timeline", testVersion.id)
+            .when().get("/api/v1/audit/policy-versions/{versionId}/timeline", testVersion.id)
             .then()
             .statusCode(400);
     }
@@ -205,7 +205,7 @@ public class PolicyAuditResourceTest {
     void testAssessImpact_ReturnsCorrectCounts() {
         given()
             .header("X-Tenant-Id", TEST_TENANT_ID)
-            .when().get("/api/audit/policy-versions/{versionId}/impact", testVersion.id)
+            .when().get("/api/v1/audit/policy-versions/{versionId}/impact", testVersion.id)
             .then()
             .statusCode(200)
             .body("versionId", is(testVersion.id.intValue()))
@@ -220,7 +220,7 @@ public class PolicyAuditResourceTest {
     void testAssessImpact_NotFound() {
         given()
             .header("X-Tenant-Id", TEST_TENANT_ID)
-            .when().get("/api/audit/policy-versions/{versionId}/impact", 999999L)
+            .when().get("/api/v1/audit/policy-versions/{versionId}/impact", 999999L)
             .then()
             .statusCode(404);
     }
@@ -232,7 +232,7 @@ public class PolicyAuditResourceTest {
     void testGetWorkflowVersionHistory() {
         given()
             .header("X-Tenant-Id", TEST_TENANT_ID)
-            .when().get("/api/audit/workflows/{workflowId}/version-history", workflowId1)
+            .when().get("/api/v1/audit/workflows/{workflowId}/version-history", workflowId1)
             .then()
             .statusCode(200)
             .body("$", notNullValue());
@@ -245,7 +245,7 @@ public class PolicyAuditResourceTest {
     void testGetWorkflowVersionHistory_InvalidUUID() {
         given()
             .header("X-Tenant-Id", TEST_TENANT_ID)
-            .when().get("/api/audit/workflows/{workflowId}/version-history", "invalid-uuid")
+            .when().get("/api/v1/audit/workflows/{workflowId}/version-history", "invalid-uuid")
             .then()
             .statusCode(400);
     }
@@ -258,7 +258,7 @@ public class PolicyAuditResourceTest {
         String validSha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         given()
             .header("X-Tenant-Id", TEST_TENANT_ID)
-            .when().get("/api/audit/artifacts/{sha256}", validSha256)
+            .when().get("/api/v1/audit/artifacts/{sha256}", validSha256)
             .then()
             .statusCode(404);
     }
@@ -270,7 +270,7 @@ public class PolicyAuditResourceTest {
     void testGetArtifact_InvalidFormat() {
         given()
             .header("X-Tenant-Id", TEST_TENANT_ID)
-            .when().get("/api/audit/artifacts/{sha256}", "invalid-sha256")
+            .when().get("/api/v1/audit/artifacts/{sha256}", "invalid-sha256")
             .then()
             .statusCode(400);
     }
@@ -282,7 +282,7 @@ public class PolicyAuditResourceTest {
     void testGetRuntimePolicies() {
         given()
             .header("X-Tenant-Id", TEST_TENANT_ID)
-            .when().get("/api/audit/runtime/{build}/policies", "test-build-1.0.0")
+            .when().get("/api/v1/audit/runtime/{build}/policies", "test-build-1.0.0")
             .then()
             .statusCode(200)
             .body("$", notNullValue());
@@ -295,7 +295,7 @@ public class PolicyAuditResourceTest {
     void testGetRuntimePolicies_EmptyBuild() {
         given()
             .header("X-Tenant-Id", TEST_TENANT_ID)
-            .when().get("/api/audit/runtime/{build}/policies", " ")
+            .when().get("/api/v1/audit/runtime/{build}/policies", " ")
             .then()
             .statusCode(400);
     }

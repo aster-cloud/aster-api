@@ -19,6 +19,8 @@ import io.vertx.ext.web.RoutingContext;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
+import io.aster.policy.security.rbac.RequireRole;
+import io.aster.policy.security.rbac.Role;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
@@ -38,9 +40,10 @@ import java.util.regex.Matcher;
  * 提供策略评估、批量评估、验证和缓存管理的RESTful接口。
  * 支持通过 X-Tenant-Id 头部实现多租户隔离。
  */
-@Path("/api/policies")
+@Path("/api/v1/policies")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
+@RequireRole(Role.MEMBER)
 public class PolicyEvaluationResource {
 
     private static final Logger LOG = Logger.getLogger(PolicyEvaluationResource.class);
@@ -263,7 +266,10 @@ public class PolicyEvaluationResource {
      */
     @POST
     @Path("/evaluate-source")
-    public Uni<EvaluationResponse> evaluateSource(@Valid SourcePolicyRequest request) {
+    public Uni<EvaluationResponse> evaluateSource(
+        @Valid SourcePolicyRequest request,
+        @QueryParam("trace") @DefaultValue("false") boolean trace
+    ) {
         String tenantId = tenantId();
         String performedBy = performedBy();
         Timer.Sample sample = businessMetrics.startPolicyEvaluation();
@@ -318,6 +324,16 @@ public class PolicyEvaluationResource {
                 LOG.infof("CNL source evaluation completed in %dms: %s.%s",
                     execResult.executionTimeMs(), execResult.moduleName(), execResult.functionName());
 
+                if (trace) {
+                    var decisionTrace = new io.aster.policy.api.model.DecisionTrace(
+                        execResult.moduleName(),
+                        execResult.functionName(),
+                        List.of(),
+                        execResult.result(),
+                        execResult.executionTimeMs()
+                    );
+                    return EvaluationResponse.success(execResult.result(), execResult.executionTimeMs(), decisionTrace);
+                }
                 return EvaluationResponse.success(execResult.result(), execResult.executionTimeMs());
 
             } catch (DynamicCnlExecutor.DynamicExecutionException e) {

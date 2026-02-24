@@ -33,7 +33,7 @@ public class PIIResponseFilterTest {
         given()
             .header("X-Tenant-Id", tenantId)
             .when()
-            .get("/api/audit")
+            .get("/api/v1/audit")
             .then()
             .statusCode(200)
             .contentType(ContentType.JSON);
@@ -50,7 +50,7 @@ public class PIIResponseFilterTest {
         given()
             .header("X-Tenant-Id", "normal-tenant")
             .when()
-            .get("/api/audit")
+            .get("/api/v1/audit")
             .then()
             .statusCode(200)
             .contentType(ContentType.JSON);
@@ -68,7 +68,7 @@ public class PIIResponseFilterTest {
             .queryParam("start", start)
             .queryParam("end", end)
             .when()
-            .get("/api/audit/verify-chain")
+            .get("/api/v1/audit/verify-chain")
             .then()
             .statusCode(200)
             .contentType(ContentType.JSON)

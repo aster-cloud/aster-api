@@ -104,9 +104,8 @@ jobs:
       - name: Generate image tag
         id: meta
         run: |
-          VERSION=$(grep '^version' aster-api/gradle.properties 2>/dev/null | cut -d= -f2 || echo "0.0.0")
           SHA=$(echo "${{ github.sha }}" | head -c 7)
-          TAG="${VERSION}-${SHA}"
+          TAG="${SHA}"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Image tag: ${TAG}"
 

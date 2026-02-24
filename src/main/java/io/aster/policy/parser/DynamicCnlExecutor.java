@@ -27,6 +27,7 @@ import java.util.Map;
  *
  * 适用于 Dashboard 执行场景，无需预先部署策略
  */
+@jakarta.enterprise.context.ApplicationScoped
 public class DynamicCnlExecutor {
 
     private static final Logger LOG = Logger.getLogger(DynamicCnlExecutor.class);

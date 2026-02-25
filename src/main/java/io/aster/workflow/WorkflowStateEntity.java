@@ -193,18 +193,6 @@ public class WorkflowStateEntity extends PanacheEntityBase {
     }
 
     /**
-     * 获取或创建 workflow 状态（仅用于内部事件存储）
-     *
-     * @param workflowId workflow 唯一标识符
-     * @return workflow 状态实例
-     * @deprecated 使用 getOrCreate(UUID, String) 替代，明确指定租户ID
-     */
-    @Deprecated
-    public static WorkflowStateEntity getOrCreate(UUID workflowId) {
-        return getOrCreate(workflowId, null);
-    }
-
-    /**
      * 获取或创建 workflow 状态
      *
      * Phase 4.3: 添加租户ID参数，确保多租户数据隔离

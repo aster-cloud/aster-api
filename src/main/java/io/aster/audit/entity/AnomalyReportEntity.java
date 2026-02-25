@@ -124,20 +124,6 @@ public class AnomalyReportEntity extends PanacheEntityBase {
     }
 
     /**
-     * 查询最近 N 天的异常报告（不带租户过滤，仅用于系统级管理）
-     *
-     * @param days 天数
-     * @return 异常报告列表，按检测时间降序排列
-     * @deprecated 使用 findRecent(String tenantId, int days) 替代
-     */
-    @Deprecated
-    public static List<AnomalyReportEntity> findRecent(int days) {
-        return find("detected_at >= ?1 ORDER BY detected_at DESC",
-            Instant.now().minus(days, ChronoUnit.DAYS))
-            .list();
-    }
-
-    /**
      * 按异常类型查询（带租户过滤）
      *
      * @param tenantId 租户ID

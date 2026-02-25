@@ -216,17 +216,6 @@ public class PostgresWorkflowRuntime implements WorkflowRuntime {
     }
 
     /**
-     * 兼容旧接口：返回 DeterminismContext 提供的时钟实例。
-     *
-     * @return 确定性时钟实例
-     */
-    @Override
-    @Deprecated
-    public DeterministicClock getClock() {
-        return getDeterminismContext().clock();
-    }
-
-    /**
      * 获取事件存储
      *
      * @return 事件存储实例

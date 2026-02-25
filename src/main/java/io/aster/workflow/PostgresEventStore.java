@@ -75,7 +75,6 @@ public class PostgresEventStore implements EventStore, aster.truffle.runtime.Pos
 
     @Transactional
     @Override
-    @SuppressWarnings("deprecation") // getOrCreate(UUID) - tenantId not available in EventStore interface
     public long appendEvent(String workflowId, String eventType, Object payload,
                             Integer attemptNumber, Long backoffDelayMs, String failureReason) {
         try {
@@ -124,7 +123,7 @@ public class PostgresEventStore implements EventStore, aster.truffle.runtime.Pos
             long workflowSeq = maxSeq + 1;
 
             // Phase 3.1: 获取或创建 workflow_state（用于后续状态更新）
-            WorkflowStateEntity state = WorkflowStateEntity.getOrCreate(wfId);
+            WorkflowStateEntity state = WorkflowStateEntity.getOrCreate(wfId, null);
 
             // 创建事件实体
             WorkflowEventEntity event = new WorkflowEventEntity();
@@ -250,11 +249,11 @@ public class PostgresEventStore implements EventStore, aster.truffle.runtime.Pos
      */
     @Transactional
     @Override
-    @SuppressWarnings({"deprecation", "unchecked"}) // getOrCreate(UUID) - tenantId not in interface; Map cast is safe
+    @SuppressWarnings("unchecked") // Map cast is safe
     public void saveSnapshot(String workflowId, long eventSeq, Object state) {
         try {
             UUID wfId = UUID.fromString(workflowId);
-            WorkflowStateEntity entity = WorkflowStateEntity.getOrCreate(wfId);
+            WorkflowStateEntity entity = WorkflowStateEntity.getOrCreate(wfId, null);
 
             Object snapshotPayload = state;
             if (state instanceof Map<?, ?> stateMap) {

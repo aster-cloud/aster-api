@@ -160,17 +160,6 @@ class DeterminismSnapshotTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
-    void testDeprecatedAlias() throws Exception {
-        ClockTimesSnapshot snapshot = new ClockTimesSnapshot();
-        snapshot.setClockTimes(List.of("2025-04-01T00:00:00Z"));
-
-        String json = mapper.writeValueAsString(snapshot);
-        DeterminismSnapshot restored = mapper.readValue(json, DeterminismSnapshot.class);
-        assertThat(restored.getClockTimes()).containsExactly("2025-04-01T00:00:00Z");
-    }
-
-    @Test
     void testSizeLimitBoundaryExactly500() {
         // 测试恰好 500 条记录（边界值）
         ReplayDeterministicRandom random = new ReplayDeterministicRandom();

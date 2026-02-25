@@ -1,16 +1,17 @@
 package io.aster.policy.websocket;
 
 import io.aster.policy.api.PolicyEvaluationService;
-import io.aster.policy.rest.model.EvaluationRequest;
-import io.smallrye.mutiny.Uni;
+import io.aster.policy.security.RateLimiter;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.websocket.*;
 import jakarta.websocket.server.ServerEndpoint;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -21,6 +22,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * - 接收策略代码和示例输入
  * - 实时编译和评估
  * - 返回评估结果或错误信息
+ *
+ * 防护措施：
+ * - 连接级限流：限制每个 IP 的并发连接数
+ * - 消息级限流：限制每个会话的消息频率
+ * - 空闲超时：自动关闭长时间无消息的连接
  */
 @ServerEndpoint("/ws/preview")
 @ApplicationScoped
@@ -32,16 +38,51 @@ public class PreviewWebSocket {
     @Inject
     PolicyEvaluationService evaluationService;
 
-    // 存储会话，用于广播
+    @Inject
+    RateLimiter rateLimiter;
+
+    @ConfigProperty(name = "aster.ratelimit.enabled", defaultValue = "true")
+    boolean rateLimitEnabled;
+
+    @ConfigProperty(name = "aster.ratelimit.ws.max-connections", defaultValue = "5")
+    int maxConnections;
+
+    @ConfigProperty(name = "aster.ratelimit.ws.max-messages-per-second", defaultValue = "10")
+    int maxMessagesPerSecond;
+
+    @ConfigProperty(name = "aster.ratelimit.ws.idle-timeout-ms", defaultValue = "300000")
+    long idleTimeoutMs;
+
+    // 存储会话，用于管理
     private final ConcurrentHashMap<String, Session> sessions = new ConcurrentHashMap<>();
+
+    // 会话 → 连接标识映射（用于连接释放时减计数）
+    private final ConcurrentHashMap<String, String> sessionIdentifiers = new ConcurrentHashMap<>();
 
     /**
      * 连接建立
      */
     @OnOpen
     public void onOpen(Session session) {
+        // 设置空闲超时
+        session.setMaxIdleTimeout(idleTimeoutMs);
+
+        // 连接级限流
+        String identifier = extractIdentifier(session);
+
+        if (rateLimitEnabled && !rateLimiter.tryAcquireConnection(identifier, maxConnections)) {
+            LOG.warnf("WebSocket 连接限流拒绝: identifier=%s, session=%s", identifier, session.getId());
+            closeSession(session, new CloseReason(
+                CloseReason.CloseCodes.VIOLATED_POLICY,
+                "Connection limit exceeded"
+            ));
+            return;
+        }
+
         sessions.put(session.getId(), session);
-        LOG.infof("WebSocket connected: %s", session.getId());
+        sessionIdentifiers.put(session.getId(), identifier);
+
+        LOG.infof("WebSocket connected: %s (identifier=%s)", session.getId(), identifier);
         sendMessage(session, createResponse("connected", "WebSocket 连接成功", null));
     }
 
@@ -51,6 +92,13 @@ public class PreviewWebSocket {
     @OnClose
     public void onClose(Session session) {
         sessions.remove(session.getId());
+
+        // 释放连接计数
+        String identifier = sessionIdentifiers.remove(session.getId());
+        if (identifier != null) {
+            rateLimiter.releaseConnection(identifier);
+        }
+
         LOG.infof("WebSocket closed: %s", session.getId());
     }
 
@@ -76,6 +124,16 @@ public class PreviewWebSocket {
     @OnMessage
     public void onMessage(String message, Session session) {
         LOG.debugf("Received message from %s: %s", session.getId(), message);
+
+        // 消息级限流
+        if (rateLimitEnabled) {
+            String msgRateLimitKey = "ws:msg:" + session.getId();
+            if (!rateLimiter.tryAcquire(msgRateLimitKey, maxMessagesPerSecond, Duration.ofSeconds(1))) {
+                LOG.warnf("WebSocket 消息限流拒绝: session=%s", session.getId());
+                sendMessage(session, createResponse("error", "Rate limit exceeded", null));
+                return;
+            }
+        }
 
         try {
             // 解析请求
@@ -144,6 +202,43 @@ public class PreviewWebSocket {
         } catch (Exception e) {
             LOG.errorf(e, "Failed to process preview request from %s", session.getId());
             sendMessage(session, createResponse("error", "请求格式错误: " + e.getMessage(), null));
+        }
+    }
+
+    /**
+     * 从 WebSocket 会话中提取连接标识（IP 地址）
+     */
+    private String extractIdentifier(Session session) {
+        // 优先从 query parameter 中获取标识
+        var params = session.getRequestParameterMap();
+        if (params != null && params.containsKey("clientId")) {
+            List<String> values = params.get("clientId");
+            if (values != null && !values.isEmpty()) {
+                return "ws:" + values.get(0);
+            }
+        }
+
+        // 回退到会话用户属性或远程地址
+        var userProperties = session.getUserProperties();
+        if (userProperties != null) {
+            Object remoteAddr = userProperties.get("jakarta.websocket.endpoint.remoteAddress");
+            if (remoteAddr != null) {
+                return "ws:" + remoteAddr;
+            }
+        }
+
+        // 最终回退：使用固定前缀（所有匿名连接共享限额）
+        return "ws:anonymous";
+    }
+
+    /**
+     * 安全关闭 WebSocket 会话
+     */
+    private void closeSession(Session session, CloseReason reason) {
+        try {
+            session.close(reason);
+        } catch (Exception e) {
+            LOG.errorf(e, "Failed to close session %s", session.getId());
         }
     }
 

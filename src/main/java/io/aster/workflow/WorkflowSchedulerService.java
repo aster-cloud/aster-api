@@ -53,6 +53,12 @@ public class WorkflowSchedulerService {
     @ConfigProperty(name = "quarkus.datasource.db-kind", defaultValue = "postgresql")
     String dbKind;
 
+    @ConfigProperty(name = "workflow.scheduler.max-schedule-count", defaultValue = "100")
+    int maxScheduleCount;
+
+    @ConfigProperty(name = "workflow.scheduler.max-running-minutes", defaultValue = "30")
+    int maxRunningMinutes;
+
     private ExecutorService executorService;
     private ScheduledExecutorService timerPollingService;
     private volatile boolean running = false;
@@ -151,10 +157,12 @@ public class WorkflowSchedulerService {
     @SuppressWarnings("unchecked")
     public List<WorkflowStateEntity> findReadyWorkflows(int limit) {
         // 使用原生 SQL 查询以支持 PostgreSQL 的 FOR UPDATE SKIP LOCKED 语法
+        // schedule_count 过滤：排除已超限的 workflow，避免反复拉取死循环 workflow
         StringBuilder sql = new StringBuilder(
                 "SELECT * FROM workflow_state " +
                 "WHERE status IN ('READY', 'RUNNING') " +
                 "AND (lock_expires_at IS NULL OR lock_expires_at < :now) " +
+                "AND schedule_count <= :maxScheduleCount " +
                 "ORDER BY created_at"
         );
         if (supportsSkipLocked()) {
@@ -164,6 +172,7 @@ public class WorkflowSchedulerService {
 
         return entityManager.createNativeQuery(sql.toString(), WorkflowStateEntity.class)
         .setParameter("now", Instant.now())
+        .setParameter("maxScheduleCount", maxScheduleCount)
         .setParameter("limit", limit)
         .getResultList();
     }
@@ -227,9 +236,12 @@ public class WorkflowSchedulerService {
             } else {
                 state.status = "RUNNING";
             }
+
+            // 递增调度计数器（用于死循环检测，实际终止在事件检查之后）
+            state.scheduleCount++;
             state.persist();
 
-            Log.infof("Processing workflow %s (worker=%s)", workflowId, workerId);
+            Log.infof("Processing workflow %s (worker=%s, scheduleCount=%d)", workflowId, workerId, state.scheduleCount);
 
             // Snapshot 优化：从最后的 snapshot 开始重放事件，而非从 0
             long fromSeq = 0;
@@ -336,7 +348,32 @@ public class WorkflowSchedulerService {
                 Log.infof("Workflow %s failed", workflowId);
 
             } else {
-                // 仍在执行中，释放锁等待下次调度
+                // 仍在执行中，无终结事件 — 检查是否为卡死 workflow
+
+                // 防护检查 1：调度次数上限
+                if (state.scheduleCount > maxScheduleCount) {
+                    state.markCompleted("FAILED");
+                    state.errorMessage = "Terminated: exceeded max schedule count (" + maxScheduleCount + ")";
+                    state.lockOwner = null;
+                    state.lockExpiresAt = null;
+                    state.persist();
+                    Log.warnf("Workflow %s terminated: exceeded %d schedule attempts", workflowId, maxScheduleCount);
+                    return;
+                }
+
+                // 防护检查 2：最大运行时间
+                Instant startedTime = state.startedAt != null ? state.startedAt : state.createdAt;
+                if (Duration.between(startedTime, Instant.now()).toMinutes() > maxRunningMinutes) {
+                    state.markCompleted("FAILED");
+                    state.errorMessage = "Terminated: exceeded max running time (" + maxRunningMinutes + " minutes)";
+                    state.lockOwner = null;
+                    state.lockExpiresAt = null;
+                    state.persist();
+                    Log.warnf("Workflow %s terminated: running for > %d minutes", workflowId, maxRunningMinutes);
+                    return;
+                }
+
+                // 未超限，释放锁等待下次调度
                 state.lockOwner = null;
                 state.lockExpiresAt = null;
                 state.persist();

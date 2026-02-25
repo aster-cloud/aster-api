@@ -52,6 +52,13 @@ public class WorkflowStateEntity extends PanacheEntityBase {
     @Column(name = "last_snapshot_at")
     public Instant lastSnapshotAt;
 
+    /**
+     * 调度计数器（Phase 6.6）
+     * 记录该 workflow 被调度器处理的次数，用于检测死循环调度
+     */
+    @Column(name = "schedule_count", nullable = false)
+    public Integer scheduleCount = 0;
+
     @Column(name = "lock_owner", length = 64)
     public String lockOwner;
 

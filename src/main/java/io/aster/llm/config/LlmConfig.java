@@ -4,6 +4,7 @@ import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 
 import java.time.Duration;
+import java.util.Optional;
 
 /**
  * LLM 集成配置
@@ -42,8 +43,7 @@ public interface LlmConfig {
     Duration readTimeout();
 
     /** 全局 API Key（多租户场景可被租户专属 Key 覆盖） */
-    @WithDefault("")
-    String apiKey();
+    Optional<String> apiKey();
 
     /** Key 来源：config / db */
     @WithDefault("config")

@@ -84,7 +84,9 @@ public class PromptComposer {
     public PromptContext buildExplainContext(String tenantId, ExplainRequest req) {
         String locale = req.getLocaleOrDefault();
 
-        String systemPrompt = templates.load("system", "system_base", locale);
+        String systemPrompt = "You are an aster-lang policy expert. "
+            + "Your task is to explain policy code logic clearly and concisely. "
+            + "Reply in the language requested by the user.";
 
         StringBuilder userPrompt = new StringBuilder();
         userPrompt.append("请解释以下 aster-lang 策略代码的逻辑：\n\n");

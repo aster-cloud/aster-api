@@ -31,7 +31,7 @@ public class ConfigTenantLlmKeyProvider implements TenantLlmKeyProvider {
         }
 
         // 回退到全局 Key
-        String globalKey = config.apiKey();
+        String globalKey = config.apiKey().orElse(null);
         if (globalKey != null && !globalKey.isBlank()) {
             return globalKey;
         }

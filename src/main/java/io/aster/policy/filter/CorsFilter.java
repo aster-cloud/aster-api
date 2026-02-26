@@ -1,29 +1,24 @@
 package io.aster.policy.filter;
 
-import jakarta.annotation.Priority;
-import jakarta.ws.rs.Priorities;
-import jakarta.ws.rs.container.ContainerRequestContext;
-import jakarta.ws.rs.container.ContainerRequestFilter;
-import jakarta.ws.rs.container.ContainerResponseContext;
-import jakarta.ws.rs.container.ContainerResponseFilter;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.ext.Provider;
+import io.vertx.core.Handler;
+import io.vertx.core.http.HttpMethod;
+import io.vertx.ext.web.Router;
+import io.vertx.ext.web.RoutingContext;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.Optional;
 import java.util.Set;
 
 /**
- * 运行时 CORS 过滤器：处理 preflight（OPTIONS）和普通跨域请求。
+ * Vert.x 层 CORS 过滤器：处理 preflight（OPTIONS）和普通跨域请求。
  *
- * 同时实现 ContainerRequestFilter（拦截 OPTIONS 并返回 CORS 头）
- * 和 ContainerResponseFilter（为普通请求添加 CORS 头）。
- *
- * 优先级设为 AUTHENTICATION - 1，确保在所有业务过滤器之前执行。
+ * 通过监听 Router 事件在 Vert.x HTTP 层注册全局路由，确保 CORS 头被添加到
+ * 所有响应，包括 SSE 流式响应（JAX-RS ContainerResponseFilter 无法覆盖 SSE 流）。
  */
-@Provider
-@Priority(Priorities.AUTHENTICATION - 1)
-public class CorsFilter implements ContainerRequestFilter, ContainerResponseFilter {
+@ApplicationScoped
+public class CorsFilter {
 
     @ConfigProperty(name = "quarkus.http.cors.origins", defaultValue = "")
     Optional<String> allowedOrigins;
@@ -34,47 +29,32 @@ public class CorsFilter implements ContainerRequestFilter, ContainerResponseFilt
     @ConfigProperty(name = "quarkus.http.cors.headers", defaultValue = "accept,authorization,content-type,x-requested-with")
     String allowedHeaders;
 
-    @Override
-    public void filter(ContainerRequestContext requestContext) {
-        String origin = requestContext.getHeaderString("Origin");
-        if (origin == null || origin.isBlank()) {
-            return;
-        }
-
-        if (!isOriginAllowed(origin)) {
-            return;
-        }
-
-        // OPTIONS preflight：直接返回 200 + CORS 头
-        if ("OPTIONS".equalsIgnoreCase(requestContext.getMethod())) {
-            requestContext.abortWith(
-                Response.ok()
-                    .header("Access-Control-Allow-Origin", origin)
-                    .header("Access-Control-Allow-Methods", allowedMethods)
-                    .header("Access-Control-Allow-Headers", allowedHeaders)
-                    .header("Access-Control-Allow-Credentials", "true")
-                    .header("Access-Control-Max-Age", "86400")
-                    .build()
-            );
-        }
+    void onRouterReady(@Observes Router router) {
+        router.route().order(-200).handler(corsHandler());
     }
 
-    @Override
-    public void filter(ContainerRequestContext requestContext, ContainerResponseContext responseContext) {
-        String origin = requestContext.getHeaderString("Origin");
-        if (origin == null || origin.isBlank()) {
-            return;
-        }
+    private Handler<RoutingContext> corsHandler() {
+        return rc -> {
+            String origin = rc.request().getHeader("Origin");
+            if (origin == null || origin.isBlank() || !isOriginAllowed(origin)) {
+                rc.next();
+                return;
+            }
 
-        if (!isOriginAllowed(origin)) {
-            return;
-        }
+            rc.response()
+                .putHeader("Access-Control-Allow-Origin", origin)
+                .putHeader("Access-Control-Allow-Methods", allowedMethods)
+                .putHeader("Access-Control-Allow-Headers", allowedHeaders)
+                .putHeader("Access-Control-Allow-Credentials", "true")
+                .putHeader("Access-Control-Max-Age", "86400");
 
-        responseContext.getHeaders().putSingle("Access-Control-Allow-Origin", origin);
-        responseContext.getHeaders().putSingle("Access-Control-Allow-Methods", allowedMethods);
-        responseContext.getHeaders().putSingle("Access-Control-Allow-Headers", allowedHeaders);
-        responseContext.getHeaders().putSingle("Access-Control-Allow-Credentials", "true");
-        responseContext.getHeaders().putSingle("Access-Control-Max-Age", "86400");
+            if (rc.request().method() == HttpMethod.OPTIONS) {
+                rc.response().setStatusCode(200).end();
+                return;
+            }
+
+            rc.next();
+        };
     }
 
     private boolean isOriginAllowed(String origin) {

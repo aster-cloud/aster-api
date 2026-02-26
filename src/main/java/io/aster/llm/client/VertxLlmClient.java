@@ -60,8 +60,8 @@ public class VertxLlmClient implements LlmClient {
                 JsonObject body = buildRequestBody(request);
                 int port = resolvePort(baseUri);
 
-                LOG.debugf("LLM 流式请求: provider=%s, model=%s, path=%s",
-                    config.provider(), request.model(), chatPath);
+                LOG.infof("LLM 流式请求: provider=%s, model=%s, url=%s:%d%s",
+                    config.provider(), request.model(), baseUri.getHost(), port, chatPath);
 
                 HttpRequest<Buffer> httpRequest = getClient()
                     .request(HttpMethod.POST, port, baseUri.getHost(), chatPath)
@@ -184,10 +184,19 @@ public class VertxLlmClient implements LlmClient {
 
     private JsonObject buildRequestBody(LlmRequest request) {
         JsonArray messages = new JsonArray();
+        boolean isNativeOpenAi = "openai".equals(config.provider())
+            && config.baseUrl().contains("api.openai.com");
         for (var msg : request.messages()) {
-            String role = "developer".equals(msg.role()) && "anthropic".equals(config.provider())
-                ? "user"
-                : msg.role();
+            String role = msg.role();
+            if ("developer".equals(role)) {
+                // "developer" 角色仅 OpenAI 原生 API 支持，
+                // 其他提供商和 OpenAI 兼容代理需映射为 system
+                if ("anthropic".equals(config.provider())) {
+                    role = "user";
+                } else if (!isNativeOpenAi) {
+                    role = "system";
+                }
+            }
             messages.add(new JsonObject()
                 .put("role", role)
                 .put("content", msg.content()));

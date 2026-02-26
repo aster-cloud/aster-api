@@ -124,5 +124,5 @@ jobs:
         run: |
           mkdir -p ~/.kube
           printf '%s' "${{ secrets.KUBECONFIG }}" > ~/.kube/config
-          kubectl set image deployment/aster-api aster-api=wontlost/aster-api:${{ steps.meta.outputs.tag }} -n aster-cloud
+          kubectl rollout restart deployment/aster-api -n aster-cloud
           kubectl rollout status deployment/aster-api -n aster-cloud --timeout=300s

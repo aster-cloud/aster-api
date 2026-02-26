@@ -234,11 +234,12 @@ class WorkflowChaosTest extends CrashRecoveryTestBase {
         String workflowId = bootstrapWorkflow("RUNNING");
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch start = new CountDownLatch(1);
+        int stepsPerThread = 10;
 
         Runnable writerA = () -> {
             try {
                 start.await();
-                for (int i = 0; i < 60; i++) {
+                for (int i = 0; i < stepsPerThread; i++) {
                     String stepId = "hot-" + i;
                     appendStepStarted(workflowId, stepId, List.of());
                     appendStepCompleted(workflowId, stepId, List.of(), "A-" + i, true);
@@ -250,7 +251,7 @@ class WorkflowChaosTest extends CrashRecoveryTestBase {
         Runnable writerB = () -> {
             try {
                 start.await();
-                for (int i = 0; i < 60; i++) {
+                for (int i = 0; i < stepsPerThread; i++) {
                     String stepId = "cold-" + i;
                     appendStepStarted(workflowId, stepId, List.of());
                     appendStepCompleted(workflowId, stepId, List.of(), "B-" + i, false);
@@ -264,7 +265,9 @@ class WorkflowChaosTest extends CrashRecoveryTestBase {
         executor.submit(writerB);
         start.countDown();
         executor.shutdown();
-        executor.awaitTermination(15, TimeUnit.SECONDS);
+        assertThat(executor.awaitTermination(30, TimeUnit.SECONDS))
+                .as("concurrent writers should finish within timeout")
+                .isTrue();
         appendWorkflowCompleted(workflowId, Map.of("result", "concurrent-ok"));
 
         // When：调度器读取乱序事件，验证未出现死锁

@@ -79,9 +79,10 @@ public class TenantFilter implements ContainerRequestFilter {
 
         String path = requestContext.getUriInfo().getPath();
 
-        // 豁免路径：仅管理端点和 schema 端点
+        // 豁免路径：管理端点、schema 端点、AI 端点（浏览器直连，无 X-Tenant-Id）
         if (path.startsWith("/q/") || path.startsWith("q/")
-                || path.equals("/graphql/schema.graphql") || path.equals("graphql/schema.graphql")) {
+                || path.equals("/graphql/schema.graphql") || path.equals("graphql/schema.graphql")
+                || path.startsWith("/api/v1/ai/") || path.startsWith("api/v1/ai/")) {
             LOG.debugf("Bypassing tenant validation for path: %s", path);
             // 豁免路径使用默认租户
             tenantContext.setCurrentTenant("default");

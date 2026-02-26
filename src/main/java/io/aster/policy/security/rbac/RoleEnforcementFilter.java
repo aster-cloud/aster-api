@@ -33,6 +33,11 @@ public class RoleEnforcementFilter implements ContainerRequestFilter {
 
     @Override
     public void filter(ContainerRequestContext requestContext) {
+        // CORS preflight 请求不带自定义 headers，必须放行
+        if ("OPTIONS".equalsIgnoreCase(requestContext.getMethod())) {
+            return;
+        }
+
         if (!rbacEnabled) {
             return;
         }

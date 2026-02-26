@@ -72,6 +72,11 @@ public class TenantFilter implements ContainerRequestFilter {
 
     @Override
     public void filter(ContainerRequestContext requestContext) {
+        // CORS preflight 请求不带自定义 headers，必须放行
+        if ("OPTIONS".equalsIgnoreCase(requestContext.getMethod())) {
+            return;
+        }
+
         String path = requestContext.getUriInfo().getPath();
 
         // 豁免路径：仅管理端点和 schema 端点

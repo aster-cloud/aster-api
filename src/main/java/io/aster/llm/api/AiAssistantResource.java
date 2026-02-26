@@ -4,6 +4,7 @@ import io.aster.llm.api.dto.CompleteRequest;
 import io.aster.llm.api.dto.CompleteResponse;
 import io.aster.llm.api.dto.ExplainRequest;
 import io.aster.llm.api.dto.GeneratePolicyRequest;
+import io.aster.llm.api.dto.SuggestRequest;
 import io.aster.llm.config.LlmConfig;
 import io.aster.llm.service.LlmProxyService;
 import io.aster.policy.security.rbac.RequireRole;
@@ -79,6 +80,23 @@ public class AiAssistantResource {
         String tenantId = tenantId();
         LOG.infof("AI 解释请求: tenant=%s, locale=%s", tenantId, request.getLocaleOrDefault());
         return llmProxyService.streamExplain(tenantId, request);
+    }
+
+    /**
+     * 策略优化建议（SSE 流式）
+     *
+     * POST /api/v1/ai/suggest
+     */
+    @POST
+    @Path("/suggest")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.SERVER_SENT_EVENTS)
+    @RestStreamElementType(MediaType.TEXT_PLAIN)
+    public Multi<String> suggest(@Valid SuggestRequest request) {
+        checkEnabled();
+        String tenantId = tenantId();
+        LOG.infof("AI 优化建议请求: tenant=%s, locale=%s", tenantId, request.getLocaleOrDefault());
+        return llmProxyService.streamSuggest(tenantId, request);
     }
 
     /**

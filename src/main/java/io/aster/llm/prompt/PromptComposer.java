@@ -3,6 +3,7 @@ package io.aster.llm.prompt;
 import io.aster.llm.api.dto.CompleteRequest;
 import io.aster.llm.api.dto.ExplainRequest;
 import io.aster.llm.api.dto.GeneratePolicyRequest;
+import io.aster.llm.api.dto.SuggestRequest;
 import io.aster.llm.config.LlmConfig;
 import io.aster.llm.model.ValidationResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -122,6 +123,35 @@ public class PromptComposer {
             .model(model)
             .temperature(0.1) // 补全场景低温度
             .maxTokens(256);  // 补全不需要长输出
+    }
+
+    /**
+     * 构建策略优化建议上下文
+     */
+    public PromptContext buildSuggestContext(String tenantId, SuggestRequest req) {
+        String locale = req.getLocaleOrDefault();
+        String model = req.model() != null ? req.model() : config.model();
+
+        String systemPrompt = "You are an aster-lang policy expert and code reviewer. "
+            + "Analyze the given policy code and provide actionable optimization suggestions. "
+            + "Focus on: simplification, performance, readability, and correctness. "
+            + "Reply in the language requested by the user.";
+
+        StringBuilder userPrompt = new StringBuilder();
+        userPrompt.append("请分析以下 aster-lang 策略代码并提供优化建议：\n\n");
+        userPrompt.append("```\n").append(req.source()).append("\n```\n\n");
+        if (req.focus() != null && !req.focus().isBlank()) {
+            userPrompt.append("重点关注：").append(req.focus()).append("\n\n");
+        }
+        userPrompt.append("请用").append(localeToLanguageName(locale)).append("回答。\n");
+        userPrompt.append("输出格式：按优先级列出建议，每条包含问题描述、改进方案和改进后的代码片段。");
+
+        return new PromptContext()
+            .systemPrompt(systemPrompt)
+            .userPrompt(userPrompt.toString())
+            .model(model)
+            .temperature(0.3)
+            .maxTokens(config.maxTokens());
     }
 
     private String buildUserPrompt(GeneratePolicyRequest req) {

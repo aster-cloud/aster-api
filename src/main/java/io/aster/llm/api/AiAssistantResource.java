@@ -7,8 +7,6 @@ import io.aster.llm.api.dto.GeneratePolicyRequest;
 import io.aster.llm.api.dto.SuggestRequest;
 import io.aster.llm.config.LlmConfig;
 import io.aster.llm.service.LlmProxyService;
-import io.aster.policy.security.rbac.RequireRole;
-import io.aster.policy.security.rbac.Role;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import io.vertx.ext.web.RoutingContext;
@@ -27,7 +25,6 @@ import org.jboss.resteasy.reactive.RestStreamElementType;
  * 生成和解释使用 SSE 流式传输，补全使用同步请求。
  */
 @Path("/api/v1/ai")
-@RequireRole(Role.MEMBER)
 public class AiAssistantResource {
 
     private static final Logger LOG = Logger.getLogger(AiAssistantResource.class);

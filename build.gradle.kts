@@ -49,6 +49,10 @@ dependencies {
     // WebSocket support for Live Preview
     implementation("io.quarkus:quarkus-websockets")
 
+    // Vert.x WebClient - LLM API 调用（GraalVM Native 兼容）
+    implementation("io.quarkus:quarkus-vertx")
+    implementation("io.vertx:vertx-web-client")
+
     // GraphQL支持
     implementation("io.quarkus:quarkus-smallrye-graphql")
     implementation("commons-codec:commons-codec:1.17.1")

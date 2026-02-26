@@ -1,0 +1,13 @@
+Der zuvor generierte Richtliniencode hat Kompilierungsfehler. Bitte beheben Sie diese.
+
+## Fehlermeldungen
+{errors}
+
+## Vorherige Ausgabe
+{previous_output}
+
+## Reparaturanforderungen
+1. Alle Kompilierungsfehler beheben
+2. Urspruengliche Geschaeftslogik beibehalten
+3. Nur den vollstaendigen korrigierten Richtliniencode ausgeben
+4. Keine Erklaerungen ausgeben

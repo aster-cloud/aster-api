@@ -1,0 +1,13 @@
+The previously generated policy code has compilation errors. Please fix them.
+
+## Error Messages
+{errors}
+
+## Previous Output
+{previous_output}
+
+## Repair Requirements
+1. Fix all compilation errors
+2. Keep the original business logic unchanged
+3. Output only the complete fixed policy code
+4. Do not output explanations

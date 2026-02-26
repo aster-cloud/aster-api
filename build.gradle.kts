@@ -124,8 +124,9 @@ tasks.withType<Test> {
     systemProperty("quarkus.test.flat-class-path", "true")
     jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
 
-    // Testcontainers Podman 配置
-    environment("DOCKER_HOST", "unix:///Users/rpang/.local/share/containers/podman/machine/podman.sock")
+    // Testcontainers 配置
+    // DOCKER_HOST: 本地开发通过 ~/.testcontainers.properties 配置 Podman socket
+    // CI 环境使用默认 Docker socket，不覆盖 DOCKER_HOST
     environment("TESTCONTAINERS_RYUK_DISABLED", "true")
 
     // 跳过需要完整 Aster 语言运行时的测试

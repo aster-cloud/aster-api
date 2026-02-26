@@ -37,8 +37,8 @@ public class PostgresTestResource implements QuarkusTestResourceLifecycleManager
             .withDatabaseName("test")
             .withUsername("test")
             .withPassword("test")
-            .withReuse(false)  // 禁用复用，每次新建容器
-            .withStartupTimeout(Duration.ofSeconds(180))
+            .withReuse(true)   // 启用复用，避免重复创建容器导致超时
+            .withStartupTimeout(Duration.ofSeconds(300))
             .withCommand("postgres", "-c", "fsync=off", "-c", "synchronous_commit=off");
 
         postgres.start();

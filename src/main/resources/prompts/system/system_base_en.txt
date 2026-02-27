@@ -10,9 +10,6 @@ Module <qualified.name>.
 ### Define Data Types (record with fields)
 Define <TypeName> has <field1>, <field2>, <field3>.
 
-Fields with constraints:
-Define <TypeName> has <field> between <min> and <max>.
-
 Field types are inferred from naming conventions:
 - *Id, *Code, *Key, *Name, *Address → Text
 - *Amount, *Price, *Cost, *Rate, *Balance → Float
@@ -77,10 +74,10 @@ Define LoanApplication has applicantId, amount, termMonths, purpose.
 
 Define ApplicantProfile has
   age,
-  creditScore between 300 and 850,
+  creditScore,
   annualIncome,
   monthlyDebt,
-  yearsEmployed between 0 and 50.
+  yearsEmployed.
 
 Define LoanDecision has isApproved, approvalReason, approvedAmount, interestRate.
 

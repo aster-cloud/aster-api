@@ -10,9 +10,6 @@ Module <限定名>.
 ### 定义数据类型（带字段的记录类型）
 Define <类型名> has <字段1>, <字段2>, <字段3>.
 
-带约束的字段：
-Define <类型名> has <字段> between <最小值> and <最大值>.
-
 字段类型根据命名约定自动推断：
 - *Id, *Code, *Key, *Name, *Address → Text
 - *Amount, *Price, *Cost, *Rate, *Balance → Float
@@ -77,10 +74,10 @@ Define LoanApplication has applicantId, amount, termMonths, purpose.
 
 Define ApplicantProfile has
   age,
-  creditScore between 300 and 850,
+  creditScore,
   annualIncome,
   monthlyDebt,
-  yearsEmployed between 0 and 50.
+  yearsEmployed.
 
 Define LoanDecision has isApproved, approvalReason, approvedAmount, interestRate.
 

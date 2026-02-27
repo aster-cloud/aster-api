@@ -10,9 +10,6 @@ Module <qualifizierter.name>.
 ### Datentypen definieren (Record mit Feldern)
 Define <Typname> has <feld1>, <feld2>, <feld3>.
 
-Felder mit Einschraenkungen:
-Define <Typname> has <feld> between <min> and <max>.
-
 Feldtypen werden automatisch aus Namenskonventionen abgeleitet:
 - *Id, *Code, *Key, *Name, *Address → Text
 - *Amount, *Price, *Cost, *Rate, *Balance → Float
@@ -77,10 +74,10 @@ Define LoanApplication has applicantId, amount, termMonths, purpose.
 
 Define ApplicantProfile has
   age,
-  creditScore between 300 and 850,
+  creditScore,
   annualIncome,
   monthlyDebt,
-  yearsEmployed between 0 and 50.
+  yearsEmployed.
 
 Define LoanDecision has isApproved, approvalReason, approvedAmount, interestRate.
 

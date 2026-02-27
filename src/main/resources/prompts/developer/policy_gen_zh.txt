@@ -10,8 +10,8 @@
 7. 条件分支：使用带缩进的 If/Otherwise 块（不要使用内联 if/then/else）
 8. 模式匹配：使用 Match/When（不要使用 match/case）
 9. 构造实例：<类型名> with <字段> set to <值>.
-10. 比较运算：equals to, greater than, less than, at least, at most
-11. 算术运算：plus, minus, times, divided by
+10. 比较运算：equals to, greater than, less than, >=, <=（不要使用 "at least" 或 "at most"）
+11. 算术运算：plus, minus, times, divided by（或符号：+, -, *, /）
 
 ## 常见错误
 - 错误：Data UserInfo: has name : Text.

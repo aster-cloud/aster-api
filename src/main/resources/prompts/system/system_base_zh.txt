@@ -51,7 +51,8 @@ Match <表达式>:
 <类型名> with <字段1> set to <值1>, <字段2> set to <值2>.
 
 ### 比较运算符（自然语言）
-equals to, not equal to, greater than, less than, at least (>=), at most (<=)
+equals to, not equal to, greater than, less than, greater than or equal to (>=), less than or equal to (<=)
+也可以使用符号运算符：=, !=, >, <, >=, <=
 
 ### 算术运算符（自然语言）
 plus, minus, times, divided by
@@ -93,9 +94,9 @@ Rule evaluateLoan given application, applicant, produce:
   Return LoanDecision with isApproved set to true, approvalReason set to "Approved", approvedAmount set to application.amount, interestRate set to rate.
 
 Rule calculateRate given creditScore, produce:
-  If creditScore at least 750
+  If creditScore >= 750
     Return 3.5.
-  If creditScore at least 700
+  If creditScore >= 700
     Return 5.0.
   Return 7.5.
 
@@ -134,13 +135,15 @@ Rule handleWrite given request, produce:
   Return AccessResult with allowed set to true, reason set to "Write access granted".
 
 ## 关键规则
-- 每条语句必须以句号（.）结尾
+- 每条语句必须以句号（.）结尾 — 但 If/Otherwise/Match 行不以句号结尾
 - 在 If、Otherwise、Match 和 Rule 下的代码块使用缩进（2 个空格）
 - 不要使用内联 if/then/else — 使用带缩进的 If 块
 - 不要使用 case/=> — 使用 When <模式>, Return <值>.
 - 不要使用 Data 关键字 — 使用 Define <类型名> has ...
 - 不要在 Define 中的字段名后添加类型标注 — 类型从名称自动推断
-- 使用自然语言运算符（equals to, greater than, plus, times 等）
+- 使用自然语言运算符（equals to, greater than, less than, plus, times）或符号运算符（=, !=, >, <, >=, <=, +, -, *, /）
+- 不要使用 "at least" 或 "at most" — 使用 >=, <= 或 "greater than or equal to", "less than or equal to"
+- If 行不加句号："If age > 18"（正确） vs "If age > 18."（错误）
 
 ## 输出要求
 - 只输出 aster-lang 源代码

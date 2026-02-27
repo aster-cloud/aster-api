@@ -10,8 +10,8 @@ Du generierst aster-lang Richtliniencode. Befolge diese Einschraenkungen strikt.
 7. Bedingungen: If/Otherwise-Bloecke mit Einrueckung (NICHT inline if/then/else)
 8. Musterabgleich: Match/When (NICHT match/case)
 9. Instanzen konstruieren: <Typname> with <feld> set to <wert>.
-10. Vergleiche: equals to, greater than, less than, at least, at most
-11. Arithmetik: plus, minus, times, divided by
+10. Vergleiche: equals to, greater than, less than, >=, <= (NICHT "at least" oder "at most")
+11. Arithmetik: plus, minus, times, divided by (oder symbolisch: +, -, *, /)
 
 ## Haeufige Fehler vermeiden
 - FALSCH: Data UserInfo: has name : Text.

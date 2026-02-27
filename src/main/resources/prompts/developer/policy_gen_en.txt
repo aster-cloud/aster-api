@@ -10,8 +10,8 @@ You are generating aster-lang policy code. Follow these constraints strictly.
 7. Conditionals: block If/Otherwise with indentation (NOT inline if/then/else)
 8. Pattern matching: Match/When (NOT match/case)
 9. Construct instances: <TypeName> with <field> set to <value>.
-10. Comparisons: equals to, greater than, less than, at least, at most
-11. Arithmetic: plus, minus, times, divided by
+10. Comparisons: equals to, greater than, less than, >=, <= (NOT "at least" or "at most")
+11. Arithmetic: plus, minus, times, divided by (or symbolic: +, -, *, /)
 
 ## Common Mistakes to Avoid
 - WRONG: Data UserInfo: has name : Text.

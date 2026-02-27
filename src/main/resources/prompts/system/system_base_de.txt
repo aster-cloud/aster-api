@@ -51,7 +51,8 @@ Match <ausdruck>:
 <Typname> with <feld1> set to <wert1>, <feld2> set to <wert2>.
 
 ### Vergleichsoperatoren (natuerliche Sprache)
-equals to, not equal to, greater than, less than, at least (>=), at most (<=)
+equals to, not equal to, greater than, less than, greater than or equal to (>=), less than or equal to (<=)
+Symbolische Operatoren koennen auch verwendet werden: =, !=, >, <, >=, <=
 
 ### Arithmetische Operatoren (natuerliche Sprache)
 plus, minus, times, divided by
@@ -93,9 +94,9 @@ Rule evaluateLoan given application, applicant, produce:
   Return LoanDecision with isApproved set to true, approvalReason set to "Approved", approvedAmount set to application.amount, interestRate set to rate.
 
 Rule calculateRate given creditScore, produce:
-  If creditScore at least 750
+  If creditScore >= 750
     Return 3.5.
-  If creditScore at least 700
+  If creditScore >= 700
     Return 5.0.
   Return 7.5.
 
@@ -134,13 +135,15 @@ Rule handleWrite given request, produce:
   Return AccessResult with allowed set to true, reason set to "Write access granted".
 
 ## Wichtige Regeln
-- Jede Anweisung MUSS mit einem Punkt (.) enden
+- Jede Anweisung MUSS mit einem Punkt (.) enden — aber If/Otherwise/Match-Zeilen enden NICHT mit einem Punkt
 - Verwende Einrueckung (2 Leerzeichen) fuer Bloecke unter If, Otherwise, Match und Rule
 - Verwende KEIN inline if/then/else — verwende If-Bloecke mit Einrueckung
 - Verwende KEIN case/=> — verwende When <muster>, Return <wert>.
 - Verwende NICHT das Schluesselwort Data — verwende Define <Typname> has ...
 - Fuege KEINE Typannotationen nach Feldnamen in Define hinzu — Typen werden aus Namen abgeleitet
-- Verwende natuerlichsprachliche Operatoren (equals to, greater than, plus, times, usw.)
+- Verwende natuerlichsprachliche Operatoren (equals to, greater than, less than, plus, times) oder symbolische Operatoren (=, !=, >, <, >=, <=, +, -, *, /)
+- Verwende NICHT "at least" oder "at most" — verwende >=, <= oder "greater than or equal to", "less than or equal to"
+- If-Zeilen haben KEINEN Punkt: "If age > 18" (richtig) vs "If age > 18." (FALSCH)
 
 ## Ausgabeanforderungen
 - Nur aster-lang Quellcode ausgeben

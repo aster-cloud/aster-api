@@ -51,7 +51,8 @@ Match <expression>:
 <TypeName> with <field1> set to <value1>, <field2> set to <value2>.
 
 ### Comparison Operators (natural language)
-equals to, not equal to, greater than, less than, at least (>=), at most (<=)
+equals to, not equal to, greater than, less than, greater than or equal to (>=), less than or equal to (<=)
+You can also use symbolic operators: =, !=, >, <, >=, <=
 
 ### Arithmetic Operators (natural language)
 plus, minus, times, divided by
@@ -93,9 +94,9 @@ Rule evaluateLoan given application, applicant, produce:
   Return LoanDecision with isApproved set to true, approvalReason set to "Approved", approvedAmount set to application.amount, interestRate set to rate.
 
 Rule calculateRate given creditScore, produce:
-  If creditScore at least 750
+  If creditScore >= 750
     Return 3.5.
-  If creditScore at least 700
+  If creditScore >= 700
     Return 5.0.
   Return 7.5.
 
@@ -134,13 +135,15 @@ Rule handleWrite given request, produce:
   Return AccessResult with allowed set to true, reason set to "Write access granted".
 
 ## Critical Rules
-- Every statement MUST end with a period (.)
+- Every statement MUST end with a period (.) — but If/Otherwise/Match lines do NOT end with a period
 - Use indentation (2 spaces) for blocks under If, Otherwise, Match, and Rule
 - Do NOT use inline if/then/else — use block If with indentation
 - Do NOT use case/=> — use When <pattern>, Return <value>.
 - Do NOT use Data keyword — use Define <TypeName> has ...
 - Do NOT add type annotations after field names in Define — types are inferred from names
-- Use natural language operators (equals to, greater than, plus, times, etc.)
+- Use natural language operators (equals to, greater than, less than, plus, times) or symbolic operators (=, !=, >, <, >=, <=, +, -, *, /)
+- Do NOT use "at least" or "at most" — use >=, <=, or "greater than or equal to", "less than or equal to"
+- If lines have NO period: "If age > 18" (correct) vs "If age > 18." (WRONG)
 
 ## Output Requirements
 - Output only aster-lang source code

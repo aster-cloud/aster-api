@@ -50,9 +50,10 @@ Match <expression>:
 ### Construct Instances
 <TypeName> with <field1> set to <value1>, <field2> set to <value2>.
 
-### Comparison Operators (natural language)
-equals to, not equal to, greater than, less than, greater than or equal to (>=), less than or equal to (<=)
-You can also use symbolic operators: =, !=, >, <, >=, <=
+### Comparison Operators
+Natural language: equals to, not equal to, greater than, less than, greater than or equal to, less than or equal to
+Symbolic: <, >, <=, >=, !=
+IMPORTANT: For equality, use "equals to" (NOT = or ==). For inequality, use != or "not equal to".
 
 ### Arithmetic Operators (natural language)
 plus, minus, times, divided by
@@ -141,9 +142,9 @@ Rule handleWrite given request, produce:
 - Do NOT use case/=> — use When <pattern>, Return <value>.
 - Do NOT use Data keyword — use Define <TypeName> has ...
 - Do NOT add type annotations after field names in Define — types are inferred from names
-- Use natural language operators (equals to, greater than, less than, plus, times) or symbolic operators (=, !=, >, <, >=, <=, +, -, *, /)
-- Do NOT use "at least" or "at most" — use >=, <=, or "greater than or equal to", "less than or equal to"
-- If lines have NO period: "If age > 18" (correct) vs "If age > 18." (WRONG)
+- For equality use "equals to" (NOT = or ==). For inequality use != or "not equal to"
+- For >=/<= use symbolic >=/<= or "greater than or equal to"/"less than or equal to". Do NOT use "at least" or "at most"
+- If/Otherwise/Match lines have NO period: "If age > 18" (correct) vs "If age > 18." (WRONG)
 
 ## Output Requirements
 - Output only aster-lang source code

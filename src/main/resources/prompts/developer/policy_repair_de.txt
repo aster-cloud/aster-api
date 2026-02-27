@@ -15,7 +15,8 @@ Der zuvor generierte Richtliniencode hat Kompilierungsfehler. Behebe sie mit der
 - Fehlendes "set to" bei Konstruktoren: "<Typ> with <feld> set to <wert>."
 - Symbolische Operatoren ">", "<", "+": verwende "greater than", "less than", "plus"
 - Fehlendes Komma zwischen Feldern: "Define X has a, b, c."
-- Falscher Vergleich "==": verwende "equals to"
+- Falscher Vergleich "==" oder "=": verwende "equals to" fuer Gleichheit
+- Punkt nach If-Bedingung "If x > 5.": entferne den Punkt von If-Zeilen (If x > 5)
 
 ## Reparaturanforderungen
 1. Alle oben aufgefuehrten Kompilierungsfehler beheben

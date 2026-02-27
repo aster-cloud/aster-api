@@ -15,7 +15,8 @@
 - 缺少 "set to"：使用 "<类型> with <字段> set to <值>."
 - 符号运算符 ">", "<", "+"：使用 "greater than", "less than", "plus"
 - Define 中字段间缺少逗号："Define X has a, b, c."
-- 错误比较 "=="：使用 "equals to"
+- 错误比较 "==" 或 "="：使用 "equals to" 进行等于比较
+- If 条件后加句号 "If x > 5."：去掉 If 行的句号 (If x > 5)
 
 ## 修复要求
 1. 修复上述所有编译错误

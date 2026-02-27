@@ -50,9 +50,10 @@ Match <表达式>:
 ### 构造实例
 <类型名> with <字段1> set to <值1>, <字段2> set to <值2>.
 
-### 比较运算符（自然语言）
-equals to, not equal to, greater than, less than, greater than or equal to (>=), less than or equal to (<=)
-也可以使用符号运算符：=, !=, >, <, >=, <=
+### 比较运算符
+自然语言：equals to, not equal to, greater than, less than, greater than or equal to, less than or equal to
+符号：<, >, <=, >=, !=
+重要：等于比较使用 "equals to"（不要使用 = 或 ==）。不等于使用 != 或 "not equal to"。
 
 ### 算术运算符（自然语言）
 plus, minus, times, divided by
@@ -141,9 +142,9 @@ Rule handleWrite given request, produce:
 - 不要使用 case/=> — 使用 When <模式>, Return <值>.
 - 不要使用 Data 关键字 — 使用 Define <类型名> has ...
 - 不要在 Define 中的字段名后添加类型标注 — 类型从名称自动推断
-- 使用自然语言运算符（equals to, greater than, less than, plus, times）或符号运算符（=, !=, >, <, >=, <=, +, -, *, /）
-- 不要使用 "at least" 或 "at most" — 使用 >=, <= 或 "greater than or equal to", "less than or equal to"
-- If 行不加句号："If age > 18"（正确） vs "If age > 18."（错误）
+- 等于比较使用 "equals to"（不要使用 = 或 ==）。不等于使用 != 或 "not equal to"
+- 大于等于/小于等于使用符号 >=/<= 或 "greater than or equal to"/"less than or equal to"。不要使用 "at least" 或 "at most"
+- If/Otherwise/Match 行不加句号："If age > 18"（正确） vs "If age > 18."（错误）
 
 ## 输出要求
 - 只输出 aster-lang 源代码

@@ -15,7 +15,8 @@ The previously generated policy code has compilation errors. Fix them using the 
 - Missing "set to" in constructors: use "<Type> with <field> set to <value>."
 - Symbolic operators ">", "<", "+": use "greater than", "less than", "plus"
 - Missing comma between fields in Define: "Define X has a, b, c."
-- Wrong comparison "==": use "equals to"
+- Wrong comparison "==" or "=": use "equals to" for equality
+- Period after If condition "If x > 5.": remove the period from If lines (If x > 5)
 
 ## Repair Requirements
 1. Fix all compilation errors listed above

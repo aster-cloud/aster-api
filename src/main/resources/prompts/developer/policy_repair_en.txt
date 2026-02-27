@@ -1,4 +1,4 @@
-The previously generated policy code has compilation errors. Please fix them.
+The previously generated policy code has compilation errors. Fix them using the correct aster-lang syntax.
 
 ## Error Messages
 {errors}
@@ -6,8 +6,23 @@ The previously generated policy code has compilation errors. Please fix them.
 ## Previous Output
 {previous_output}
 
+## Common Fixes
+- Missing period: every statement must end with "."
+- Wrong keyword "Data": use "Define <TypeName> has <fields>."
+- Inline if/then/else: convert to block "If <cond>\n  <stmt>.\nOtherwise\n  <stmt>."
+- Wrong pattern matching "case X =>": use "When X, Return <value>."
+- Type annotations on fields "name: Text": remove type, use just field name "name"
+- Missing "set to" in constructors: use "<Type> with <field> set to <value>."
+- Symbolic operators ">", "<", "+": use "greater than", "less than", "plus"
+- Missing comma between fields in Define: "Define X has a, b, c."
+- Wrong comparison "==": use "equals to"
+
 ## Repair Requirements
-1. Fix all compilation errors
+1. Fix all compilation errors listed above
 2. Keep the original business logic unchanged
-3. Output only the complete fixed policy code
-4. Do not output explanations
+3. Ensure every statement ends with a period (.)
+4. Use block If/Otherwise, not inline if/then/else
+5. Use Match/When, not match/case
+6. Use Define, not Data
+7. Output only the complete fixed policy code
+8. Do not output explanations

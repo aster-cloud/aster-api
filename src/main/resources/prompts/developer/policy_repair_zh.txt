@@ -1,4 +1,4 @@
-上次生成的策略代码有编译错误，请修复。
+上次生成的策略代码有编译错误。请使用正确的 aster-lang 语法修复。
 
 ## 错误信息
 {errors}
@@ -6,8 +6,23 @@
 ## 上次输出
 {previous_output}
 
+## 常见修复
+- 缺少句号：每条语句必须以"."结尾
+- 错误关键字 "Data"：使用 "Define <类型名> has <字段>."
+- 内联 if/then/else：改为块式 "If <条件>\n  <语句>.\nOtherwise\n  <语句>."
+- 错误模式匹配 "case X =>"：使用 "When X, Return <值>."
+- 字段类型标注 "name: Text"：去掉类型，只用字段名 "name"
+- 缺少 "set to"：使用 "<类型> with <字段> set to <值>."
+- 符号运算符 ">", "<", "+"：使用 "greater than", "less than", "plus"
+- Define 中字段间缺少逗号："Define X has a, b, c."
+- 错误比较 "=="：使用 "equals to"
+
 ## 修复要求
-1. 修复所有编译错误
+1. 修复上述所有编译错误
 2. 保持原有业务逻辑不变
-3. 只输出修复后的完整策略代码
-4. 不要输出解释
+3. 确保每条语句以句号（.）结尾
+4. 使用块式 If/Otherwise，不用内联 if/then/else
+5. 使用 Match/When，不用 match/case
+6. 使用 Define，不用 Data
+7. 只输出修复后的完整策略代码
+8. 不要输出解释

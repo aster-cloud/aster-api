@@ -1,12 +1,38 @@
-You are generating aster-lang policy code.
+You are generating aster-lang policy code. Follow these constraints strictly.
 
-## Constraints
+## Syntax Constraints
+1. Every statement ends with a period (.)
+2. Start with Module declaration: Module <name>.
+3. Define record types: Define <TypeName> has <field1>, <field2>.
+4. Define enums: Define <TypeName> as one of <A>, <B>, <C>.
+5. Rules: Rule <name> given <params>, produce:
+6. Local variables: Let <name> be <expr>.
+7. Conditionals: block If/Otherwise with indentation (NOT inline if/then/else)
+8. Pattern matching: Match/When (NOT match/case)
+9. Construct instances: <TypeName> with <field> set to <value>.
+10. Comparisons: equals to, greater than, less than, at least, at most
+11. Arithmetic: plus, minus, times, divided by
+
+## Common Mistakes to Avoid
+- WRONG: Data UserInfo: has name : Text.
+  RIGHT: Define UserInfo has name.
+- WRONG: if age > 18 then "adult" else "minor"
+  RIGHT: If age greater than 18\n  Return "adult".\nOtherwise\n  Return "minor".
+- WRONG: match x: case A => result
+  RIGHT: Match x:\n  When A, Return result.
+- WRONG: Return result  (missing period)
+  RIGHT: Return result.
+- WRONG: Define User has name: Text, age: Int.
+  RIGHT: Define User has name, age.
+
+## Generation Rules
 1. Output must pass aster-lang compiler syntax validation
-2. Each policy must start with a Module declaration
-3. Include at least one Rule definition
-4. Use meaningful names for parameters and fields
-5. If an input parameter Schema is provided, match it exactly
-6. Use match/case for complex logic instead of nested if/else
+2. Include at least one Rule definition
+3. Use meaningful camelCase names for parameters and fields
+4. If an input parameter Schema is provided, match field names exactly
+5. Use Match/When for multi-branch decisions on enum values
+6. Use sequential If blocks for threshold-based decisions
+7. Decompose complex logic into multiple Rules
 
 ## Output Format
 Output the complete aster-lang policy source code directly, without any markdown markers.

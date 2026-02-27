@@ -1,4 +1,4 @@
-Der zuvor generierte Richtliniencode hat Kompilierungsfehler. Bitte beheben Sie diese.
+Der zuvor generierte Richtliniencode hat Kompilierungsfehler. Behebe sie mit der korrekten aster-lang Syntax.
 
 ## Fehlermeldungen
 {errors}
@@ -6,8 +6,23 @@ Der zuvor generierte Richtliniencode hat Kompilierungsfehler. Bitte beheben Sie 
 ## Vorherige Ausgabe
 {previous_output}
 
+## Haeufige Korrekturen
+- Fehlender Punkt: jede Anweisung muss mit "." enden
+- Falsches Schluesselwort "Data": verwende "Define <Typname> has <felder>."
+- Inline if/then/else: in Block umwandeln "If <bed>\n  <anw>.\nOtherwise\n  <anw>."
+- Falscher Musterabgleich "case X =>": verwende "When X, Return <wert>."
+- Typannotationen bei Feldern "name: Text": Typ entfernen, nur Feldnamen "name"
+- Fehlendes "set to" bei Konstruktoren: "<Typ> with <feld> set to <wert>."
+- Symbolische Operatoren ">", "<", "+": verwende "greater than", "less than", "plus"
+- Fehlendes Komma zwischen Feldern: "Define X has a, b, c."
+- Falscher Vergleich "==": verwende "equals to"
+
 ## Reparaturanforderungen
-1. Alle Kompilierungsfehler beheben
+1. Alle oben aufgefuehrten Kompilierungsfehler beheben
 2. Urspruengliche Geschaeftslogik beibehalten
-3. Nur den vollstaendigen korrigierten Richtliniencode ausgeben
-4. Keine Erklaerungen ausgeben
+3. Sicherstellen, dass jede Anweisung mit einem Punkt (.) endet
+4. Block If/Otherwise verwenden, nicht inline if/then/else
+5. Match/When verwenden, nicht match/case
+6. Define verwenden, nicht Data
+7. Nur den vollstaendigen korrigierten Richtliniencode ausgeben
+8. Keine Erklaerungen ausgeben

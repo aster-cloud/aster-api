@@ -57,7 +57,7 @@ public interface LlmConfig {
 
     interface Validation {
         /** 编译校验最大重试次数（含首次生成） */
-        @WithDefault("2")
+        @WithDefault("5")
         int maxAttempts();
     }
 

@@ -122,7 +122,7 @@ public class LlmProxyService {
                     if (result.ok()) {
                         // 校验通过，输出清理后的最终代码
                         String cleanedSource = validator.cleanLlmOutput(source);
-                        emitter.emit(toJson(GeneratePolicyEvent.finalResult(cleanedSource)));
+                        emitter.emit(toJson(GeneratePolicyEvent.finalResult(cleanedSource, true)));
                         emitter.complete();
                     } else if (currentAttempt < maxAttempts) {
                         // 校验失败，尝试修复
@@ -135,7 +135,10 @@ public class LlmProxyService {
                         PromptContext repairCtx = promptComposer.buildRepairContext(
                             currentCtx.get(), source, result, locale);
                         currentCtx.set(repairCtx);
-                        attempt.incrementAndGet();
+                        int nextAttempt = attempt.incrementAndGet();
+
+                        // 通知前端修复开始
+                        emitter.emit(toJson(GeneratePolicyEvent.repairStart(nextAttempt, maxAttempts)));
 
                         // 递归重试
                         executeGenerateAttempt(repairCtx, apiKey, locale,
@@ -147,7 +150,7 @@ public class LlmProxyService {
                         emitter.emit(toJson(GeneratePolicyEvent.validationError(result.errorsAsString())));
                         // 仍然输出最后一次的代码，让用户手动修复
                         String cleanedSource = validator.cleanLlmOutput(source);
-                        emitter.emit(toJson(GeneratePolicyEvent.finalResult(cleanedSource)));
+                        emitter.emit(toJson(GeneratePolicyEvent.finalResult(cleanedSource, false)));
                         emitter.complete();
                     }
                 }

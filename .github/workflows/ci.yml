@@ -80,9 +80,10 @@ jobs:
         uses: dorny/test-reporter@v1
         with:
           name: JUnit Test Results
-          path: aster-api/build/test-results/**/*.xml
+          path: build/test-results/**/*.xml
           reporter: java-junit
           fail-on-error: false
+          working-directory: aster-api
 
       - name: Upload Test Results
         if: always()

@@ -69,3 +69,24 @@ jobs:
       - name: Build & Test
         working-directory: aster-api
         run: ./gradlew build
+
+      - name: Chaos Tests (optional)
+        working-directory: aster-api
+        run: ./gradlew testChaos
+        continue-on-error: true
+
+      - name: Publish JUnit Report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: JUnit Test Results
+          path: aster-api/build/test-results/**/*.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: aster-api/build/test-results

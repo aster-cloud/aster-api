@@ -8,6 +8,7 @@ plugins {
     // Using latest Quarkus 3.28.3 - testing Gradle 9.0 compatibility
     id("io.quarkus") version "3.30.2"
     id("io.gatling.gradle") version "3.13.1"
+    id("org.gradle.test-retry") version "1.6.0"
 }
 
 extra["reportsDir"] = layout.buildDirectory.dir("reports/gatling").get().asFile
@@ -131,4 +132,30 @@ tasks.withType<Test> {
 
     // 跳过需要完整 Aster 语言运行时的测试
     systemProperty("aster.truffle.tests.skip", "true")
+}
+
+tasks.named<Test>("test") {
+    useJUnitPlatform {
+        excludeTags("chaos")
+    }
+}
+
+tasks.register<Test>("testChaos") {
+    description = "Run chaos tests (@Tag(\"chaos\")) with retry support"
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("chaos")
+    }
+    systemProperty("java.util.logging.manager", "org.jboss.logmanager.LogManager")
+    systemProperty("quarkus.test.flat-class-path", "true")
+    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
+    environment("TESTCONTAINERS_RYUK_DISABLED", "true")
+    systemProperty("aster.truffle.tests.skip", "true")
+    shouldRunAfter("test")
+    retry {
+        maxRetries.set(2)
+        failOnPassedAfterRetry.set(false)
+    }
 }

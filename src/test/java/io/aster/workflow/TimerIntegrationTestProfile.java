@@ -15,6 +15,8 @@ public class TimerIntegrationTestProfile implements QuarkusTestProfile {
         return Map.ofEntries(
             // 启用 scheduler 用于 timer 轮询
             Map.entry("quarkus.scheduler.enabled", "true"),
+            // 启用 workflow 调度器后台轮询（timer 触发后需要 poller 推进 workflow 状态）
+            Map.entry("workflow.scheduler.polling.enabled", "true"),
             // 设置日志级别
             Map.entry("quarkus.log.category.\"io.aster.workflow\".level", "DEBUG")
         );

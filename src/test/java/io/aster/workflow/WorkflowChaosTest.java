@@ -11,6 +11,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -41,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
  * Workflow 混沌测试：覆盖资源耗尽、并发冲突、时序超时、故障恢复与分布式一致性五大类 24 个场景。
  */
 @QuarkusTest
+@Tag("chaos")
 class WorkflowChaosTest extends CrashRecoveryTestBase {
 
     @Inject

@@ -59,6 +59,9 @@ public class WorkflowSchedulerService {
     @ConfigProperty(name = "workflow.scheduler.max-running-minutes", defaultValue = "30")
     int maxRunningMinutes;
 
+    @ConfigProperty(name = "workflow.scheduler.polling.enabled", defaultValue = "true")
+    boolean pollingEnabled;
+
     private ExecutorService executorService;
     private ScheduledExecutorService timerPollingService;
     private volatile boolean running = false;
@@ -70,6 +73,11 @@ public class WorkflowSchedulerService {
      * 服务启动
      */
     void onStart(@Observes StartupEvent ev) {
+        if (!pollingEnabled) {
+            Log.info("WorkflowSchedulerService polling disabled via config");
+            return;
+        }
+
         Log.infof("Starting WorkflowSchedulerService (worker=%s)", workerId);
 
         // 创建工作线程池（可配置）

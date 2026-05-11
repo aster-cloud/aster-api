@@ -118,7 +118,7 @@ public class AnomalyReportEntity extends PanacheEntityBase {
      * @return 异常报告列表，按检测时间降序排列
      */
     public static List<AnomalyReportEntity> findRecent(String tenantId, int days) {
-        return find("tenant_id = ?1 AND detected_at >= ?2 ORDER BY detected_at DESC",
+        return find("tenantId = ?1 AND detectedAt >= ?2 ORDER BY detectedAt DESC",
             tenantId, Instant.now().minus(days, ChronoUnit.DAYS))
             .list();
     }
@@ -132,7 +132,7 @@ public class AnomalyReportEntity extends PanacheEntityBase {
      * @return 指定类型的异常报告列表
      */
     public static List<AnomalyReportEntity> findByType(String tenantId, String type, int days) {
-        return find("tenant_id = ?1 AND anomaly_type = ?2 AND detected_at >= ?3 ORDER BY detected_at DESC",
+        return find("tenantId = ?1 AND anomalyType = ?2 AND detectedAt >= ?3 ORDER BY detectedAt DESC",
             tenantId, type, Instant.now().minus(days, ChronoUnit.DAYS))
             .list();
     }
@@ -145,7 +145,7 @@ public class AnomalyReportEntity extends PanacheEntityBase {
      * @return CRITICAL 异常数量
      */
     public static long countCritical(String tenantId, int days) {
-        return count("tenant_id = ?1 AND severity = 'CRITICAL' AND detected_at >= ?2",
+        return count("tenantId = ?1 AND severity = 'CRITICAL' AND detectedAt >= ?2",
             tenantId, Instant.now().minus(days, ChronoUnit.DAYS));
     }
 
@@ -156,7 +156,7 @@ public class AnomalyReportEntity extends PanacheEntityBase {
      * @return 删除的记录数
      */
     public static long deleteOlderThan(int days) {
-        return delete("detected_at < ?1", Instant.now().minus(days, ChronoUnit.DAYS));
+        return delete("detectedAt < ?1", Instant.now().minus(days, ChronoUnit.DAYS));
     }
 
     /**
@@ -168,7 +168,7 @@ public class AnomalyReportEntity extends PanacheEntityBase {
      * @return 指定版本的异常报告列表
      */
     public static List<AnomalyReportEntity> findByVersion(String tenantId, Long versionId, int days) {
-        return find("tenant_id = ?1 AND version_id = ?2 AND detected_at >= ?3 ORDER BY detected_at DESC",
+        return find("tenantId = ?1 AND versionId = ?2 AND detectedAt >= ?3 ORDER BY detectedAt DESC",
             tenantId, versionId, Instant.now().minus(days, ChronoUnit.DAYS))
             .list();
     }

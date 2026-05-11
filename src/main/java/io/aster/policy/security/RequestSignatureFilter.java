@@ -3,6 +3,7 @@ package io.aster.policy.security;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.WebApplicationException;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.resteasy.reactive.server.ServerRequestFilter;
 
@@ -33,9 +34,11 @@ public class RequestSignatureFilter {
     @ServerRequestFilter(priority = Priorities.AUTHENTICATION)
     public Uni<Void> filter(ContainerRequestContext ctx) {
         // 跳过健康检查和内部端点（支持带/不带前导斜杠的路径）
+        // /api/internal/* 是跨服务接口，自带 HMAC 验签，不走全局签名过滤器
         String path = ctx.getUriInfo().getPath();
         if (path.startsWith("/q/") || path.startsWith("q/")
-                || path.startsWith("/internal/") || path.startsWith("internal/")) {
+                || path.startsWith("/internal/") || path.startsWith("internal/")
+                || path.startsWith("/api/internal/") || path.startsWith("api/internal/")) {
             return Uni.createFrom().voidItem();
         }
 
@@ -63,6 +66,9 @@ public class RequestSignatureFilter {
 
                 nonceService.ensureFresh(tenantId, nonce, requestHash);
                 return null;
+            } catch (WebApplicationException e) {
+                // 透传 WebApplicationException，保留 HTTP 状态码（401/403 等）
+                throw e;
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }

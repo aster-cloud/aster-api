@@ -218,10 +218,20 @@ public class DynamicCnlExecutor {
             if (evalResult.canExecute()) {
                 // 返回值是可执行的函数，传参调用
                 Value execResult;
-                if (context == null || context.length == 0) {
-                    execResult = evalResult.execute();
-                } else {
-                    execResult = evalResult.execute(context);
+                try {
+                    if (context == null || context.length == 0) {
+                        execResult = evalResult.execute();
+                    } else {
+                        execResult = evalResult.execute(context);
+                    }
+                } catch (NullPointerException | org.graalvm.polyglot.PolyglotException e) {
+                    String msg = e.getMessage();
+                    if (msg != null && msg.contains("null")) {
+                        // Polyglot 无法转换 null 返回值，视为函数无匹配结果
+                        throw new DynamicExecutionException(
+                            "函数返回 null（可能是 Match 语句无匹配分支或条件未覆盖所有情况）");
+                    }
+                    throw new DynamicExecutionException("Polyglot 执行失败: " + msg, e);
                 }
                 result = convertValue(execResult);
             } else if (evalResult.isHostObject()) {

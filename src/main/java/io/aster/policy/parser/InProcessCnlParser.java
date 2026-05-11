@@ -166,7 +166,9 @@ public class InProcessCnlParser {
 
         // 回退到常见 locale 前缀匹配
         if (normalizedLocale.startsWith("zh")) {
-            return registry.getOrThrow("zh-CN");
+            return registry.getOrThrow("zh-cn");
+        } else if (normalizedLocale.startsWith("de")) {
+            return registry.getOrThrow("de-de");
         } else {
             // 对于不支持的 locale，回退到英语
             LOG.warnf("Unsupported locale '%s', falling back to en-US", locale);

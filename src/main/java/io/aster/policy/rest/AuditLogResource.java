@@ -52,11 +52,14 @@ public class AuditLogResource {
      */
     @GET
     @io.smallrye.common.annotation.Blocking
-    public Uni<List<AuditLog>> getAllLogs() {
+    public Uni<List<AuditLog>> getAllLogs(
+        @QueryParam("page") @DefaultValue("0") int page,
+        @QueryParam("size") @DefaultValue("50") int size
+    ) {
         String tenantId = tenantId();
-        LOG.infof("Fetching all audit logs for tenant: %s", tenantId);
+        LOG.infof("Fetching audit logs for tenant: %s (page=%d, size=%d)", tenantId, page, size);
 
-        return Uni.createFrom().item(() -> AuditLog.findByTenant(tenantId));
+        return Uni.createFrom().item(() -> AuditLog.findByTenant(tenantId, page, size));
     }
 
     /**
@@ -68,11 +71,15 @@ public class AuditLogResource {
     @GET
     @Path("/type/{eventType}")
     @io.smallrye.common.annotation.Blocking
-    public Uni<List<AuditLog>> getLogsByEventType(@PathParam("eventType") String eventType) {
+    public Uni<List<AuditLog>> getLogsByEventType(
+        @PathParam("eventType") String eventType,
+        @QueryParam("page") @DefaultValue("0") int page,
+        @QueryParam("size") @DefaultValue("50") int size
+    ) {
         String tenantId = tenantId();
-        LOG.infof("Fetching audit logs by event type: %s for tenant: %s", eventType, tenantId);
+        LOG.infof("Fetching audit logs by event type: %s for tenant: %s (page=%d, size=%d)", eventType, tenantId, page, size);
 
-        return Uni.createFrom().item(() -> AuditLog.findByEventType(eventType, tenantId));
+        return Uni.createFrom().item(() -> AuditLog.findByEventType(eventType, tenantId, page, size));
     }
 
     /**
@@ -86,14 +93,16 @@ public class AuditLogResource {
     @io.smallrye.common.annotation.Blocking
     public Uni<List<AuditLog>> getLogsByPolicy(
         @PathParam("policyModule") String policyModule,
-        @PathParam("policyFunction") String policyFunction
+        @PathParam("policyFunction") String policyFunction,
+        @QueryParam("page") @DefaultValue("0") int page,
+        @QueryParam("size") @DefaultValue("50") int size
     ) {
         String tenantId = tenantId();
-        LOG.infof("Fetching audit logs for policy: %s.%s (tenant: %s)",
-            policyModule, policyFunction, tenantId);
+        LOG.infof("Fetching audit logs for policy: %s.%s (tenant: %s, page=%d, size=%d)",
+            policyModule, policyFunction, tenantId, page, size);
 
         return Uni.createFrom().item(() ->
-            AuditLog.findByPolicy(policyModule, policyFunction, tenantId));
+            AuditLog.findByPolicy(policyModule, policyFunction, tenantId, page, size));
     }
 
     /**
@@ -107,18 +116,20 @@ public class AuditLogResource {
     @io.smallrye.common.annotation.Blocking
     public Uni<List<AuditLog>> getLogsByTimeRange(
         @QueryParam("startTime") String startTimeStr,
-        @QueryParam("endTime") String endTimeStr
+        @QueryParam("endTime") String endTimeStr,
+        @QueryParam("page") @DefaultValue("0") int page,
+        @QueryParam("size") @DefaultValue("50") int size
     ) {
         String tenantId = tenantId();
-        LOG.infof("Fetching audit logs for time range: %s to %s (tenant: %s)",
-            startTimeStr, endTimeStr, tenantId);
+        LOG.infof("Fetching audit logs for time range: %s to %s (tenant: %s, page=%d, size=%d)",
+            startTimeStr, endTimeStr, tenantId, page, size);
 
         try {
             Instant startTime = Instant.parse(startTimeStr);
             Instant endTime = Instant.parse(endTimeStr);
 
             return Uni.createFrom().item(() ->
-                AuditLog.findByTimeRange(startTime, endTime, tenantId));
+                AuditLog.findByTimeRange(startTime, endTime, tenantId, page, size));
         } catch (Exception e) {
             LOG.errorf(e, "Invalid time format: startTime=%s, endTime=%s", startTimeStr, endTimeStr);
             throw new BadRequestException("Invalid time format. Use ISO8601 format (e.g., 2024-01-01T00:00:00Z)");

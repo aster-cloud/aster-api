@@ -1,6 +1,7 @@
 package io.aster.llm.client;
 
 import io.aster.llm.config.LlmConfig;
+import io.aster.llm.metrics.LlmMetrics;
 import io.aster.llm.model.LlmRequest;
 import io.aster.llm.model.LlmStreamEvent;
 import io.smallrye.mutiny.Multi;
@@ -38,6 +39,9 @@ public class VertxLlmClient implements LlmClient {
     @Inject
     SseEventParser sseParser;
 
+    @Inject
+    LlmMetrics llmMetrics;
+
     private volatile WebClient webClient;
 
     private WebClient getClient() {
@@ -59,45 +63,132 @@ public class VertxLlmClient implements LlmClient {
                 String chatPath = resolveChatPath(baseUri, config.provider());
                 JsonObject body = buildRequestBody(request);
                 int port = resolvePort(baseUri);
+                boolean ssl = "https".equals(baseUri.getScheme());
 
                 LOG.infof("LLM 流式请求: provider=%s, model=%s, url=%s:%d%s",
                     config.provider(), request.model(), baseUri.getHost(), port, chatPath);
 
-                HttpRequest<Buffer> httpRequest = getClient()
-                    .request(HttpMethod.POST, port, baseUri.getHost(), chatPath)
-                    .ssl("https".equals(baseUri.getScheme()))
-                    .timeout(config.readTimeout().toMillis())
+                // 使用底层 HttpClient 获取 response stream，避免 WebClient.sendJsonObject 缓冲整个响应体
+                io.vertx.core.http.HttpClientOptions clientOptions = new io.vertx.core.http.HttpClientOptions()
+                    .setSsl(ssl)
+                    .setDefaultHost(baseUri.getHost())
+                    .setDefaultPort(port)
+                    .setConnectTimeout((int) config.readTimeout().toMillis());
+
+                io.vertx.core.http.HttpClient httpClient = mutinyVertx.getDelegate().createHttpClient(clientOptions);
+                io.vertx.core.http.RequestOptions reqOptions = new io.vertx.core.http.RequestOptions()
+                    .setMethod(HttpMethod.POST)
+                    .setURI(chatPath)
                     .putHeader("Content-Type", "application/json")
                     .putHeader("Accept", "text/event-stream");
 
-                addAuthHeaders(httpRequest, apiKey, config.provider());
+                // 注入认证头
+                switch (config.provider()) {
+                    case "anthropic" -> {
+                        reqOptions.putHeader("x-api-key", apiKey);
+                        reqOptions.putHeader("anthropic-version", "2023-06-01");
+                    }
+                    default -> reqOptions.putHeader("Authorization", "Bearer " + apiKey);
+                }
 
-                httpRequest.sendJsonObject(body, ar -> {
-                    if (ar.failed()) {
-                        LOG.errorf(ar.cause(), "LLM 请求失败");
-                        emitter.emit(LlmStreamEvent.error("LLM 请求失败: " + ar.cause().getMessage()));
+                // 用于跨 chunk 拼接不完整的字节（防止多字节 UTF-8 字符被截断）
+                // 使用数组包装以支持 lambda 内重新赋值
+                io.vertx.core.buffer.Buffer[] byteBufferHolder = { io.vertx.core.buffer.Buffer.buffer() };
+
+                // 下游取消时关闭 HTTP 连接，释放资源并停止 token 消耗
+                emitter.onTermination(() -> {
+                    httpClient.close();
+                });
+
+                httpClient.request(reqOptions, reqAr -> {
+                    if (reqAr.failed()) {
+                        LOG.errorf(reqAr.cause(), "LLM 连接失败");
+                        emitter.emit(LlmStreamEvent.error("LLM 连接失败: " + reqAr.cause().getMessage()));
                         emitter.complete();
+                        httpClient.close();
                         return;
                     }
 
-                    HttpResponse<Buffer> response = ar.result();
-                    int statusCode = response.statusCode();
+                    io.vertx.core.http.HttpClientRequest clientRequest = reqAr.result();
+                    clientRequest.response(respAr -> {
+                        if (respAr.failed()) {
+                            LOG.errorf(respAr.cause(), "LLM 响应读取失败");
+                            emitter.emit(LlmStreamEvent.error("LLM 响应读取失败: " + respAr.cause().getMessage()));
+                            emitter.complete();
+                            httpClient.close();
+                            return;
+                        }
 
-                    if (statusCode != 200) {
-                        String errorBody = response.body() != null ? response.bodyAsString() : "(empty)";
-                        LOG.errorf("LLM API 错误: status=%d, body=%s", statusCode, errorBody);
-                        emitter.emit(LlmStreamEvent.error("LLM API 错误 (" + statusCode + "): " + errorBody));
-                        emitter.complete();
-                        return;
-                    }
+                        io.vertx.core.http.HttpClientResponse clientResponse = respAr.result();
+                        int statusCode = clientResponse.statusCode();
 
-                    if (response.body() == null) {
-                        emitter.emit(LlmStreamEvent.error("LLM API 返回空响应"));
-                        emitter.complete();
-                        return;
-                    }
+                        if (statusCode != 200) {
+                            // 非 200：缓冲错误体后关闭
+                            clientResponse.bodyHandler(errBuf -> {
+                                String errBody = errBuf != null ? errBuf.toString() : "(empty)";
+                                LOG.errorf("LLM API 错误: status=%d, body=%s", statusCode, errBody);
+                                emitter.emit(LlmStreamEvent.error("LLM API 错误 (" + statusCode + "): " + errBody));
+                                emitter.complete();
+                                httpClient.close();
+                            });
+                            return;
+                        }
 
-                    parseSseResponse(response.bodyAsString(), emitter);
+                        // 逐 chunk 解析 SSE，使用 Buffer 拼接避免多字节 UTF-8 字符被截断
+                        clientResponse.handler(chunk -> {
+                            byteBufferHolder[0].appendBuffer(chunk);
+                            // 安全地转换为字符串并逐行解析
+                            String text = byteBufferHolder[0].toString();
+                            int lastNewline = text.lastIndexOf('\n');
+                            if (lastNewline < 0) return; // 没有完整行，等待下一个 chunk
+
+                            // 处理已完成的行，保留不完整的尾部
+                            String completePart = text.substring(0, lastNewline + 1);
+                            String remainder = text.substring(lastNewline + 1);
+                            byteBufferHolder[0] = io.vertx.core.buffer.Buffer.buffer(remainder);
+
+                            for (String line : completePart.split("\n", -1)) {
+                                line = line.stripTrailing();
+                                if (line.startsWith("data: ") || line.startsWith("data:")) {
+                                    String data = line.startsWith("data: ") ? line.substring(6) : line.substring(5);
+                                    LlmStreamEvent event = sseParser.parseLine(data, config.provider());
+                                    if (event != null) {
+                                        if (event.type() == LlmStreamEvent.Type.DONE) {
+                                            emitter.complete();
+                                            httpClient.close();
+                                            return;
+                                        }
+                                        emitter.emit(event);
+                                    }
+                                }
+                            }
+                        });
+
+                        clientResponse.endHandler(v -> {
+                            // 处理尾部缓冲区中的最后一行（没有换行符结尾的情况）
+                            if (byteBufferHolder[0].length() > 0) {
+                                String tail = byteBufferHolder[0].toString().stripTrailing();
+                                if (tail.startsWith("data: ") || tail.startsWith("data:")) {
+                                    String data = tail.startsWith("data: ") ? tail.substring(6) : tail.substring(5);
+                                    LlmStreamEvent event = sseParser.parseLine(data, config.provider());
+                                    if (event != null && event.type() != LlmStreamEvent.Type.DONE) {
+                                        emitter.emit(event);
+                                    }
+                                }
+                            }
+                            emitter.complete();
+                            httpClient.close();
+                        });
+
+                        clientResponse.exceptionHandler(ex -> {
+                            LOG.errorf(ex, "LLM 流式响应异常");
+                            emitter.emit(LlmStreamEvent.error("流式响应异常: " + ex.getMessage()));
+                            emitter.complete();
+                            httpClient.close();
+                        });
+                    });
+
+                    clientRequest.end(io.vertx.core.buffer.Buffer.buffer(body.encode()));
                 });
 
             } catch (Exception e) {
@@ -146,40 +237,13 @@ public class VertxLlmClient implements LlmClient {
                 try {
                     JsonObject responseJson = response.bodyAsJsonObject();
                     String content = extractContent(responseJson, config.provider());
+                    recordTokenUsage(responseJson, request.model());
                     emitter.complete(content);
                 } catch (Exception e) {
                     emitter.fail(new RuntimeException("LLM 响应解析失败", e));
                 }
             });
         });
-    }
-
-    private void parseSseResponse(String responseBody, io.smallrye.mutiny.subscription.MultiEmitter<? super LlmStreamEvent> emitter) {
-        // 使用 \\r?\\n 处理 CRLF 和 LF 两种行尾
-        for (String line : responseBody.split("\\r?\\n")) {
-            String trimmedLine = line.trim();
-
-            if (trimmedLine.isEmpty()) {
-                continue;
-            }
-
-            if (trimmedLine.startsWith("data: ") || trimmedLine.startsWith("data:")) {
-                String data = trimmedLine.startsWith("data: ")
-                    ? trimmedLine.substring(6)
-                    : trimmedLine.substring(5);
-
-                LlmStreamEvent event = sseParser.parseLine(data, config.provider());
-                if (event != null) {
-                    if (event.type() == LlmStreamEvent.Type.DONE) {
-                        emitter.complete();
-                        return;
-                    }
-                    emitter.emit(event);
-                }
-            }
-        }
-
-        emitter.complete();
     }
 
     private JsonObject buildRequestBody(LlmRequest request) {
@@ -251,6 +315,23 @@ public class VertxLlmClient implements LlmClient {
         int port = uri.getPort();
         if (port > 0) return port;
         return "https".equals(uri.getScheme()) ? 443 : 80;
+    }
+
+    /**
+     * 从非流式响应中解析 token 用量并写入 Counter
+     *
+     * 与 OpenAI 兼容的 provider 在响应根部返回 usage 字段；流式 SSE 通常不返回，
+     * 因此此方法仅在非流式分支调用。
+     */
+    private void recordTokenUsage(JsonObject body, String model) {
+        if (body == null) return;
+        JsonObject usage = body.getJsonObject("usage");
+        if (usage == null) return;
+        int prompt = usage.getInteger("prompt_tokens", 0);
+        int completion = usage.getInteger("completion_tokens", 0);
+        if (prompt > 0 || completion > 0) {
+            llmMetrics.recordTokens(model != null ? model : "unknown", prompt, completion);
+        }
     }
 
     private String extractContent(JsonObject body, String provider) {

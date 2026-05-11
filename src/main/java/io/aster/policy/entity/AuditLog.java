@@ -150,34 +150,66 @@ public class AuditLog extends PanacheEntityBase {
     public AuditLog() {
     }
 
+    /** 分页结果上限，防止单次查询返回过多记录 */
+    private static final int MAX_PAGE_SIZE = 200;
+
+    /** 安全分页参数：page ≥ 0，size ∈ [1, MAX_PAGE_SIZE] */
+    private static io.quarkus.panache.common.Page safePage(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.max(1, Math.min(size, MAX_PAGE_SIZE));
+        return io.quarkus.panache.common.Page.of(safePage, safeSize);
+    }
+
     /**
-     * 查询指定租户的所有审计日志
+     * 查询指定租户的审计日志（默认第一页，最大条数）
      */
     public static java.util.List<AuditLog> findByTenant(String tenantId) {
-        return list("tenantId = ?1 order by timestamp desc", tenantId);
+        return findByTenant(tenantId, 0, MAX_PAGE_SIZE);
     }
 
     /**
-     * 查询指定事件类型的审计日志
+     * 查询指定租户的审计日志（分页，按时间+ID稳定排序）
+     */
+    public static java.util.List<AuditLog> findByTenant(String tenantId, int page, int size) {
+        return find("tenantId = ?1 order by timestamp desc, id desc", tenantId)
+            .page(safePage(page, size))
+            .list();
+    }
+
+    /**
+     * 查询指定事件类型的审计日志（默认第一页，最大条数）
      */
     public static java.util.List<AuditLog> findByEventType(String eventType, String tenantId) {
-        return list("eventType = ?1 and tenantId = ?2 order by timestamp desc", eventType, tenantId);
+        return findByEventType(eventType, tenantId, 0, MAX_PAGE_SIZE);
     }
 
     /**
-     * 查询指定策略的审计日志
+     * 查询指定事件类型的审计日志（分页）
      */
-    public static java.util.List<AuditLog> findByPolicy(String policyModule, String policyFunction, String tenantId) {
-        return list("policyModule = ?1 and policyFunction = ?2 and tenantId = ?3 order by timestamp desc",
-            policyModule, policyFunction, tenantId);
+    public static java.util.List<AuditLog> findByEventType(String eventType, String tenantId, int page, int size) {
+        return find("eventType = ?1 and tenantId = ?2 order by timestamp desc, id desc", eventType, tenantId)
+            .page(safePage(page, size))
+            .list();
     }
 
     /**
-     * 查询指定时间范围的审计日志
+     * 查询指定策略的审计日志（分页）
      */
-    public static java.util.List<AuditLog> findByTimeRange(Instant startTime, Instant endTime, String tenantId) {
-        return list("timestamp >= ?1 and timestamp <= ?2 and tenantId = ?3 order by timestamp desc",
-            startTime, endTime, tenantId);
+    public static java.util.List<AuditLog> findByPolicy(String policyModule, String policyFunction, String tenantId, int page, int size) {
+        return find("policyModule = ?1 and policyFunction = ?2 and tenantId = ?3 order by timestamp desc, id desc",
+            policyModule, policyFunction, tenantId)
+            .page(safePage(page, size))
+            .list();
+    }
+
+    /**
+     * 查询指定时间范围的审计日志（分页）
+     */
+    public static java.util.List<AuditLog> findByTimeRange(Instant startTime, Instant endTime, String tenantId, int page, int size) {
+        return find("timestamp >= ?1 and timestamp <= ?2 and tenantId = ?3 order by timestamp desc, id desc",
+            startTime, endTime, tenantId)
+            .page(safePage(page, size))
+            .list();
     }
 
     /**

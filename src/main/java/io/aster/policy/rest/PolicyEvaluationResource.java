@@ -1,5 +1,6 @@
 package io.aster.policy.rest;
 
+import io.aster.billing.ApiQuotaGuard;
 import io.aster.policy.common.PolicySerializer;
 import io.aster.monitoring.BusinessMetrics;
 import io.aster.policy.api.PolicyEvaluationService;
@@ -13,6 +14,8 @@ import io.aster.policy.parser.DynamicCnlExecutor;
 import io.aster.policy.parser.InProcessCnlParser;
 import io.aster.policy.rest.model.*;
 import io.aster.policy.service.PolicyVersionService;
+import io.aster.policy.telemetry.NsmEvents;
+import io.aster.policy.telemetry.NsmTelemetry;
 import io.micrometer.core.instrument.Timer;
 import io.smallrye.mutiny.Uni;
 import io.vertx.ext.web.RoutingContext;
@@ -63,6 +66,12 @@ public class PolicyEvaluationResource {
     @Inject
     Event<AuditEvent> auditEventPublisher;
 
+    @Inject
+    NsmTelemetry nsmTelemetry;
+
+    @Inject
+    ApiQuotaGuard apiQuotaGuard;
+
     @Context
     RoutingContext routingContext;
 
@@ -76,6 +85,7 @@ public class PolicyEvaluationResource {
     @POST
     @Path("/evaluate")
     public Uni<EvaluationResponse> evaluate(@Valid EvaluationRequest request) {
+        enforceApiQuota("/api/v1/policies/evaluate");
         String tenantId = tenantId();
         String performedBy = performedBy();
         long startTime = System.currentTimeMillis();
@@ -114,6 +124,7 @@ public class PolicyEvaluationResource {
             );
 
             LOG.infof("Policy evaluation completed in %dms: %s.%s", executionTime, request.policyModule(), request.policyFunction());
+            recordApiCall("/api/v1/policies/evaluate", "success", executionTime);
             return EvaluationResponse.success(result.getResult(), executionTime);
         })
         .onFailure().recoverWithItem(throwable -> {
@@ -134,6 +145,7 @@ public class PolicyEvaluationResource {
             );
 
             LOG.errorf(throwable, "Policy evaluation failed after %dms: %s.%s", executionTime, request.policyModule(), request.policyFunction());
+            recordApiCall("/api/v1/policies/evaluate", "api_error", executionTime);
             return EvaluationResponse.error(throwable.getMessage());
         });
     }
@@ -148,6 +160,7 @@ public class PolicyEvaluationResource {
     @POST
     @Path("/evaluate-json")
     public Uni<EvaluationResponse> evaluateJson(@Valid JsonPolicyRequest request) {
+        enforceApiQuota("/api/v1/policies/evaluate-json");
         String tenantId = tenantId();
         String performedBy = performedBy();
         long startTime = System.currentTimeMillis();
@@ -216,6 +229,7 @@ public class PolicyEvaluationResource {
                 );
 
                 LOG.infof("JSON policy evaluation completed in %dms: %s.%s", executionTime, policyModule, policyFunction);
+                recordApiCall("/api/v1/policies/evaluate-json", "success", executionTime);
                 return EvaluationResponse.success(result.getResult(), executionTime);
             })
             .onFailure().recoverWithItem(throwable -> {
@@ -239,6 +253,7 @@ public class PolicyEvaluationResource {
                 );
 
                 LOG.errorf(throwable, "JSON policy evaluation failed after %dms: %s.%s", executionTime, policyModule, policyFunction);
+                recordApiCall("/api/v1/policies/evaluate-json", "api_error", executionTime);
                 return EvaluationResponse.error(throwable.getMessage());
             });
         } catch (Exception e) {
@@ -246,6 +261,7 @@ public class PolicyEvaluationResource {
             businessMetrics.endPolicyEvaluation(sample);
 
             LOG.errorf(e, "Failed to process JSON policy: %s", e.getMessage());
+            recordApiCall("/api/v1/policies/evaluate-json", "api_error", executionTime);
             return Uni.createFrom().item(EvaluationResponse.error("JSON 策略解析失败: " + e.getMessage()));
         }
     }
@@ -270,8 +286,10 @@ public class PolicyEvaluationResource {
         @Valid SourcePolicyRequest request,
         @QueryParam("trace") @DefaultValue("false") boolean trace
     ) {
+        enforceApiQuota("/api/v1/policies/evaluate-source");
         String tenantId = tenantId();
         String performedBy = performedBy();
+        long apiCallStart = System.currentTimeMillis();
         Timer.Sample sample = businessMetrics.startPolicyEvaluation();
 
         LOG.infof("Evaluating CNL source for tenant %s (locale=%s, function=%s)",
@@ -332,23 +350,28 @@ public class PolicyEvaluationResource {
                         execResult.result(),
                         execResult.executionTimeMs()
                     );
+                    recordApiCall("/api/v1/policies/evaluate-source", "success", System.currentTimeMillis() - apiCallStart);
                     return EvaluationResponse.success(execResult.result(), execResult.executionTimeMs(), decisionTrace);
                 }
+                recordApiCall("/api/v1/policies/evaluate-source", "success", System.currentTimeMillis() - apiCallStart);
                 return EvaluationResponse.success(execResult.result(), execResult.executionTimeMs());
 
             } catch (DynamicCnlExecutor.DynamicExecutionException e) {
                 businessMetrics.endPolicyEvaluation(sample);
                 LOG.errorf(e, "Dynamic CNL execution failed: %s", e.getMessage());
+                recordApiCall("/api/v1/policies/evaluate-source", "api_error", System.currentTimeMillis() - apiCallStart);
                 return EvaluationResponse.error("CNL 动态执行失败: " + e.getMessage());
 
             } catch (InProcessCnlParser.CnlParseException e) {
                 businessMetrics.endPolicyEvaluation(sample);
                 LOG.errorf(e, "CNL parsing failed: %s", e.getMessage());
+                recordApiCall("/api/v1/policies/evaluate-source", "api_error", System.currentTimeMillis() - apiCallStart);
                 return EvaluationResponse.error("CNL 解析失败: " + e.getMessage());
 
             } catch (Exception e) {
                 businessMetrics.endPolicyEvaluation(sample);
                 LOG.errorf(e, "Failed to process CNL source: %s", e.getMessage());
+                recordApiCall("/api/v1/policies/evaluate-source", "api_error", System.currentTimeMillis() - apiCallStart);
                 return EvaluationResponse.error("CNL 策略执行失败: " + e.getMessage());
             }
         }).runSubscriptionOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool());
@@ -421,6 +444,8 @@ public class PolicyEvaluationResource {
     @POST
     @Path("/evaluate/batch")
     public Uni<BatchEvaluationResponse> evaluateBatch(@Valid BatchEvaluationRequest request) {
+        // batch 按"批中每条都算一次调用"扣配额：在 quota 检查之外，结果落地时按条 recordApiCall
+        enforceApiQuota("/api/v1/policies/evaluate/batch");
         String tenantId = tenantId();
         long startTime = System.currentTimeMillis();
 
@@ -465,6 +490,7 @@ public class PolicyEvaluationResource {
                         attempt.getResult().getResult(),
                         execTime
                     ));
+                    recordApiCall("/api/v1/policies/evaluate/batch", "success", execTime);
                 }
 
                 // 添加失败的结果
@@ -480,6 +506,7 @@ public class PolicyEvaluationResource {
                     );
 
                     responses.add(EvaluationResponse.error(attempt.getError()));
+                    recordApiCall("/api/v1/policies/evaluate/batch", "api_error", execTime);
                 }
 
                 LOG.infof("Batch evaluation completed in %dms: %d success, %d failures",
@@ -603,6 +630,27 @@ public class PolicyEvaluationResource {
                 )
             );
 
+            // NSM 埋点：rule_rolled_back（详见 03-telemetry-spec.md）
+            // days_after_publish 暂留 -1，待 PolicyVersion 加入 publishedAt/activatedAt 后回填精确值
+            long daysAfterPublish = -1L;
+            if (currentVersion != null && currentVersion.activatedAt != null) {
+                daysAfterPublish = java.time.Duration.between(
+                    currentVersion.activatedAt, java.time.Instant.now()
+                ).toDays();
+            }
+            nsmTelemetry.track(
+                performedBy,
+                NsmEvents.RULE_ROLLED_BACK,
+                java.util.Map.of(
+                    "rule_id", policyId,
+                    "from_version", fromVersion != null ? fromVersion : -1,
+                    "to_version", rolledBackVersion.version,
+                    "days_after_publish", daysAfterPublish,
+                    "reason", request.reason() != null ? request.reason() : "",
+                    "tenant_id", tenantId
+                )
+            );
+
             LOG.infof("Policy %s successfully rolled back to version %d",
                 policyId, rolledBackVersion.version);
 
@@ -718,6 +766,103 @@ public class PolicyEvaluationResource {
         }
         String user = routingContext.request().getHeader("X-User-Id");
         return user == null || user.isBlank() ? "anonymous" : user.trim();
+    }
+
+    /**
+     * 同步检查 API 配额；命中即抛 WebApplicationException
+     * 写入 X-Quota-Limit / Remaining / Reset / Warning 响应头（API-5）
+     *
+     * 已用 == 0 而 limit == 0 时仍会写 0/0 的响应头，给客户端清晰信号"plan 不开放"
+     */
+    private ApiQuotaGuard.GuardResult enforceApiQuota(String endpointPath) {
+        String tenantId = tenantId();
+        String userId = performedBy();
+        ApiQuotaGuard.GuardResult result = apiQuotaGuard.check(tenantId, userId);
+
+        // 写响应头（API-5）
+        if (routingContext != null && routingContext.response() != null) {
+            String limitStr = result.limit() == -1 ? "unlimited" : String.valueOf(result.limit());
+            routingContext.response().putHeader("X-Quota-Limit", limitStr);
+            if (result.limit() != -1) {
+                long remaining = Math.max(0, result.limit() - result.used());
+                routingContext.response().putHeader("X-Quota-Remaining", String.valueOf(remaining));
+                routingContext.response().putHeader("X-Quota-Reset", String.valueOf(monthStartUnix()));
+            }
+            if (result.warning() != null) {
+                routingContext.response().putHeader("X-Quota-Warning", result.warning());
+            }
+        }
+
+        switch (result.verdict()) {
+            case FORBIDDEN -> throw new WebApplicationException(
+                jakarta.ws.rs.core.Response.status(403)
+                    .entity(Map.of(
+                        "error", "api_access_denied",
+                        "message", "Free 计划不包含 Policy Execution API。请升级到 Pro/Team 或试用 Trial。"
+                    ))
+                    .type(MediaType.APPLICATION_JSON)
+                    .build()
+            );
+            case RATE_LIMITED -> throw new WebApplicationException(
+                jakarta.ws.rs.core.Response.status(429)
+                    .entity(Map.of(
+                        "error", "api_quota_hard_exceeded",
+                        "message", "本月 API 调用已超 200% 上限，已拒绝。请升级套餐或联系客服。",
+                        "limit", result.limit(),
+                        "used", result.used()
+                    ))
+                    .type(MediaType.APPLICATION_JSON)
+                    .build()
+            );
+            default -> { /* ALLOW: 即使 soft warn 也继续 */ }
+        }
+
+        // API-7: per-API-key per-second 限流（仅当请求带 X-Api-Key-Id 时生效）
+        String apiKeyId = null;
+        if (routingContext != null && routingContext.request() != null) {
+            apiKeyId = routingContext.request().getHeader("X-Api-Key-Id");
+        }
+        if (apiKeyId != null && !apiKeyId.isBlank()) {
+            ApiQuotaGuard.RateCheck rate = apiQuotaGuard.checkRate(tenantId, apiKeyId);
+            if (routingContext != null && routingContext.response() != null) {
+                routingContext.response().putHeader("X-RateLimit-Limit", String.valueOf(rate.limit()));
+                routingContext.response().putHeader("X-RateLimit-Remaining",
+                    String.valueOf(Math.max(0, rate.limit() - rate.used())));
+            }
+            if (!rate.allowed()) {
+                throw new WebApplicationException(
+                    jakarta.ws.rs.core.Response.status(429)
+                        .header("Retry-After", "1")
+                        .entity(Map.of(
+                            "error", "rate_limit_exceeded",
+                            "message", "Per-API-key per-second 限流：超过 " + rate.limit() + " RPS",
+                            "rps_limit", rate.limit(),
+                            "rps_used", rate.used()
+                        ))
+                        .type(MediaType.APPLICATION_JSON)
+                        .build()
+                );
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 异步记录一次 API 调用（fire-and-forget）
+     */
+    private void recordApiCall(String endpointPath, String status, long latencyMs) {
+        String tenantId = tenantId();
+        String userId = performedBy();
+        String apiKeyId = null;
+        if (routingContext != null && routingContext.request() != null) {
+            apiKeyId = routingContext.request().getHeader("X-Api-Key-Id");
+        }
+        apiQuotaGuard.recordAsync(userId, tenantId, apiKeyId, endpointPath, status, latencyMs);
+    }
+
+    private static long monthStartUnix() {
+        java.time.YearMonth ym = java.time.YearMonth.now(java.time.ZoneOffset.UTC);
+        return ym.plusMonths(1).atDay(1).atStartOfDay(java.time.ZoneOffset.UTC).toEpochSecond();
     }
 
     /**

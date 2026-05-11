@@ -113,23 +113,43 @@ public class NamedContextMapper {
             .map(p -> p.name)
             .toList();
 
-        // 检测是否为命名格式：至少有一个键与参数名匹配
-        boolean isNamedFormat = false;
+        // 构建上下文键到参数名的模糊匹配映射
+        // 处理规范化差异（如 request → reqüst），支持原始键直接匹配和规范化后匹配
+        java.util.Map<String, String> keyToParamMapping = new java.util.HashMap<>();
         for (Object key : map.keySet()) {
-            if (key instanceof String keyStr && paramNames.contains(keyStr)) {
-                isNamedFormat = true;
-                break;
+            if (!(key instanceof String keyStr)) continue;
+            // 精确匹配
+            if (paramNames.contains(keyStr)) {
+                keyToParamMapping.put(keyStr, keyStr);
+                continue;
+            }
+            // 模糊匹配：上下文键可能是规范化前的形式（如 "request"），
+            // 而参数名是规范化后的形式（如 "reqüst"）
+            for (String paramName : paramNames) {
+                if (fuzzyMatch(keyStr, paramName)) {
+                    keyToParamMapping.put(keyStr, paramName);
+                    LOG.debugf("模糊匹配: 上下文键 '%s' → 参数名 '%s'", keyStr, paramName);
+                    break;
+                }
             }
         }
 
+        boolean isNamedFormat = !keyToParamMapping.isEmpty();
+
         if (!isNamedFormat) {
             // 不是命名格式，按单参数 Map 处理（向后兼容）
-            LOG.debugf("上下文 Map 键与参数名不匹配，按单参数处理");
+            LOG.infof("上下文 Map 键与参数名不匹配，按单参数处理。上下文键: %s, 参数名: %s", map.keySet(), paramNames);
             return MappingResult.success(new Object[] { map }, false, List.of());
         }
 
         // 命名格式：按参数顺序提取值
         LOG.debugf("检测到命名格式上下文，参数名: %s", paramNames);
+
+        // 构建反向映射：参数名 → 上下文键
+        java.util.Map<String, String> paramToKeyMapping = new java.util.HashMap<>();
+        for (var entry : keyToParamMapping.entrySet()) {
+            paramToKeyMapping.put(entry.getValue(), entry.getKey());
+        }
 
         Object[] positionalArgs = new Object[params.size()];
         List<String> warnings = new ArrayList<>();
@@ -138,9 +158,10 @@ public class NamedContextMapper {
         for (int i = 0; i < params.size(); i++) {
             CoreModel.Param param = params.get(i);
             String paramName = param.name;
+            String contextKey = paramToKeyMapping.get(paramName);
 
-            if (map.containsKey(paramName)) {
-                positionalArgs[i] = map.get(paramName);
+            if (contextKey != null && map.containsKey(contextKey)) {
+                positionalArgs[i] = map.get(contextKey);
                 LOG.debugf("参数 '%s' (位置 %d) = %s", paramName, i, positionalArgs[i]);
             } else {
                 // 缺少参数
@@ -152,7 +173,7 @@ public class NamedContextMapper {
 
         // 检查未知参数
         for (Object key : map.keySet()) {
-            if (key instanceof String keyStr && !paramNames.contains(keyStr)) {
+            if (key instanceof String keyStr && !keyToParamMapping.containsKey(keyStr)) {
                 warnings.add("未知参数: '" + keyStr + "'");
                 LOG.warnf("未知参数: '%s'", keyStr);
             }
@@ -166,6 +187,32 @@ public class NamedContextMapper {
         }
 
         return MappingResult.success(positionalArgs, true, warnings);
+    }
+
+    /**
+     * 模糊匹配上下文键和参数名
+     *
+     * 处理规范化差异（如德语 umlaut 替换: request → reqüst）。
+     * 通过比较 ASCII 基础形式来判断是否为同一标识符。
+     */
+    private static boolean fuzzyMatch(String contextKey, String paramName) {
+        // 将 umlaut 字符还原为 ASCII 等价形式后比较
+        String normalizedParam = normalizeUmlauts(paramName);
+        String normalizedKey = normalizeUmlauts(contextKey);
+        return normalizedKey.equalsIgnoreCase(normalizedParam);
+    }
+
+    /**
+     * 将 umlaut 字符还原为 ASCII 等价形式
+     */
+    private static String normalizeUmlauts(String s) {
+        return s.replace("ü", "ue")
+                .replace("ö", "oe")
+                .replace("ä", "ae")
+                .replace("ß", "ss")
+                .replace("Ü", "Ue")
+                .replace("Ö", "Oe")
+                .replace("Ä", "Ae");
     }
 
     /**

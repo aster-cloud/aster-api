@@ -1,0 +1,299 @@
+plugins {
+    id 'java'
+    id 'jacoco'
+    // Using latest Quarkus 3.28.3 - testing Gradle 9.0 compatibility
+    id 'io.quarkus' version '3.32.2'
+    id 'io.gatling.gradle' version '3.13.1'
+    id 'org.gradle.test-retry' version '1.6.0'
+}
+
+jacoco {
+    // 0.8.13+ 支持 Java 25 字节码（major class file 69）
+    toolVersion = '0.8.13'
+}
+
+group = 'io.aster'
+version = '1.0.0-SNAPSHOT'
+
+ext.reportsDir = layout.buildDirectory.dir('reports/gatling').get().asFile
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+dependencies {
+    // Quarkus BOM (Bill of Materials) for dependency management
+    implementation enforcedPlatform('io.quarkus.platform:quarkus-bom:3.32.2')
+
+    // Quarkus核心依赖 - Reactive REST endpoints (quarkus-rest already includes reactive support)
+    implementation 'io.quarkus:quarkus-rest'
+    implementation 'io.quarkus:quarkus-rest-jackson'
+
+    // OpenAPI & Health checks
+    implementation 'io.quarkus:quarkus-smallrye-openapi'
+    implementation 'io.quarkus:quarkus-smallrye-health'
+
+    // Metrics
+    implementation 'io.quarkus:quarkus-micrometer-registry-prometheus'
+
+    // 链路追踪 - OpenTelemetry
+    implementation 'io.quarkus:quarkus-opentelemetry'
+    implementation 'io.opentelemetry:opentelemetry-exporter-logging'
+
+    // Caching - Caffeine cache + Redis for distributed invalidation
+    implementation 'io.quarkus:quarkus-cache'
+    implementation 'io.quarkus:quarkus-redis-cache'
+
+    // WebSocket support for Live Preview
+    implementation 'io.quarkus:quarkus-websockets'
+
+    // Vert.x WebClient - LLM API 调用（GraalVM Native 兼容）
+    implementation 'io.quarkus:quarkus-vertx'
+    implementation 'io.vertx:vertx-web-client'
+
+    // GraphQL支持
+    implementation 'io.quarkus:quarkus-smallrye-graphql'
+    implementation 'commons-codec:commons-codec:1.17.1'
+
+    // Persistence - Hibernate Panache + PostgreSQL + Flyway + Reactive Inbox
+    implementation 'io.quarkus:quarkus-hibernate-orm-panache'
+    implementation 'io.quarkus:quarkus-hibernate-reactive-panache'
+    implementation 'io.quarkus:quarkus-reactive-pg-client'
+    implementation 'io.quarkus:quarkus-jdbc-postgresql'
+    implementation 'io.quarkus:quarkus-flyway'
+
+    // Scheduler - for workflow cleanup tasks
+    implementation 'io.quarkus:quarkus-scheduler'
+
+    // Aster 核心模块 - 使用独立项目 (cloud.aster-lang 命名空间)
+    implementation 'cloud.aster-lang:aster-lang-core:0.0.1'
+    implementation 'cloud.aster-lang:aster-lang-runtime:0.0.1'
+    implementation 'cloud.aster-lang:aster-lang-truffle:0.0.1'
+
+    // 语言包（通过 SPI 自动发现并注册到 LexiconRegistry）
+    runtimeOnly 'cloud.aster-lang:aster-lang-en:0.0.1'
+    runtimeOnly 'cloud.aster-lang:aster-lang-zh:0.0.1'
+    runtimeOnly 'cloud.aster-lang:aster-lang-de:0.0.1'
+
+    // Aster 验证模块 - 独立项目
+    implementation 'cloud.aster-lang:aster-lang-validation:0.0.1'
+
+    // GraalVM Polyglot SDK (用于动态 CNL 执行)
+    implementation 'org.graalvm.polyglot:polyglot:25.0.1'
+    implementation 'org.graalvm.sdk:graal-sdk:25.0.1'
+    // truffle-api 需要作为 implementation 以便访问 VirtualFrame（DynamicCnlExecutor 需要）
+    implementation 'org.graalvm.truffle:truffle-api:25.0.1'
+    runtimeOnly 'org.graalvm.truffle:truffle-runtime:25.0.1'
+    runtimeOnly 'org.graalvm.truffle:truffle-compiler:25.0.1'
+    runtimeOnly 'org.graalvm.compiler:compiler:25.0.1'
+
+    // 测试依赖
+    testImplementation 'io.quarkus:quarkus-junit5'
+    testImplementation 'io.quarkus:quarkus-junit5-mockito'
+    testImplementation 'io.quarkus:quarkus-test-vertx'
+    testImplementation 'io.rest-assured:rest-assured'
+    testImplementation 'io.smallrye.reactive:smallrye-mutiny-vertx-junit5'
+    testImplementation 'org.assertj:assertj-core:3.27.7'
+    testImplementation 'org.mockito:mockito-core:5.7.0'
+    testImplementation 'io.quarkus:quarkus-jdbc-h2'
+    testImplementation 'org.awaitility:awaitility:4.2.0'
+    testImplementation 'com.tngtech.archunit:archunit-junit5:1.2.1'
+
+    // Testcontainers - PostgreSQL 测试环境（Phase 3.4）
+    testImplementation 'org.testcontainers:testcontainers:1.19.3'
+    testImplementation 'org.testcontainers:postgresql:1.19.3'
+    testImplementation 'org.testcontainers:junit-jupiter:1.19.3'
+    testImplementation 'com.redis:testcontainers-redis:2.0.1'
+}
+
+configurations.configureEach {
+    exclude group: 'org.jboss.slf4j', module: 'slf4j-jboss-logmanager'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs.remove('-Werror')
+    // 排除 classfile 警告（MicroProfile Config API 缺少 OSGi 注解依赖）
+    options.compilerArgs.addAll(['-parameters', '-Xlint:all,-classfile'])
+}
+
+tasks.withType(Test) {
+    systemProperty 'java.util.logging.manager', 'org.jboss.logmanager.LogManager'
+    systemProperty 'quarkus.test.flat-class-path', 'true'
+    jvmArgs '--add-opens', 'java.base/java.lang=ALL-UNNAMED'
+
+    // Testcontainers 配置
+    // DOCKER_HOST: 本地开发通过 ~/.testcontainers.properties 配置 Podman socket
+    // CI 环境使用默认 Docker socket，不覆盖 DOCKER_HOST
+    environment 'TESTCONTAINERS_RYUK_DISABLED', 'true'
+
+    // 跳过需要完整 Aster 语言运行时的测试
+    systemProperty 'aster.truffle.tests.skip', 'true'
+}
+
+// Jacoco 覆盖率：聚合 test + integrationTest 的执行数据
+tasks.named('jacocoTestReport', JacocoReport) {
+    dependsOn 'test'
+    // Gradle 9 严格依赖检查：声明可选 mustRunAfter，避免读 integrationTest 输出报错
+    mustRunAfter('integrationTest')
+    executionData.from(
+        fileTree(layout.buildDirectory).matching {
+            include 'jacoco/test.exec'
+            include 'jacoco/integrationTest.exec'
+        }
+    )
+    reports {
+        xml.required.set(true)   // codecov 上传用
+        html.required.set(true)
+        csv.required.set(false)
+    }
+    classDirectories.setFrom(
+        files(classDirectories.files.collect {
+            fileTree(it).matching {
+                // 排除生成代码、DTO、配置类
+                exclude 'io/aster/**/dto/**'
+                exclude 'io/aster/**/model/**'
+                exclude 'io/aster/**/entity/**'
+                exclude 'io/aster/**/event/**'
+            }
+        })
+    )
+}
+
+// 覆盖率门槛：仅对本次 PM 工作引入的核心业务包做强约束
+tasks.register('jacocoCoverageVerification', JacocoCoverageVerification) {
+    dependsOn 'jacocoTestReport'
+    mustRunAfter('integrationTest')
+    executionData.from(
+        fileTree(layout.buildDirectory).matching {
+            include 'jacoco/test.exec'
+            include 'jacoco/integrationTest.exec'
+        }
+    )
+    violationRules {
+        rule {
+            element = 'PACKAGE'
+            includes = ['io.aster.billing']
+            limit { counter = 'INSTRUCTION'; minimum = 0.60 }
+            limit { counter = 'BRANCH'; minimum = 0.50 }
+        }
+        rule {
+            element = 'PACKAGE'
+            includes = ['io.aster.policy.telemetry']
+            limit { counter = 'INSTRUCTION'; minimum = 0.60 }
+        }
+    }
+}
+
+// 测试分层：
+//   - test            : 快速单元测试（默认，不含 *IT 集成测试，CI 每次推送都跑）
+//   - integrationTest : 慢速集成测试（*IT.java，需要 Testcontainers / 真实容器）
+//   - testChaos       : 混沌测试（@Tag("chaos")，retry 容错）
+//
+// 命名约定：
+//   - *Test.java  → 单元测试，跑 test
+//   - *IT.java    → 集成测试，跑 integrationTest
+//   - 标签 chaos  → 混沌测试，跑 testChaos
+tasks.named('test', Test) {
+    useJUnitPlatform {
+        excludeTags 'chaos'
+    }
+    // 排除 *IT 集成测试，让 test 任务保持快速反馈（< 30s）
+    exclude '**/*IT.class'
+}
+
+tasks.register('integrationTest', Test) {
+    description = 'Run integration tests (*IT.java) with Testcontainers / real containers'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        excludeTags 'chaos'
+    }
+    include '**/*IT.class'
+    systemProperty 'java.util.logging.manager', 'org.jboss.logmanager.LogManager'
+    systemProperty 'quarkus.test.flat-class-path', 'true'
+    systemProperty 'aster.truffle.tests.skip', 'true'
+    jvmArgs '--add-opens', 'java.base/java.lang=ALL-UNNAMED'
+    // CI 上若设了 TESTCONTAINERS_RYUK_DISABLED 由外层透传，此处不强制
+    shouldRunAfter 'test'
+    // 集成测试占用更多资源，限制并发避免端口/容器抢占
+    maxParallelForks = 1
+    // 失败一次即停，节省 CI 时间（true=慢速测试不容忍 flakiness）
+    retry {
+        maxRetries = 1
+        failOnPassedAfterRetry = false
+    }
+}
+
+// 让 build 任务依赖 integrationTest，CI 跑 ./gradlew build 时自动包含集成测试
+tasks.named('check') {
+    dependsOn 'integrationTest'
+}
+
+/**
+ * Fresh-container 集成测试任务
+ *
+ * 用途：定期（推荐每天一次）跑一遍**全新容器**的集成测试，
+ *      防止 testcontainers reuse=true 长期复用时积累的 schema 漂移、
+ *      cache poisoning、卷数据残留导致测试漏检。
+ *
+ * 与 integrationTest 的差异：
+ *   - testcontainers.reuse.enable=false（每次起新容器）
+ *   - 强制 forkEvery=1，每个 test class 独立 JVM
+ *   - 不参与 check / build 链路（避免每次 PR 都付出 5x 时间成本）
+ *
+ * 触发方式：
+ *   - 本地：./gradlew integrationTestFresh
+ *   - CI：定时 workflow（cron） 每天 03:00 UTC 跑一次
+ */
+tasks.register('integrationTestFresh', Test) {
+    description = 'Run integration tests with fresh Testcontainers (no reuse). 用于定期 cron。'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        excludeTags 'chaos'
+    }
+    include '**/*IT.class'
+    systemProperty 'java.util.logging.manager', 'org.jboss.logmanager.LogManager'
+    systemProperty 'quarkus.test.flat-class-path', 'true'
+    systemProperty 'aster.truffle.tests.skip', 'true'
+    // 关键：禁用 testcontainers reuse + ryuk 接管清理
+    systemProperty 'testcontainers.reuse.enable', 'false'
+    environment 'TESTCONTAINERS_REUSE_ENABLE', 'false'
+    jvmArgs '--add-opens', 'java.base/java.lang=ALL-UNNAMED'
+    maxParallelForks = 1
+    forkEvery = 1
+    // 完全不容忍 flakiness——这是最强校验
+    retry {
+        maxRetries = 0
+    }
+}
+
+tasks.register('testChaos', Test) {
+    description = 'Run chaos tests (@Tag("chaos")) with retry support'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'chaos'
+    }
+    systemProperty 'java.util.logging.manager', 'org.jboss.logmanager.LogManager'
+    systemProperty 'quarkus.test.flat-class-path', 'true'
+    jvmArgs '--add-opens', 'java.base/java.lang=ALL-UNNAMED'
+    environment 'TESTCONTAINERS_RYUK_DISABLED', 'true'
+    systemProperty 'aster.truffle.tests.skip', 'true'
+    shouldRunAfter 'test'
+    retry {
+        maxRetries = 2
+        failOnPassedAfterRetry = false
+    }
+}

@@ -231,6 +231,22 @@ public class PolicyVersion extends PanacheEntityBase {
     public String compilerVersion;
 
     /**
+     * 版本来源类型
+     * 用于北极星指标 WAADR：每周被业务专家采纳的 AI 草稿规则数
+     * 取值：manual / ai_draft / ai_draft_edited / imported
+     */
+    @Column(name = "source_kind", length = 32, nullable = false)
+    public String sourceKind = "manual";
+
+    /**
+     * 作者业务角色（v1.2）
+     * 取值：business_expert / compliance_officer / risk_analyst / engineer / admin / unknown
+     * WAADR 视图仅统计业务三角色（前三者），与 PM 02-NSM 精确定义对齐
+     */
+    @Column(name = "author_role", length = 64, nullable = false)
+    public String authorRole = "unknown";
+
+    /**
      * 策略语言环境
      * 区分不同区域或语言的策略版本
      */
@@ -261,6 +277,12 @@ public class PolicyVersion extends PanacheEntityBase {
         }
         if (this.active == null) {
             this.active = true;
+        }
+        if (this.sourceKind == null) {
+            this.sourceKind = "manual";
+        }
+        if (this.authorRole == null) {
+            this.authorRole = "unknown";
         }
         // 确保 sourceHash 有值（非空约束）
         if (this.sourceHash == null && this.content != null) {

@@ -50,7 +50,8 @@ public class RateLimitFilter {
 
         // 豁免管理端点和内部端点
         if (path.startsWith("/q/") || path.startsWith("q/")
-                || path.startsWith("/internal/") || path.startsWith("internal/")) {
+                || path.startsWith("/internal/") || path.startsWith("internal/")
+                || path.startsWith("/api/internal/") || path.startsWith("api/internal/")) {
             return;
         }
 

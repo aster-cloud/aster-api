@@ -1,8 +1,12 @@
 package io.aster.policy.service;
 
+import io.aster.billing.PlanGateService;
+import io.aster.billing.PlanLimitException;
 import io.aster.policy.entity.PolicyCatalog;
 import io.aster.policy.entity.PolicyVersion;
 import io.aster.policy.entity.VersionStatus;
+import io.aster.policy.telemetry.NsmEvents;
+import io.aster.policy.telemetry.NsmTelemetry;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -35,6 +39,12 @@ public class PolicyVersionService {
     @Inject
     EntityManager entityManager;
 
+    @Inject
+    NsmTelemetry nsmTelemetry;
+
+    @Inject
+    PlanGateService planGate;
+
     @ConfigProperty(name = "aster.policy.dual-write.enabled", defaultValue = "false")
     boolean dualWriteEnabled;
 
@@ -55,6 +65,26 @@ public class PolicyVersionService {
      */
     @Transactional
     public PolicyVersion createVersion(UUID catalogId, String sourceCnl, String locale) {
+        return createVersion(catalogId, sourceCnl, locale, "manual", "unknown");
+    }
+
+    /**
+     * 创建策略版本（带 sourceKind 标记，向后兼容）
+     */
+    @Transactional
+    public PolicyVersion createVersion(UUID catalogId, String sourceCnl, String locale, String sourceKind) {
+        return createVersion(catalogId, sourceCnl, locale, sourceKind, "unknown");
+    }
+
+    /**
+     * 创建策略版本（v1.2 带 sourceKind + authorRole）
+     *
+     * sourceKind: manual / ai_draft / ai_draft_edited / imported
+     * authorRole: business_expert / compliance_officer / risk_analyst / engineer / admin / unknown
+     *   仅前三个业务角色才计入 WAADR 北极星指标
+     */
+    @Transactional
+    public PolicyVersion createVersion(UUID catalogId, String sourceCnl, String locale, String sourceKind, String authorRole) {
         PolicyCatalog catalog = PolicyCatalog.findById(catalogId);
         if (catalog == null) {
             throw new IllegalArgumentException("策略目录不存在: catalogId=" + catalogId);
@@ -71,7 +101,9 @@ public class PolicyVersionService {
         );
         version.tenantId = catalog.tenantId;
         version.locale = locale;
-        version.active = false; // 新版本默认保持非活跃，待 activateVersion 显式启用
+        version.sourceKind = normalizeSourceKind(sourceKind);
+        version.authorRole = normalizeAuthorRole(authorRole);
+        version.active = false;
         version.persist();
 
         // 双写：同时写入静态文件作为兜底
@@ -80,6 +112,34 @@ public class PolicyVersionService {
         }
 
         return version;
+    }
+
+    /**
+     * 规范化 sourceKind，未识别值回落到 manual。
+     */
+    private static String normalizeSourceKind(String sourceKind) {
+        if (sourceKind == null) {
+            return "manual";
+        }
+        String s = sourceKind.trim().toLowerCase();
+        return switch (s) {
+            case "manual", "ai_draft", "ai_draft_edited", "imported" -> s;
+            default -> "manual";
+        };
+    }
+
+    /**
+     * 规范化 authorRole（v1.2）
+     * 与 PM 02-NSM 精确定义对齐：仅前三个业务角色计入 WAADR
+     */
+    private static String normalizeAuthorRole(String role) {
+        if (role == null) return "unknown";
+        String s = role.trim().toLowerCase();
+        return switch (s) {
+            case "business_expert", "compliance_officer", "risk_analyst",
+                 "engineer", "admin" -> s;
+            default -> "unknown";
+        };
     }
 
     /**
@@ -111,6 +171,11 @@ public class PolicyVersionService {
     @Transactional
     public PolicyVersion submitForApproval(Long versionId, String submittedBy) {
         PolicyVersion version = requireVersion(versionId);
+        // PM v1.1：审批流是 Free→Pro 的核心转化抓手，Free 档位禁用 reviewer 流程
+        // 详见 aster-deploy/docs/pm/05-pricing-packaging.md（SOX 职责分离）
+        if (!planGate.allowsApproval(version.tenantId)) {
+            throw new PlanLimitException("reviewer_required");
+        }
         if (version.status != VersionStatus.DRAFT) {
             throw new IllegalStateException(
                 String.format("仅草稿版本可提交审批: versionId=%d, status=%s", versionId, version.status)
@@ -136,6 +201,11 @@ public class PolicyVersionService {
     @Transactional
     public PolicyVersion approveVersion(Long versionId, String approvedBy) {
         PolicyVersion version = requireVersion(versionId);
+        // 防御深度：即使 submitForApproval 没拦住，approve 也再检查一次 plan
+        // 防止 Free 用户绕过 submit 直接调 approve（未来如开放此接口需要）
+        if (!planGate.allowsApproval(version.tenantId)) {
+            throw new PlanLimitException("reviewer_required");
+        }
         if (version.status != VersionStatus.SUBMITTED) {
             throw new IllegalStateException(
                 String.format("仅已提交版本可审批通过: versionId=%d, status=%s", versionId, version.status)
@@ -219,6 +289,27 @@ public class PolicyVersionService {
         }
 
         emitActivationNotification(version, catalog);
+        trackDraftPublished(version, activatedBy);
+    }
+
+    /**
+     * NSM 埋点：发布版本被激活
+     *
+     * 后端为 draft_published 的权威信号源（强一致），前端同名事件保留作为 UX 计时器。
+     * 分析时按 emitted_by="server" 过滤即可去重。
+     */
+    private void trackDraftPublished(PolicyVersion version, String activatedBy) {
+        java.util.Map<String, Object> props = new java.util.HashMap<>();
+        props.put("rule_id", version.policyId);
+        props.put("draft_id", version.policyId);
+        props.put("version", version.version);
+        props.put("source_kind", version.sourceKind);
+        props.put("tenant_id", version.tenantId != null ? version.tenantId : "unknown");
+        props.put("reviewer_id", activatedBy);
+        // v1.2：authorRole 从 PolicyVersion 持久化读取（cloud→api 通过 createVersion 传播）
+        props.put("author_role", version.authorRole != null ? version.authorRole : "unknown");
+        props.put("emitted_by", "server");
+        nsmTelemetry.track(activatedBy, NsmEvents.DRAFT_PUBLISHED, props);
     }
 
     /**

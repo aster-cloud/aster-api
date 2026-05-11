@@ -76,11 +76,22 @@ public class PolicyMetrics {
      */
     public void recordEvaluation(String module, String function, long durationMs, boolean success) {
         // 记录评估时长
+        // publishPercentileHistogram(true) 让 Prometheus exporter 暴露 _bucket 系列，
+        // 使 histogram_quantile() 在 PromQL 中可用，而不仅仅是 _count/_sum/_max（summary）
+        // 详见 aster-api/docs/metrics/MetricsCatalog.md 反指标 P99 评估延迟
         Timer.builder("policy_evaluation_duration_seconds")
             .description("Policy evaluation duration in seconds")
             .tag("module", module)
             .tag("function", function)
             .tag("status", success ? "success" : "error")
+            .publishPercentileHistogram(true)
+            .serviceLevelObjectives(
+                java.time.Duration.ofMillis(50),
+                java.time.Duration.ofMillis(100),
+                java.time.Duration.ofMillis(200),
+                java.time.Duration.ofMillis(500),
+                java.time.Duration.ofSeconds(1)
+            )
             .register(registry)
             .record(java.time.Duration.ofMillis(durationMs));
 

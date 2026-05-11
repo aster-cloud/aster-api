@@ -1,0 +1,80 @@
+name: Nightly fresh-container IT
+
+on:
+  # UTC 03:00 = 北京 11:00（避开夜间维护窗口又比上班早 → 出问题马上能看到）
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  fresh-it:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: aster-api
+
+      # 同 ci.yml 一致：fresh-container 跑也需要这些子模块
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-core, path: aster-lang-core, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-runtime, path: aster-lang-runtime, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-truffle, path: aster-lang-truffle, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-validation, path: aster-lang-validation, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-en, path: aster-lang-en, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-zh, path: aster-lang-zh, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-de, path: aster-lang-de, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      # 显式禁用 reuse，确保每次起新容器
+      - name: Configure Testcontainers (no reuse)
+        run: |
+          mkdir -p $HOME
+          cat > $HOME/.testcontainers.properties <<EOF
+          testcontainers.reuse.enable=false
+          checks.disable=true
+          EOF
+
+      - name: Pre-pull test images
+        run: |
+          docker pull postgres:17-alpine &
+          docker pull redis:7-alpine &
+          wait
+
+      - name: Fresh Integration Tests
+        working-directory: aster-api
+        run: ./gradlew integrationTestFresh
+        env:
+          TESTCONTAINERS_REUSE_ENABLE: "false"
+          TESTCONTAINERS_RYUK_DISABLED: "false"
+
+      - name: Publish JUnit Report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Nightly Fresh-Container IT
+          path: build/test-results/**/*.xml
+          reporter: java-junit
+          fail-on-error: false
+          working-directory: aster-api
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-fresh-it-results
+          path: aster-api/build/test-results

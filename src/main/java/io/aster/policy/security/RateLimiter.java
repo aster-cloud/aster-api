@@ -1,5 +1,6 @@
 package io.aster.policy.security;
 
+import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -7,7 +8,6 @@ import org.jboss.logging.Logger;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Deque;
-import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -163,16 +163,33 @@ public class RateLimiter {
 
     /**
      * 移除滑动窗口中过期的时间戳
+     *
+     * 使用 pollFirst() 而非 iterator.remove()，利用 deque 的 FIFO 特性：
+     * 最早的时间戳在队首，逐个弹出直到遇到未过期的条目。
      */
     private void evictExpired(Deque<Instant> timestamps, Instant windowStart) {
-        Iterator<Instant> it = timestamps.iterator();
-        while (it.hasNext()) {
-            if (it.next().isBefore(windowStart)) {
-                it.remove();
-            } else {
-                // ConcurrentLinkedDeque 按插入顺序排列，后续均未过期
+        while (true) {
+            Instant head = timestamps.peekFirst();
+            if (head == null || !head.isBefore(windowStart)) {
                 break;
             }
+            timestamps.pollFirst();
         }
+    }
+
+    /**
+     * 定期清理已无活动记录的 idle 标识符，防止高基数流量导致内存无界增长。
+     * 每 5 分钟执行一次：清除空的时间戳队列和零计数的连接计数器。
+     */
+    @Scheduled(every = "5m")
+    void evictIdleEntries() {
+        Instant cutoff = Instant.now().minus(Duration.ofMinutes(5));
+        windows.entrySet().removeIf(entry -> {
+            Deque<Instant> q = entry.getValue();
+            evictExpired(q, cutoff);
+            return q.isEmpty();
+        });
+        connectionCounters.entrySet().removeIf(entry -> entry.getValue().get() == 0);
+        LOG.debugf("限流器空闲清理完成: windows=%d, connections=%d", windows.size(), connectionCounters.size());
     }
 }

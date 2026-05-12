@@ -122,10 +122,15 @@ jobs:
 
       - name: Deploy to K3S
         env:
-          KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG }}
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
         run: |
           mkdir -p ~/.kube
-          printf '%s' "$KUBECONFIG_CONTENT" > ~/.kube/config
+          # Secret is stored base64-encoded to survive shell/yaml mangling of
+          # multiline PEM blocks. Decode straight to file.
+          echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
+          # Sanity check — fail fast with a useful message if decode produced
+          # something kubectl can't read.
+          kubectl --kubeconfig ~/.kube/config version --client=false --request-timeout=10s
           kubectl rollout restart deployment/aster-api -n aster-cloud
           kubectl rollout status deployment/aster-api -n aster-cloud --timeout=300s

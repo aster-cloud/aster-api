@@ -55,28 +55,36 @@ public class HmacSignatureService {
         // 验证时间戳（防止重放攻击）
         validateTimestamp(timestamp);
 
-        // 加载租户密钥
-        String secret = loadSecret(tenantId);
-
         // 获取 query 参数
         String query = ctx.getUriInfo().getRequestUri().getQuery();
 
         // 构建规范化字符串（包含 query 参数）
         String canonical = RequestCanonicalizer.canonicalize(ctx.getMethod(), ctx.getUriInfo().getPath(), query, timestamp, nonce, body);
 
-        // 计算期望的签名
-        String expected = hmacSha256(secret, canonical);
-
-        // 常量时间比较
-        if (!MessageDigest.isEqual(
-            expected.getBytes(StandardCharsets.US_ASCII),
-            signature.getBytes(StandardCharsets.US_ASCII))) {
-
-            securityEventService.recordSignatureFailure(tenantId, "Signature mismatch",
-                java.util.Map.of("method", ctx.getMethod(), "path", ctx.getUriInfo().getPath(), "query", query != null ? query : ""));
-
-            throw new WebApplicationException("Invalid signature", Response.Status.UNAUTHORIZED);
+        // 加载当前密钥并验证；若失败再尝试 previous-key（轮换 grace period）
+        String currentSecret = loadSecret(tenantId);
+        if (constantTimeEquals(hmacSha256(currentSecret, canonical), signature)) {
+            return;
         }
+
+        String previousSecret = loadPreviousSecret(tenantId);
+        if (previousSecret != null && constantTimeEquals(hmacSha256(previousSecret, canonical), signature)) {
+            // grace period 命中旧密钥，记录便于观察轮换完成度
+            java.util.logging.Logger.getLogger(getClass().getName())
+                .warning("HMAC 命中旧密钥（grace period），tenant=" + tenantId);
+            return;
+        }
+
+        securityEventService.recordSignatureFailure(tenantId, "Signature mismatch",
+            java.util.Map.of("method", ctx.getMethod(), "path", ctx.getUriInfo().getPath(), "query", query != null ? query : ""));
+
+        throw new WebApplicationException("Invalid signature", Response.Status.UNAUTHORIZED);
+    }
+
+    private boolean constantTimeEquals(String a, String b) {
+        return MessageDigest.isEqual(
+            a.getBytes(StandardCharsets.US_ASCII),
+            b.getBytes(StandardCharsets.US_ASCII));
     }
 
 
@@ -116,6 +124,9 @@ public class HmacSignatureService {
 
     @ConfigProperty(name = "aster.security.hmac.secret-key")
     java.util.Optional<String> globalSecretKey;
+
+    @ConfigProperty(name = "aster.security.hmac.previous-secret-key")
+    java.util.Optional<String> previousGlobalSecretKey;
 
     @ConfigProperty(name = "aster.security.hmac.use-env-secrets", defaultValue = "true")
     boolean useEnvSecrets;
@@ -159,5 +170,24 @@ public class HmacSignatureService {
                 "HMAC 密钥未配置，请设置环境变量或配置项",
                 Response.Status.INTERNAL_SERVER_ERROR);
         });
+    }
+
+    /**
+     * 加载租户的上一代密钥（用于轮换 grace period）
+     *
+     * 加载顺序与 loadSecret 对应：
+     * 1. 环境变量: ASTER_HMAC_PREV_SECRET_{TENANT_ID}
+     * 2. 全局配置: aster.security.hmac.previous-secret-key
+     * 未配置时返回 null（轮换完成后应清空 prev 值）。
+     */
+    private String loadPreviousSecret(String tenantId) {
+        if (useEnvSecrets) {
+            String envKey = "ASTER_HMAC_PREV_SECRET_" + tenantId.toUpperCase().replace("-", "_");
+            String envSecret = System.getenv(envKey);
+            if (envSecret != null && !envSecret.isBlank()) {
+                return envSecret;
+            }
+        }
+        return previousGlobalSecretKey.filter(s -> !s.isBlank()).orElse(null);
     }
 }

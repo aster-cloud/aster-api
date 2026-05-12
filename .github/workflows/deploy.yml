@@ -121,8 +121,11 @@ jobs:
             wontlost/aster-api:jvm-latest
 
       - name: Deploy to K3S
+        env:
+          KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG }}
         run: |
           mkdir -p ~/.kube
-          printf '%s' "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+          printf '%s' "$KUBECONFIG_CONTENT" > ~/.kube/config
+          chmod 600 ~/.kube/config
           kubectl rollout restart deployment/aster-api -n aster-cloud
           kubectl rollout status deployment/aster-api -n aster-cloud --timeout=300s

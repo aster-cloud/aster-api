@@ -1,0 +1,142 @@
+name: Nightly perf benchmark (k6)
+
+# P0-3: 在 GH runner 内启动 aster-api + PG，跑 k6 对 evaluate-source 做基线
+# 阈值：P95 < 200ms, P99 < 500ms, 5xx error rate < 0.1%
+#
+# 设计权衡：不在 k3s 部署独立 perf-env（资源不足、维护复杂）。
+# runner 内启动可重复性好、隔离彻底，缺点是绝对数字与生产不同——用作回归检测。
+
+on:
+  schedule:
+    - cron: '0 4 * * *'   # UTC 04:00, 紧接 nightly IT
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  k6:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: aster_perf
+          POSTGRES_USER: aster
+          POSTGRES_PASSWORD: aster
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aster"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: aster-api }
+
+      # 子模块仓库（与 nightly.yml 一致）
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-core, path: aster-lang-core, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-runtime, path: aster-lang-runtime, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-truffle, path: aster-lang-truffle, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-validation, path: aster-lang-validation, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-en, path: aster-lang-en, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-zh, path: aster-lang-zh, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-de, path: aster-lang-de, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Build aster-api jar
+        working-directory: aster-api
+        run: ./gradlew quarkusBuild -x test --no-daemon
+
+      - name: Start aster-api in background
+        working-directory: aster-api
+        env:
+          ASTER_SECURITY_SIGNATURE_ENABLED: "false"
+          ASTER_SECURITY_RBAC_ENABLED: "false"
+          QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://localhost:5432/aster_perf
+          QUARKUS_DATASOURCE_USERNAME: aster
+          QUARKUS_DATASOURCE_PASSWORD: aster
+          QUARKUS_REDIS_HOSTS: redis://localhost:6379
+          QUARKUS_HTTP_PORT: "8080"
+          # 禁用所有遥测/外部依赖，缩减启动时间
+          OTEL_TRACES_EXPORTER: "none"
+          QUARKUS_OTEL_ENABLED: "false"
+        run: |
+          nohup java -jar build/quarkus-app/quarkus-run.jar > aster-api.log 2>&1 &
+          echo "PID=$!"
+          # 健康检查 wait
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/q/health >/dev/null 2>&1; then
+              echo "aster-api ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::aster-api failed to start within 120s"
+          cat aster-api.log
+          exit 1
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
+            --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
+            | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+
+      - name: Run evaluate-source baseline
+        working-directory: aster-api/perf
+        env:
+          API_BASE: http://localhost:8080
+          TENANT_ID: perf-tenant
+        run: |
+          k6 run --summary-export=policy-eval.json evaluate-source.js \
+            || { echo "::error::P0-3 perf threshold breached"; exit 1; }
+
+      - name: Upload k6 summary + aster-api log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-evaluate-source-${{ github.run_id }}
+          path: |
+            aster-api/perf/policy-eval.json
+            aster-api/perf/policy-eval-summary.json
+            aster-api/aster-api.log
+
+      - name: Notify Slack on failure
+        if: failure()
+        run: |
+          if [ -z "$SLACK_WEBHOOK" ]; then
+            echo "SLACK_WEBHOOK not set; skipping notification"
+            exit 0
+          fi
+          curl -X POST -H 'Content-Type: application/json' \
+            -d "{\"text\":\":warning: aster-api perf benchmark FAILED (run ${{ github.run_id }})\nP95 ≥ 200ms or P99 ≥ 500ms or error rate > 0.1%. See artifacts.\"}" \
+            "$SLACK_WEBHOOK"
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_PERF_WEBHOOK }}

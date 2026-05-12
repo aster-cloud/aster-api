@@ -44,9 +44,12 @@ dependencies {
     implementation 'io.quarkus:quarkus-micrometer-registry-prometheus'
 
     // 链路追踪 - OpenTelemetry
+    // Quarkus extension 已经包含 OTLP exporter（通过 CDI-managed wrapper）；
+    // 直接加 raw io.opentelemetry:opentelemetry-exporter-otlp 没用 — Quarkus
+    // 不通过 SDK 的 SPI autoconfigure 路径加载它。生产 export 走
+    // quarkus.otel.traces.exporter=cdi（见 application.properties）。
     implementation 'io.quarkus:quarkus-opentelemetry'
     implementation 'io.opentelemetry:opentelemetry-exporter-logging'
-    implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
 
     // Caching - Caffeine cache + Redis for distributed invalidation
     implementation 'io.quarkus:quarkus-cache'

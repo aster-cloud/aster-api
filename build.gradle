@@ -46,6 +46,7 @@ dependencies {
     // 链路追踪 - OpenTelemetry
     implementation 'io.quarkus:quarkus-opentelemetry'
     implementation 'io.opentelemetry:opentelemetry-exporter-logging'
+    implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
 
     // Caching - Caffeine cache + Redis for distributed invalidation
     implementation 'io.quarkus:quarkus-cache'

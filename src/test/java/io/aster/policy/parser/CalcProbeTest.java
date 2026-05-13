@@ -9,30 +9,23 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Regression probe — multi-rule modules in the Java engine.
+ * Regression: 用户函数名与 builtin 同名时的优先级。
  *
- * 用户场景（dashboard 返回 result=0）暴露了一个真实 bug：
+ * 历史 bug：用户定义 `Rule add given request, produce CalcResult: ...` 时，
+ * Loader.buildExpr 看到 `Call(Name("add"), ...)` 检查 `Builtins.has("add")=true`
+ * 后直接走 BuiltinCallNode（算术 add(a,b)），arity 失配后 fallback 路径在
+ * DSL 重写时被静默吞掉，最终返回 Integer(0)。
  *
- *   当模块包含 2 个 Rule 且其中一个调用另一个（"calculate → add"）时，
- *   Java Truffle runtime 返回 Integer(0) 而非应有的 Construct map。
+ * 修复：Loader 记录用户定义函数名集合 `userFunctionNames`，buildExpr 在
+ * 分发 Call 时**先查**该集合 —— 用户函数屏蔽同名 builtin。
  *
- *   相同 source 但只保留 add 一个 Rule（"FLAT"形态）→ 返回正确的
- *   `{_type=CalcResult, resultAmount=2000, ...}` map。
+ * 此测试覆盖：
+ *   - UNTYPED nested: calculate → add（用户的 add 屏蔽 builtin add）
+ *   - TYPED nested: 同上 + 显式字段类型
+ *   - FLAT: 单 Rule 路径，确保未引入新回归
  *
- *   TS 引擎在两种形态下都返回正确结果。
- *
- * 故障定位：
- *   - 不是类型推导（typed / untyped 都失败）
- *   - 不是字段数（FLAT 1/2/3 字段都正确）
- *   - 是多 Rule + 跨 Rule 调用时的求值/lowering 路径
- *
- * 这是 P1-9.5 deep-equivalence 设计文档预言的"parse 等价但 eval 分歧"
- * 类 case。修复前用 @Disabled 标注避免 CI 噪音，但保留 source 作为
- * regression anchor。
+ * 输入 1000 + 1000 期望结果 2000；任一分支返回 0 即说明 bug 复发。
  */
-@Disabled("Reproduces a known Java-engine bug — multi-rule module returns 0. " +
-          "See docs/rfc/deep-equivalence-design.md and the 'multi-rule eval bug' " +
-          "tracking task.")
 class CalcProbeTest {
 
     private static final String SOURCE_UNTYPED = """
@@ -81,18 +74,11 @@ class CalcProbeTest {
           Return CalcResult with resultAmount set to v.
         """;
 
-    private static void probe(String label, String source, String entry) {
+    private static Object eval(String source, String entry) {
         Map<String, Object> request = Map.of("leftAmount", 1000, "rightAmount", 1000);
         Map<String, Object> context = Map.of("request", request);
-        try {
-            ExecutionResult r = DynamicCnlExecutor.executeWithContext(source, context, entry, "en-US");
-            System.out.println("=== " + label + " ===");
-            System.out.println("  result class: " + (r.result() == null ? "null" : r.result().getClass().getName()));
-            System.out.println("  result: " + r.result());
-        } catch (Exception e) {
-            System.out.println("=== " + label + " ===");
-            System.out.println("  EXCEPTION: " + e.getMessage());
-        }
+        ExecutionResult r = DynamicCnlExecutor.executeWithContext(source, context, entry, "en-US");
+        return r.result();
     }
 
     /** 2 fields - one less than user's case */
@@ -121,16 +107,47 @@ class CalcProbeTest {
           Return CalcResult with resultAmount set to v, hasError set to "false", errorMessage set to "ok".
         """;
 
+    /**
+     * 用户函数 `add` 必须屏蔽 builtin 算术 `add`。
+     * 此前 Loader.buildExpr 优先走 BuiltinCallNode，导致 user 的 add 调用
+     * 被算术 add 拦截，1 个 Map 参数 + 期待 2 个 Int → 静默返回 0。
+     */
     @Test
-    void compare_untyped_vs_typed_vs_flat() {
-        probe("UNTYPED nested (original user case)", SOURCE_UNTYPED, "calculate");
-        probe("UNTYPED add direct", SOURCE_UNTYPED, "add");
-        probe("TYPED nested", SOURCE_TYPED, "calculate");
-        probe("TYPED add direct", SOURCE_TYPED, "add");
-        probe("FLAT 1-field", SOURCE_FLAT, "add");
-        probe("FLAT 2-field", SOURCE_2FIELDS, "add");
-        probe("FLAT 3-field", SOURCE_3FIELDS, "add");
+    void user_add_shadows_builtin_add_untyped() {
+        Object r = eval(SOURCE_UNTYPED, "calculate");
+        assertThat(r).isInstanceOf(Map.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> m = (Map<String, Object>) r;
+        assertThat(m).containsEntry("resultAmount", 2000);
+    }
 
-        assertThat(true).isTrue();
+    @Test
+    void user_add_shadows_builtin_add_typed() {
+        Object r = eval(SOURCE_TYPED, "calculate");
+        assertThat(r).isInstanceOf(Map.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> m = (Map<String, Object>) r;
+        assertThat(m).containsEntry("resultAmount", 2000);
+    }
+
+    @Test
+    void direct_call_of_user_add_works() {
+        Object r = eval(SOURCE_TYPED, "add");
+        assertThat(r).isInstanceOf(Map.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> m = (Map<String, Object>) r;
+        assertThat(m).containsEntry("resultAmount", 2000);
+    }
+
+    /** Sanity check：单 Rule 路径不能因为本次修复回归。 */
+    @Test
+    void single_rule_still_works() {
+        for (var src : new String[]{SOURCE_FLAT, SOURCE_2FIELDS, SOURCE_3FIELDS}) {
+            Object r = eval(src, "add");
+            assertThat(r).isInstanceOf(Map.class);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> m = (Map<String, Object>) r;
+            assertThat(m).containsEntry("resultAmount", 2000);
+        }
     }
 }

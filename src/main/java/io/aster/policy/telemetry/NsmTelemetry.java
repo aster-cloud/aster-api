@@ -2,7 +2,9 @@ package io.aster.policy.telemetry;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
@@ -28,6 +30,24 @@ public class NsmTelemetry {
 
     @Inject
     MeterRegistry registry;
+
+    /**
+     * 在启动时预注册 NSM counter，让 Prometheus 即便业务事件尚未发生
+     * 也能 scrape 到 metric=0。否则 Grafana 仪表盘在新部署后会显示
+     * "No data" 直到第一次真实事件发生。
+     *
+     * tenant_id=unknown 是占位 tag（与 track() 内 fallback 一致）；
+     * 真实事件发生时会按真实 tenant 注册新的 series。
+     */
+    void onStart(@Observes StartupEvent ev) {
+        for (String event : new String[]{NsmEvents.DRAFT_PUBLISHED, NsmEvents.RULE_ROLLED_BACK}) {
+            Counter.builder(event + "_total")
+                .description("NSM event " + event + " (pre-registered)")
+                .tag("tenant_id", "unknown")
+                .register(registry);
+        }
+        LOG.info("[NSM] pre-registered draft_published_total + rule_rolled_back_total counters");
+    }
 
     /**
      * 上报一个 NSM 相关事件

@@ -1,0 +1,47 @@
+####
+# Dockerfile for hot-pluggable language pack testing.
+#
+# 与 Dockerfile.jvm 唯一区别：在启动前根据 ENABLED_LOCALES 环境变量
+# 主动删除 lib/main/ 中**不应启用**的 aster-lang-{zh,de}-*.jar，
+# 用以验证 LexiconRegistry 的 SPI 发现 + FallbackLexicon 回退路径。
+#
+# 用法：
+#   ENABLED_LOCALES="en"       → 仅保留 aster-lang-en.jar（zh/de 走 fallback）
+#   ENABLED_LOCALES="en,zh"    → 保留 en+zh，移除 de
+#   ENABLED_LOCALES="en,zh,de" → 全保留（与 Dockerfile.jvm 等价）
+#
+# Build:
+#   ./gradlew build -x test
+#   podman build -f Dockerfile.pluggable -t aster/policy-api:pluggable .
+####
+
+FROM azul/zulu-openjdk-alpine:25-jre
+
+LABEL maintainer="Aster Lang Project"
+LABEL description="Quarkus Policy API - hot-pluggable language packs"
+
+WORKDIR /work/
+
+# 拷贝完整 fast-jar 结构（含全部三语言包，classpath 描述符保持有效）
+COPY build/quarkus-app/lib/ /work/lib/
+COPY build/quarkus-app/quarkus-run.jar /work/quarkus-run.jar
+COPY build/quarkus-app/app/ /work/app/
+COPY build/quarkus-app/quarkus/ /work/quarkus/
+
+RUN mkdir -p /work/data
+
+# 启动包装器：根据 ENABLED_LOCALES 删除未启用的语言包 jar
+COPY scripts/pluggable-entrypoint.sh /work/pluggable-entrypoint.sh
+RUN chmod +x /work/pluggable-entrypoint.sh
+
+EXPOSE 8080
+
+ENV JAVA_OPTS="-Xmx512m -Xms256m"
+ENV ENABLED_LOCALES="en,zh,de"
+
+# 默认连本机 postgres，podman-compose 会覆盖
+ENV QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://postgres:5432/aster_policy
+ENV QUARKUS_DATASOURCE_REACTIVE_URL=postgresql://postgres:5432/aster_policy
+ENV QUARKUS_REDIS_HOSTS=redis://redis:6379
+
+ENTRYPOINT ["/work/pluggable-entrypoint.sh"]

@@ -104,12 +104,14 @@ class NonDeterminismSourceTest {
         // - WorkflowSchedulerService: 生成工作流实例 ID (DeterminismContext 可重放)
         // - TimerSchedulerService: 生成定时器 ID (业务主键，随机性可接受)
         // - GlobalExceptionMapper: 生成 traceId 用于日志追踪 (不影响 workflow 确定性)
+        // - LexiconAdminResource: ioError 生成 traceId 用于排查上传失败 (不影响 workflow 确定性)
         Assertions.assertThat(uuidMatches.keySet())
                 .containsExactlyInAnyOrder(
                         "src/main/java/io/aster/policy/service/PolicyStorageService.java",
                         "src/main/java/io/aster/workflow/WorkflowSchedulerService.java",
                         "src/main/java/io/aster/workflow/TimerSchedulerService.java",
-                        "src/main/java/io/aster/policy/exception/GlobalExceptionMapper.java"
+                        "src/main/java/io/aster/policy/exception/GlobalExceptionMapper.java",
+                        "src/main/java/io/aster/policy/rest/LexiconAdminResource.java"
                 );
 
         Map<String, List<Integer>> nanoMatches = scanPattern(

@@ -1,4 +1,4 @@
-name: Nightly fresh-container IT
+name: Nightly (fresh-container IT + chaos)
 
 on:
   # UTC 03:00 = 北京 11:00（避开夜间维护窗口又比上班早 → 出问题马上能看到）
@@ -78,3 +78,119 @@ jobs:
         with:
           name: nightly-fresh-it-results
           path: aster-api/build/test-results
+
+  chaos:
+    # 与 fresh-it 解耦：chaos 失败不阻塞 fresh-it 结果，反之亦然
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: aster-api
+
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-core, path: aster-lang-core, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-runtime, path: aster-lang-runtime, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-truffle, path: aster-lang-truffle, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-validation, path: aster-lang-validation, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-en, path: aster-lang-en, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-zh, path: aster-lang-zh, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      - uses: actions/checkout@v4
+        with: { repository: aster-cloud/aster-lang-de, path: aster-lang-de, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Pre-pull test images
+        run: |
+          docker pull postgres:17-alpine &
+          docker pull redis:7-alpine &
+          wait
+
+      - name: Chaos Tests
+        working-directory: aster-api
+        # continue-on-error: chaos 偶发抖动不阻塞 nightly 结果；
+        # 真实回归靠每日 JUnit 报告人工巡检
+        continue-on-error: true
+        run: ./gradlew testChaos
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: "true"
+
+      # R10-CI-7 + R11-CI：哨兵步骤 —— 要求
+      #   (1) 至少 1 个 JUnit XML 报告
+      #   (2) 至少 1 个真实跑过的 test (tests>0, skipped<tests)
+      #   (3) failures+errors == 0
+      # 上一轮 R10 仅查 (1)(2)，导致 chaos step continue-on-error=true 时
+      # 真实 test failure 静默通过。R11 把 nightly 变成真正的回归门禁。
+      - name: Verify chaos tests actually ran AND passed
+        if: always()
+        working-directory: aster-api
+        run: |
+          set -e
+          XML_DIR=build/test-results
+          XML_COUNT=$(find "$XML_DIR" -name '*.xml' 2>/dev/null | wc -l | tr -d ' ')
+          echo "JUnit XML report count: $XML_COUNT"
+          if [ "$XML_COUNT" -lt 1 ]; then
+            echo "::error::No JUnit XML reports produced — chaos task likely failed before tests ran."
+            echo "  Check the Chaos Tests step log for Gradle config / classpath errors."
+            exit 1
+          fi
+          # 解析 <testsuite tests="N" skipped="K" failures="F" errors="E"> 属性
+          TOTAL_TESTS=0
+          TOTAL_SKIPPED=0
+          TOTAL_FAILURES=0
+          TOTAL_ERRORS=0
+          while IFS= read -r xml; do
+            T=$(grep -oE 'tests="[0-9]+"' "$xml" | head -1 | grep -oE '[0-9]+' || echo 0)
+            S=$(grep -oE 'skipped="[0-9]+"' "$xml" | head -1 | grep -oE '[0-9]+' || echo 0)
+            F=$(grep -oE 'failures="[0-9]+"' "$xml" | head -1 | grep -oE '[0-9]+' || echo 0)
+            E=$(grep -oE 'errors="[0-9]+"' "$xml" | head -1 | grep -oE '[0-9]+' || echo 0)
+            TOTAL_TESTS=$((TOTAL_TESTS + T))
+            TOTAL_SKIPPED=$((TOTAL_SKIPPED + S))
+            TOTAL_FAILURES=$((TOTAL_FAILURES + F))
+            TOTAL_ERRORS=$((TOTAL_ERRORS + E))
+          done < <(find "$XML_DIR" -name '*.xml')
+          RAN=$((TOTAL_TESTS - TOTAL_SKIPPED))
+          echo "Total tests=$TOTAL_TESTS skipped=$TOTAL_SKIPPED ran=$RAN failures=$TOTAL_FAILURES errors=$TOTAL_ERRORS"
+          if [ "$TOTAL_TESTS" -lt 1 ]; then
+            echo "::error::JUnit XML present but tests=0 — chaos suite likely couldn't load test classes."
+            exit 1
+          fi
+          if [ "$RAN" -lt 1 ]; then
+            echo "::error::All $TOTAL_TESTS chaos tests were skipped (likely Quarkus boot failed)."
+            echo "  Check the Chaos Tests step log for boot/config failures."
+            exit 1
+          fi
+          # R11-CI：真实测试失败必须 fail nightly。否则 continue-on-error 让 chaos failure
+          # 永远不会被运营看到。
+          REGRESSIONS=$((TOTAL_FAILURES + TOTAL_ERRORS))
+          if [ "$REGRESSIONS" -gt 0 ]; then
+            echo "::error::Chaos tests reported $TOTAL_FAILURES failures + $TOTAL_ERRORS errors."
+            echo "  Inspect the JUnit Report artifact for stack traces."
+            exit 1
+          fi
+
+      - name: Publish JUnit Report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Nightly Chaos Tests
+          path: build/test-results/**/*.xml
+          reporter: java-junit
+          fail-on-error: false
+          working-directory: aster-api
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-chaos-results
+          path: aster-api/build/test-results
+          if-no-files-found: error

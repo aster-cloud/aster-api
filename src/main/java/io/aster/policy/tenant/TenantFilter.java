@@ -81,9 +81,14 @@ public class TenantFilter implements ContainerRequestFilter {
 
         // 豁免路径：管理端点、schema 端点、AI 端点（浏览器直连，无 X-Tenant-Id）
         // /api/internal/* 跨服务接口：tenantId 在路径里或不需要，自带 HMAC 验签
+        // /api/v1/lexicons* 语言包查询：登录前/匿名亦需获取可用语言列表
+        // 用 slash-boundary 匹配防止误匹配兄弟路径（如 /api/v1/lexicons-admin）
         if (path.startsWith("/q/") || path.startsWith("q/")
                 || path.equals("/graphql/schema.graphql") || path.equals("graphql/schema.graphql")
                 || path.startsWith("/api/v1/ai/") || path.startsWith("api/v1/ai/")
+                || matchesLexiconPath(path)
+                || path.startsWith("/api/v1/admin/lexicons/") || path.startsWith("api/v1/admin/lexicons/")
+                || path.equals("/api/v1/admin/lexicons") || path.equals("api/v1/admin/lexicons")
                 || path.startsWith("/api/internal/") || path.startsWith("api/internal/")) {
             LOG.debugf("Bypassing tenant validation for path: %s", path);
             // 豁免路径使用默认租户
@@ -168,5 +173,14 @@ public class TenantFilter implements ContainerRequestFilter {
         // 截断过长的输入，移除控制字符
         String sanitized = input.length() > 100 ? input.substring(0, 100) + "..." : input;
         return sanitized.replaceAll("[\\r\\n\\t]", "_");
+    }
+
+    /**
+     * Slash-boundary 路径匹配，避免 startsWith("/api/v1/lexicons") 误匹配
+     * 兄弟路径如 /api/v1/lexicons-admin。
+     */
+    private boolean matchesLexiconPath(String path) {
+        if ("/api/v1/lexicons".equals(path) || "api/v1/lexicons".equals(path)) return true;
+        return path.startsWith("/api/v1/lexicons/") || path.startsWith("api/v1/lexicons/");
     }
 }

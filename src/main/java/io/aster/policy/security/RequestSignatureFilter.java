@@ -36,9 +36,12 @@ public class RequestSignatureFilter {
         // 跳过健康检查和内部端点（支持带/不带前导斜杠的路径）
         // /api/internal/* 是跨服务接口，自带 HMAC 验签，不走全局签名过滤器
         String path = ctx.getUriInfo().getPath();
+        // slash-boundary 路径匹配
         if (path.startsWith("/q/") || path.startsWith("q/")
                 || path.startsWith("/internal/") || path.startsWith("internal/")
-                || path.startsWith("/api/internal/") || path.startsWith("api/internal/")) {
+                || path.startsWith("/api/internal/") || path.startsWith("api/internal/")
+                || isLexiconReadPath(path)
+                || isLexiconAdminPath(path)) {
             return Uni.createFrom().voidItem();
         }
 
@@ -74,5 +77,15 @@ public class RequestSignatureFilter {
             }
         }).runSubscriptionOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool())
           .replaceWithVoid();
+    }
+
+    private static boolean isLexiconReadPath(String path) {
+        if ("/api/v1/lexicons".equals(path) || "api/v1/lexicons".equals(path)) return true;
+        return path.startsWith("/api/v1/lexicons/") || path.startsWith("api/v1/lexicons/");
+    }
+
+    private static boolean isLexiconAdminPath(String path) {
+        if ("/api/v1/admin/lexicons".equals(path) || "api/v1/admin/lexicons".equals(path)) return true;
+        return path.startsWith("/api/v1/admin/lexicons/") || path.startsWith("api/v1/admin/lexicons/");
     }
 }

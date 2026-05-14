@@ -120,10 +120,10 @@ jobs:
         # check 已包含 integrationTest，但前面单独跑过 → 这一步主要做 assemble
         run: ./gradlew build --build-cache --parallel -x test -x integrationTest
 
-      - name: Chaos Tests (optional)
-        working-directory: aster-api
-        run: ./gradlew testChaos
-        continue-on-error: true
+      # Chaos tests moved to nightly.yml (see "Chaos Tests" step there).
+      # Rationale: 24 chaos scenarios add ~minutes to every PR for low marginal
+      # signal — they catch slow-burn regressions better when run daily on main
+      # than on every push. Run locally on demand: ./gradlew testChaos
 
       - name: Publish JUnit Report
         if: always()

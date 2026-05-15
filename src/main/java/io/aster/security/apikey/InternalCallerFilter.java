@@ -18,14 +18,20 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Internal caller filter for /api/v1/policies/evaluate-source
+ * Internal caller filter for cloud-BFF-only endpoints.
  *
- * /evaluate-source 接受请求体里的 CNL 源码，绕过审核流。仅 cloud BFF 可用于
- * dashboard 预览/playground，**禁止外部客户调用**——否则审核流可被旁路。
+ * <p>Protects:
+ * <ul>
+ *   <li>{@code /api/v1/policies/evaluate-source} —— 接受请求体里的 CNL 源码，绕过审核流。
+ *       仅 cloud BFF 可用于 dashboard 预览/playground，禁止外部客户调用</li>
+ *   <li>R23-Critical-2: {@code /api/v1/ai/*} —— LLM 代理端点，会产生真金白银的 token 成本。
+ *       浏览器无法持有 HMAC 密钥，必须经过 aster-cloud server-side proxy 转签。
+ *       否则任意来源都可烧 LLM 预算 + 通过 X-Tenant-Id 假冒任意租户</li>
+ * </ul>
  *
- * 守门：要求 X-Internal-Caller=cloud-bff + HMAC 签名（复用 PlanGate HMAC key）。
+ * <p>守门：要求 X-Internal-Caller=cloud-bff + HMAC 签名（复用 PlanGate HMAC key）。
  *
- * 优先级 = AUTHENTICATION + 50（在 RequestSignatureFilter 之后、ApiKeyAuthFilter 之前）。
+ * <p>优先级 = AUTHENTICATION + 50（在 RequestSignatureFilter 之后、ApiKeyAuthFilter 之前）。
  */
 @ApplicationScoped
 public class InternalCallerFilter {
@@ -38,24 +44,96 @@ public class InternalCallerFilter {
     @ConfigProperty(name = "aster.security.evaluate-source.public", defaultValue = "false")
     boolean evaluateSourcePublic;
 
+    /**
+     * R23-Critical-2 + R25-Major-3: 临时旁路开关。
+     *
+     * <p>{@code aster.security.ai.public}：全量旁路所有 /api/v1/ai/*（含 /complete + SSE）。
+     * 仅在紧急回退时使用 —— 例如 cloud-side proxy 也挂了的情况下让浏览器直连维持服务。
+     * <b>生产应保持 false</b>。
+     *
+     * <p>{@code aster.security.ai.sse.public}：仅旁路 SSE 端点 (/generate, /explain, /suggest)，
+     * /complete 保持锁定。R25-Major-3 引入：cloud-side proxy 目前只覆盖 /complete，
+     * SSE proxy 还没写完。生产可以临时设 true 让浏览器直连 SSE 端点维持 AI 面板能用，
+     * 同时保留 /complete 的鉴权（因为 cloud-side 已迁移）。设 true 时每次调用打 warn。
+     *
+     * <p>优先级：{@code aiPublic} > {@code aiSsePublic}（粗粒度先生效）。
+     */
+    @ConfigProperty(name = "aster.security.ai.public", defaultValue = "false")
+    boolean aiPublic;
+
+    @ConfigProperty(name = "aster.security.ai.sse.public", defaultValue = "false")
+    boolean aiSsePublic;
+
+    /**
+     * R25-Major-3: SSE 端点白名单。 /complete 不在此 set 里 —— 它走 cloud-side proxy，
+     * 必须始终鉴权。
+     */
+    private static final java.util.Set<String> AI_SSE_PATHS = java.util.Set.of(
+        "/api/v1/ai/generate",
+        "/api/v1/ai/explain",
+        "/api/v1/ai/suggest"
+    );
+
+    /**
+     * R27-Minor-3：路径分类 + 旁路决策的纯函数，便于单元测试覆盖。
+     *
+     * @return Classification 的结果：
+     *   - NOT_PROTECTED：路径不在本 filter 管辖范围 → 直接放行
+     *   - BYPASS_OK：被 public 配置旁路（dev / 灰度回退）→ 直接放行
+     *   - REQUIRE_HMAC：必须验证 HMAC 签名
+     */
+    enum Classification { NOT_PROTECTED, BYPASS_OK, REQUIRE_HMAC }
+
+    static Classification classify(String normalizedPath,
+                                   boolean evaluateSourcePublic,
+                                   boolean aiPublic,
+                                   boolean aiSsePublic) {
+        boolean isEvaluateSource = normalizedPath.equals("/api/v1/policies/evaluate-source");
+        boolean isAi = normalizedPath.startsWith("/api/v1/ai/")
+            // 仅 LLM 代理路径，且必须有 "/ai/<something>" 后缀（防 /api/v1/ai 自身误匹配）
+            && normalizedPath.length() > "/api/v1/ai/".length();
+        if (!isEvaluateSource && !isAi) return Classification.NOT_PROTECTED;
+        if (isEvaluateSource && evaluateSourcePublic) return Classification.BYPASS_OK;
+        if (isAi && aiPublic) return Classification.BYPASS_OK;
+        // R25-Major-3：细粒度 SSE 旁路 —— 只放 generate/explain/suggest，
+        // /complete 仍要求 HMAC（已走 cloud-side proxy）。
+        if (isAi && aiSsePublic && AI_SSE_PATHS.contains(normalizedPath)) {
+            return Classification.BYPASS_OK;
+        }
+        return Classification.REQUIRE_HMAC;
+    }
+
     @ServerRequestFilter(priority = Priorities.AUTHENTICATION + 50)
     public void filter(ContainerRequestContext ctx) {
-        String path = ctx.getUriInfo().getPath();
-        String p = path.startsWith("/") ? path : "/" + path;
-        if (!p.equals("/api/v1/policies/evaluate-source")) {
+        // R23-Critical-1 + R25-Critical-1：matrix-param 归一化必须 **per-segment**。
+        // 参见 ApiKeyAuthFilter.shouldProtect 同样修复。
+        String p = io.aster.security.PathNormalizer.normalize(ctx.getUriInfo().getPath());
+
+        Classification cls = classify(p, evaluateSourcePublic, aiPublic, aiSsePublic);
+        if (cls == Classification.NOT_PROTECTED) return;
+        if (cls == Classification.BYPASS_OK) {
+            // 旁路命中时打 warn —— 不丢失 operator 可见性
+            if (p.startsWith("/api/v1/ai/")) {
+                if (aiPublic) {
+                    LOG.warnf("AI endpoint %s called via FULL public bypass "
+                        + "(aster.security.ai.public=true)", p);
+                } else {
+                    LOG.warnf("AI SSE endpoint %s called via partial public bypass "
+                        + "(aster.security.ai.sse.public=true). /complete remains protected.", p);
+                }
+            }
             return;
         }
-        if (evaluateSourcePublic) {
-            // 显式 opt-in 才允许公开（dev/测试用；生产应保持 false）
-            return;
-        }
+        // cls == REQUIRE_HMAC
 
         String caller = ctx.getHeaderString("X-Internal-Caller");
         String timestamp = ctx.getHeaderString("X-Aster-Timestamp");
         String signature = ctx.getHeaderString("X-Internal-Signature");
 
         if (!"cloud-bff".equals(caller) || timestamp == null || signature == null) {
-            throw forbidden("evaluate_source_internal_only");
+            String reason = p.startsWith("/api/v1/ai/")
+                ? "ai_internal_only" : "evaluate_source_internal_only";
+            throw forbidden(reason, p);
         }
 
         // 时间戳防重放（5 min 窗口）
@@ -63,38 +141,73 @@ public class InternalCallerFilter {
         try {
             ts = Long.parseLong(timestamp);
         } catch (NumberFormatException e) {
-            throw forbidden("invalid_timestamp");
+            throw forbidden("invalid_timestamp", p);
         }
         long now = System.currentTimeMillis() / 1000;
         if (Math.abs(now - ts) > 300) {
-            throw forbidden("stale_timestamp");
+            throw forbidden("stale_timestamp", p);
         }
 
         if (hmacKey.isEmpty()) {
             // 配置错误：生产必须配 HMAC；如果缺则全部拒绝
-            LOG.warn("evaluate-source called without HMAC key configured; rejecting");
-            throw forbidden("hmac_not_configured");
+            LOG.warnf("%s called without HMAC key configured; rejecting", p);
+            throw forbidden("hmac_not_configured", p);
         }
-        String expected = sign(hmacKey.get(), "POST\n/api/v1/policies/evaluate-source\n" + ts);
+        // R23-Critical-2: canonical 包含 method + 归一化后的 path + ts。
+        // aster-cloud 端 signInternalCallerHeaders(method, path) 必须传相同的归一化 path。
+        String method = ctx.getMethod();
+        String expected = sign(hmacKey.get(), method + "\n" + p + "\n" + ts);
         if (!constantTimeEquals(expected, signature)) {
-            throw forbidden("invalid_signature");
+            throw forbidden("invalid_signature", p);
         }
     }
 
-    private static WebApplicationException forbidden(String reason) {
+    private static WebApplicationException forbidden(String reason, String path) {
+        // R27-Minor-2: operator-actionable 错误消息。区分三类：
+        //   1. AI SSE endpoint (generate/explain/suggest) —— 当前 cloud SSE proxy 还没写完，
+        //      operator 可临时开 aster.security.ai.sse.public=true 灰度回退
+        //   2. AI complete —— cloud proxy 已就绪 (/api/llm/complete)，必须经它转发；
+        //      ai.sse.public 对 /complete 无效
+        //   3. evaluate-source —— 仅 cloud-bff 内部使用
+        boolean isAi = path.startsWith("/api/v1/ai/");
+        boolean isAiSse = isAi && AI_SSE_PATHS.contains(path);
+        String error;
+        String message;
+        if (isAiSse) {
+            error = "ai_sse_endpoint_forbidden";
+            message = "AI SSE endpoint requires HMAC-signed call from cloud-side proxy. "
+                + "Cloud-side SSE proxy is not yet implemented — to temporarily allow "
+                + "browser direct calls during migration, set "
+                + "aster.security.ai.sse.public=true (operator decision).";
+        } else if (isAi) {
+            // 主要就是 /api/v1/ai/complete —— cloud-side proxy 已就绪
+            error = "ai_endpoint_forbidden";
+            message = "AI endpoint must be called via aster-cloud server-side proxy "
+                + "/api/llm/complete (which signs with PlanGate HMAC). Direct browser "
+                + "calls are not supported. Note: aster.security.ai.sse.public does NOT "
+                + "apply to /complete.";
+        } else {
+            error = "evaluate_source_forbidden";
+            message = "POST /evaluate-source is internal-only. "
+                + "Use /evaluate (DB-backed) for production policies.";
+        }
         return new WebApplicationException(
             Response.status(403)
                 .entity(Map.of(
-                    "error", "evaluate_source_forbidden",
+                    "error", error,
                     "reason", reason,
-                    "message", "POST /evaluate-source is internal-only. Use /evaluate (DB-backed) for production policies."
+                    "path", path,
+                    "message", message
                 ))
                 .type(MediaType.APPLICATION_JSON)
                 .build()
         );
     }
 
-    private static String sign(String key, String message) {
+    /**
+     * R27-Minor-3: 包级可见，便于单测复用同一签名实现。
+     */
+    static String sign(String key, String message) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));

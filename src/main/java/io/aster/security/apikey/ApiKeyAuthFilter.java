@@ -84,17 +84,42 @@ public class ApiKeyAuthFilter {
     }
 
     /**
-     * 仅保护公开生产路径
+     * 仅保护公开生产路径。
+     *
+     * <p>R21-Critical-1 背景：生产 k3s 部署把全局 {@code aster.security.signature.enabled}
+     * 关掉了（理由：浏览器 Monaco/AI/lexicon 直连无法签名），但这意味着
+     * "策略版本管理" 类端点（rollback / cache-clear / version 列表）会失去全局签名
+     * 兜底而完全敞开。这些端点是租户内部突变操作，必须 API key 守护。
+     *
+     * <p>分层（含此 filter 覆盖范围）：
+     * <ul>
+     *   <li>{@code /evaluate*} —— public 计算端点：API key 必填</li>
+     *   <li>{@code /evaluate-source} —— internal SSE：InternalCallerFilter 守护</li>
+     *   <li>{@code /{policyId}/rollback} —— 突变：R21-Critical-1 起 API key 必填</li>
+     *   <li>{@code /{policyId}/versions} —— 历史查询：R21-Critical-1 起 API key 必填</li>
+     *   <li>{@code /cache} —— 缓存清理：R21-Critical-1 起 API key 必填</li>
+     *   <li>{@code /schema}、{@code /validate} —— 元数据查询：保持匿名（无副作用）</li>
+     * </ul>
      */
     private static boolean shouldProtect(String path) {
-        // 归一化前导斜杠
-        String p = path.startsWith("/") ? path : "/" + path;
+        // R23-Critical-1 + R25-Critical-1：matrix-param 归一化必须 **per-segment**。
+        // R23 的 "在第一个 ; 截断" 把 /foo;x/rollback → /foo（丢失 /rollback）→ 绕过。
+        // R25 改用 PathNormalizer 按 / 切段、每段独立 strip ;... 后拼回，与 RESTEasy
+        // 路由层一致。
+        String p = io.aster.security.PathNormalizer.normalize(path);
+
         if (!p.startsWith("/api/v1/policies/")) return false;
-        // 仅保护 evaluate / evaluate-json / evaluate/batch
+        // 公开 evaluate 端点（按调用量计费）
         // 显式排除 evaluate-source（由 InternalCallerFilter 守护）
         if (p.equals("/api/v1/policies/evaluate")) return true;
         if (p.equals("/api/v1/policies/evaluate-json")) return true;
         if (p.equals("/api/v1/policies/evaluate/batch")) return true;
+        // R21-Critical-1：cache 清理 (DELETE /cache) —— 突变操作必须鉴权
+        if (p.equals("/api/v1/policies/cache")) return true;
+        // R21-Critical-1：版本管理 —— rollback / versions 列表必须鉴权
+        // path 形如 /api/v1/policies/{policyId}/rollback 或 /{policyId}/versions
+        if (p.endsWith("/rollback")) return true;
+        if (p.endsWith("/versions")) return true;
         return false;
     }
 

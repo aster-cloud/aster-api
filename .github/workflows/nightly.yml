@@ -14,27 +14,27 @@ jobs:
   fresh-it:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           path: aster-api
 
       # 同 ci.yml 一致：fresh-container 跑也需要这些子模块
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-core, path: aster-lang-core, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-runtime, path: aster-lang-runtime, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-truffle, path: aster-lang-truffle, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-validation, path: aster-lang-validation, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-en, path: aster-lang-en, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-zh, path: aster-lang-zh, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-de, path: aster-lang-de, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           java-version: '25'
           distribution: 'temurin'
@@ -74,7 +74,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-fresh-it-results
           path: aster-api/build/test-results
@@ -83,26 +83,26 @@ jobs:
     # 与 fresh-it 解耦：chaos 失败不阻塞 fresh-it 结果，反之亦然
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           path: aster-api
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-core, path: aster-lang-core, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-runtime, path: aster-lang-runtime, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-truffle, path: aster-lang-truffle, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-validation, path: aster-lang-validation, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-en, path: aster-lang-en, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-zh, path: aster-lang-zh, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-de, path: aster-lang-de, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           java-version: '25'
           distribution: 'temurin'
@@ -189,7 +189,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-chaos-results
           path: aster-api/build/test-results

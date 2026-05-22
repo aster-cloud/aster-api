@@ -18,53 +18,53 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           path: aster-api
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: aster-cloud/aster-lang-core
           path: aster-lang-core
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: aster-cloud/aster-lang-runtime
           path: aster-lang-runtime
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: aster-cloud/aster-lang-truffle
           path: aster-lang-truffle
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: aster-cloud/aster-lang-validation
           path: aster-lang-validation
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: aster-cloud/aster-lang-en
           path: aster-lang-en
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: aster-cloud/aster-lang-zh
           path: aster-lang-zh
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: aster-cloud/aster-lang-de
           path: aster-lang-de
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           java-version: '25'
           distribution: 'temurin'
@@ -108,7 +108,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: always()
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           files: aster-api/build/reports/jacoco/test/jacocoTestReport.xml
           flags: backend
@@ -137,7 +137,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: aster-api/build/test-results

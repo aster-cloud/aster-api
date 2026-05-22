@@ -1,6 +1,7 @@
 package io.aster.billing.snapshot;
 
 import io.aster.billing.PlanGateConfig;
+import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import io.vertx.core.json.JsonArray;
@@ -17,7 +18,9 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Snapshot 预热 + 对账
@@ -46,6 +49,18 @@ public class SnapshotWarmupService {
 
     private volatile WebClient webClient;
 
+    // Shutdown latch: integration tests start the app briefly then exit.
+    // The 2s warm-up delay below routinely outlives the test JVM's
+    // Quarkus context, and the in-flight Vert.x dispatch then logs a
+    // noisy RejectedExecutionException ("event executor terminated").
+    // Latch is checked at every async hand-off so a late warm-up is a
+    // silent no-op instead of a stack trace.
+    private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
+
+    void onShutdown(@Observes ShutdownEvent ev) {
+        shuttingDown.set(true);
+    }
+
     void onStart(@Observes StartupEvent ev) {
         if (!config.enabled()) {
             LOG.info("plan-gate disabled, skipping snapshot warm-up");
@@ -55,8 +70,16 @@ public class SnapshotWarmupService {
         mutinyVertx.executeBlocking(() -> {
             try {
                 Thread.sleep(2000); // 给 redis / cloud 上线时间
+                if (shuttingDown.get()) {
+                    LOG.debug("snapshot warm-up skipped (shutdown in progress)");
+                    return null;
+                }
                 int n = fullSync("warmup");
                 LOG.infof("snapshot warm-up complete: %d users", n);
+            } catch (RejectedExecutionException e) {
+                // Vert.x event loop already terminated — Quarkus shutdown
+                // raced ahead of us. Demote to debug so test logs stay clean.
+                LOG.debug("snapshot warm-up aborted (event loop terminated during shutdown)");
             } catch (Exception e) {
                 LOG.warnf("snapshot warm-up failed (will retry on 1h cron): %s", e.getMessage());
             }
@@ -117,6 +140,9 @@ public class SnapshotWarmupService {
     }
 
     private JsonObject fetchPage(String cursor) throws Exception {
+        if (shuttingDown.get()) {
+            throw new RejectedExecutionException("snapshot warm-up aborted: shutdown in progress");
+        }
         URI baseUri = URI.create(config.cloudInternalUrl());
         int port = baseUri.getPort() == -1
             ? ("https".equals(baseUri.getScheme()) ? 443 : 80)

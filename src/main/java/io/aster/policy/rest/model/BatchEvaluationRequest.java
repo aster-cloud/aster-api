@@ -15,8 +15,11 @@ import java.util.List;
 public record BatchEvaluationRequest(
     @NotNull(message = "requests不能为null")
     @Size(min = 1, max = 100, message = "requests数量必须在1到100之间")
-    @Valid
     @JsonProperty("requests")
-    List<EvaluationRequest> requests
+    // @Valid on the type argument (HV000271 fix): Hibernate Validator
+    // deprecated container-level @Valid in favour of explicit element-
+    // level annotation. Same runtime semantics (validates each
+    // EvaluationRequest); just the canonical form.
+    List<@Valid EvaluationRequest> requests
 ) {
 }

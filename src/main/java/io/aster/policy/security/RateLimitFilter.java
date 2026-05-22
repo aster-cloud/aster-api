@@ -41,9 +41,16 @@ public class RateLimitFilter {
     int windowSeconds;
 
     @ServerRequestFilter(priority = Priorities.AUTHENTICATION + 1)
-    public void filter(ContainerRequestContext ctx) {
+    public Response filter(ContainerRequestContext ctx) {
+        // RESTEasy Reactive's @ServerRequestFilter requires returning the
+        // Response (or Uni<Response>) for short-circuiting. Calling
+        // ctx.abortWith from inside such a filter throws IllegalStateException
+        // and bubbles out as a 500 — which is exactly what k6 saw as
+        // "100% 5xx error rate" when the rate limiter triggered.
+        //
+        // Returning null means "continue down the chain".
         if (!enabled) {
-            return;
+            return null;
         }
 
         String path = ctx.getUriInfo().getPath();
@@ -52,7 +59,7 @@ public class RateLimitFilter {
         if (path.startsWith("/q/") || path.startsWith("q/")
                 || path.startsWith("/internal/") || path.startsWith("internal/")
                 || path.startsWith("/api/internal/") || path.startsWith("api/internal/")) {
-            return;
+            return null;
         }
 
         // 使用租户ID作为限流 key（TenantFilter 已在前置过滤器中校验并设置）
@@ -79,16 +86,15 @@ public class RateLimitFilter {
             long retryAfter = Math.max(1, resetAt - java.time.Instant.now().getEpochSecond());
             LOG.warnf("限流拒绝: identifier=%s, path=%s", identifier, path);
 
-            ctx.abortWith(
-                Response.status(429)
-                    .header("Retry-After", String.valueOf(retryAfter))
-                    .header("X-RateLimit-Limit", String.valueOf(maxRequests))
-                    .header("X-RateLimit-Remaining", "0")
-                    .header("X-RateLimit-Reset", String.valueOf(resetAt))
-                    .entity("{\"error\":\"Too Many Requests\",\"retryAfter\":" + retryAfter + "}")
-                    .build()
-            );
+            return Response.status(429)
+                .header("Retry-After", String.valueOf(retryAfter))
+                .header("X-RateLimit-Limit", String.valueOf(maxRequests))
+                .header("X-RateLimit-Remaining", "0")
+                .header("X-RateLimit-Reset", String.valueOf(resetAt))
+                .entity("{\"error\":\"Too Many Requests\",\"retryAfter\":" + retryAfter + "}")
+                .build();
         }
+        return null;
     }
 
     /**

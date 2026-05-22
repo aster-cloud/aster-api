@@ -76,6 +76,11 @@ jobs:
         env:
           ASTER_SECURITY_SIGNATURE_ENABLED: "false"
           ASTER_SECURITY_RBAC_ENABLED: "false"
+          # The endpoint is gated by InternalCallerFilter (HMAC) and by
+          # RateLimitFilter (60 req / 60s per IP). Both block perf load
+          # from the runner — bypass for the duration of the benchmark.
+          ASTER_SECURITY_EVALUATE_SOURCE_PUBLIC: "true"
+          ASTER_RATELIMIT_ENABLED: "false"
           QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://localhost:5432/aster_perf
           # application.properties wires the reactive datasource separately
           # (defaults to localhost:5432/aster_policy). Without this override

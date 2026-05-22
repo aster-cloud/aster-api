@@ -66,25 +66,39 @@ public class SnapshotWarmupService {
             LOG.info("plan-gate disabled, skipping snapshot warm-up");
             return;
         }
-        // 异步启动 warm-up，不阻塞 readiness
-        mutinyVertx.executeBlocking(() -> {
+        // 异步启动 warm-up，不阻塞 readiness。
+        //
+        // 用独立 daemon 线程而不是 mutinyVertx.executeBlocking：后者完成时
+        // 把 success 回 dispatch 到原 context 的 event loop —— 集成测试场景下，
+        // event loop 在 2s warm-up 期间常常先被 Quarkus shutdown 关掉，
+        // dispatch 失败时 Vert.x 把它当作 "Uncaught exception received by
+        // Vert.x [Error Occurred After Shutdown]" 打印一长串 stack。
+        //
+        // daemon=true 让线程不阻碍 JVM 退出；fetchPage 自身在 shuttingDown
+        // 设置后会快速失败，整体冷启动开销不变。
+        Thread t = new Thread(() -> {
             try {
                 Thread.sleep(2000); // 给 redis / cloud 上线时间
                 if (shuttingDown.get()) {
                     LOG.debug("snapshot warm-up skipped (shutdown in progress)");
-                    return null;
+                    return;
                 }
                 int n = fullSync("warmup");
                 LOG.infof("snapshot warm-up complete: %d users", n);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
             } catch (RejectedExecutionException e) {
-                // Vert.x event loop already terminated — Quarkus shutdown
-                // raced ahead of us. Demote to debug so test logs stay clean.
                 LOG.debug("snapshot warm-up aborted (event loop terminated during shutdown)");
             } catch (Exception e) {
-                LOG.warnf("snapshot warm-up failed (will retry on 1h cron): %s", e.getMessage());
+                if (shuttingDown.get()) {
+                    LOG.debug("snapshot warm-up failed during shutdown: " + e.getMessage());
+                } else {
+                    LOG.warnf("snapshot warm-up failed (will retry on 1h cron): %s", e.getMessage());
+                }
             }
-            return null;
-        }).subscribeAsCompletionStage();
+        }, "snapshot-warmup");
+        t.setDaemon(true);
+        t.start();
     }
 
     @Scheduled(every = "1h", delayed = "10m")

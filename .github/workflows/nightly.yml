@@ -64,13 +64,18 @@ jobs:
 
       - name: Publish JUnit Report
         if: always()
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         with:
           name: Nightly Fresh-Container IT
           path: build/test-results/**/*.xml
           reporter: java-junit
           fail-on-error: false
           working-directory: aster-api
+          # Trim to failures only — full nightly IT suite output blows
+          # past the Checks API 65535-byte cap.
+          list-suites: failed
+          list-tests: failed
+          max-annotations: 50
 
       - name: Upload Test Results
         if: always()
@@ -179,13 +184,16 @@ jobs:
 
       - name: Publish JUnit Report
         if: always()
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         with:
           name: Nightly Chaos Tests
           path: build/test-results/**/*.xml
           reporter: java-junit
           fail-on-error: false
           working-directory: aster-api
+          list-suites: failed
+          list-tests: failed
+          max-annotations: 50
 
       - name: Upload Test Results
         if: always()

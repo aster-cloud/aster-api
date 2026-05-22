@@ -127,13 +127,21 @@ jobs:
 
       - name: Publish JUnit Report
         if: always()
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         with:
           name: JUnit Test Results
           path: build/test-results/**/*.xml
           reporter: java-junit
           fail-on-error: false
           working-directory: aster-api
+          # Aster's test suite is large (~2k JUnit cases); the default
+          # full listing routinely exceeds the GitHub Checks API 65535
+          # byte body limit and gets trimmed. Only list failed suites
+          # and tests so the published report stays under the cap and
+          # remains useful (passing cases are still in the artifact).
+          list-suites: failed
+          list-tests: failed
+          max-annotations: 50
 
       - name: Upload Test Results
         if: always()

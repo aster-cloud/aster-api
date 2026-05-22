@@ -77,26 +77,38 @@ jobs:
           ASTER_SECURITY_SIGNATURE_ENABLED: "false"
           ASTER_SECURITY_RBAC_ENABLED: "false"
           QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://localhost:5432/aster_perf
+          # application.properties wires the reactive datasource separately
+          # (defaults to localhost:5432/aster_policy). Without this override
+          # the reactive PG health check fails ("database aster_policy does
+          # not exist") and /q/health stays 503 → ready loop times out at 2min.
+          QUARKUS_DATASOURCE_REACTIVE_URL: postgresql://localhost:5432/aster_perf
           QUARKUS_DATASOURCE_USERNAME: aster
           QUARKUS_DATASOURCE_PASSWORD: aster
           QUARKUS_REDIS_HOSTS: redis://localhost:6379
           QUARKUS_HTTP_PORT: "8080"
           # 禁用所有遥测/外部依赖，缩减启动时间
           OTEL_TRACES_EXPORTER: "none"
-          QUARKUS_OTEL_ENABLED: "false"
+          # quarkus.otel.enabled is a build-time property; setting it via env
+          # at runtime is a no-op (and the app logs a build-time-fixed warning).
+          # Otel exporter set to none above already disables exports — leave
+          # the build-time value alone.
         run: |
           nohup java -jar build/quarkus-app/quarkus-run.jar > aster-api.log 2>&1 &
           echo "PID=$!"
-          # 健康检查 wait
-          for i in $(seq 1 60); do
+          # 健康检查 wait. /q/health/ready is the liveness/readiness composite
+          # but the perf jar boots ~30s; give 3min (was 2min, too tight on
+          # cold runner) before declaring failure.
+          for i in $(seq 1 90); do
             if curl -fsS http://localhost:8080/q/health >/dev/null 2>&1; then
-              echo "aster-api ready"
+              echo "aster-api ready after ${i}×2s"
               exit 0
             fi
             sleep 2
           done
-          echo "::error::aster-api failed to start within 120s"
-          cat aster-api.log
+          echo "::error::aster-api failed to start within 180s"
+          echo "::group::aster-api.log (tail 200)"
+          tail -200 aster-api.log
+          echo "::endgroup::"
           exit 1
 
       - name: Install k6

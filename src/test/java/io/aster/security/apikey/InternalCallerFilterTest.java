@@ -29,22 +29,22 @@ class InternalCallerFilterTest {
     @Test
     void unrelatedPathsAreNotProtected() {
         assertEquals(Classification.NOT_PROTECTED,
-            InternalCallerFilter.classify("/api/v1/lexicons", false, false, false));
+            InternalCallerFilter.classify("/api/v1/lexicons", false, false, false, false));
         assertEquals(Classification.NOT_PROTECTED,
-            InternalCallerFilter.classify("/api/v1/policies/evaluate", false, false, false));
+            InternalCallerFilter.classify("/api/v1/policies/evaluate", false, false, false, false));
         assertEquals(Classification.NOT_PROTECTED,
-            InternalCallerFilter.classify("/q/health", false, false, false));
+            InternalCallerFilter.classify("/q/health", false, false, false, false));
         assertEquals(Classification.NOT_PROTECTED,
-            InternalCallerFilter.classify("/", false, false, false));
+            InternalCallerFilter.classify("/", false, false, false, false));
     }
 
     @Test
     void aiPathWithoutSubResourceNotProtected() {
         // /api/v1/ai 本身（没有 sub-resource）不属于 LLM 端点，不在管辖
         assertEquals(Classification.NOT_PROTECTED,
-            InternalCallerFilter.classify("/api/v1/ai", false, false, false));
+            InternalCallerFilter.classify("/api/v1/ai", false, false, false, false));
         assertEquals(Classification.NOT_PROTECTED,
-            InternalCallerFilter.classify("/api/v1/ai/", false, false, false));
+            InternalCallerFilter.classify("/api/v1/ai/", false, false, false, false));
     }
 
     // ============================================================
@@ -55,14 +55,44 @@ class InternalCallerFilterTest {
     void evaluateSourceRequiresHmacByDefault() {
         assertEquals(Classification.REQUIRE_HMAC,
             InternalCallerFilter.classify("/api/v1/policies/evaluate-source",
-                false, false, false));
+                false, false, false, false));
     }
 
     @Test
     void evaluateSourcePublicFlagBypasses() {
         assertEquals(Classification.BYPASS_OK,
             InternalCallerFilter.classify("/api/v1/policies/evaluate-source",
-                /*evaluateSourcePublic*/ true, false, false));
+                /*evaluateSourcePublic*/ true, /*evaluateSourceTrial*/ false, false, false));
+    }
+
+    @Test
+    void evaluateSourceTrialFlagBypassesAsTrial() {
+        // .trial 单独打开时返回 BYPASS_TRIAL —— 与 BYPASS_OK 区分，确保下游 filter
+        // (TrialEndpointGuard) 才是真正的限流闸门，避免 operator 把 .trial=true
+        // 当成 .public=true 用。
+        assertEquals(Classification.BYPASS_TRIAL,
+            InternalCallerFilter.classify("/api/v1/policies/evaluate-source",
+                /*evaluateSourcePublic*/ false, /*evaluateSourceTrial*/ true, false, false));
+    }
+
+    @Test
+    void evaluateSourceTrialDoesNotAffectAiEndpoints() {
+        // .trial 是 evaluate-source 专属的：AI 路径仍要 HMAC
+        assertEquals(Classification.REQUIRE_HMAC,
+            InternalCallerFilter.classify("/api/v1/ai/complete",
+                false, /*evaluateSourceTrial*/ true, false, false));
+        assertEquals(Classification.REQUIRE_HMAC,
+            InternalCallerFilter.classify("/api/v1/ai/generate",
+                false, true, false, false));
+    }
+
+    @Test
+    void evaluateSourcePublicTakesPrecedenceOverTrial() {
+        // 同时设两个开关时，.public 是更粗粒度的旁路，优先生效（operator 应当
+        // 显式选择只设一个）。
+        assertEquals(Classification.BYPASS_OK,
+            InternalCallerFilter.classify("/api/v1/policies/evaluate-source",
+                /*evaluateSourcePublic*/ true, /*evaluateSourceTrial*/ true, false, false));
     }
 
     // ============================================================
@@ -72,13 +102,13 @@ class InternalCallerFilterTest {
     @Test
     void aiCompleteRequiresHmacByDefault() {
         assertEquals(Classification.REQUIRE_HMAC,
-            InternalCallerFilter.classify("/api/v1/ai/complete", false, false, false));
+            InternalCallerFilter.classify("/api/v1/ai/complete", false, false, false, false));
     }
 
     @Test
     void aiGenerateRequiresHmacByDefault() {
         assertEquals(Classification.REQUIRE_HMAC,
-            InternalCallerFilter.classify("/api/v1/ai/generate", false, false, false));
+            InternalCallerFilter.classify("/api/v1/ai/generate", false, false, false, false));
     }
 
     @Test
@@ -86,13 +116,13 @@ class InternalCallerFilterTest {
         // 粗粒度全量旁路 —— /complete 也放过
         assertEquals(Classification.BYPASS_OK,
             InternalCallerFilter.classify("/api/v1/ai/complete",
-                false, /*aiPublic*/ true, false));
+                false, false, /*aiPublic*/ true, false));
         assertEquals(Classification.BYPASS_OK,
             InternalCallerFilter.classify("/api/v1/ai/generate",
-                false, true, false));
+                false, false, true, false));
         assertEquals(Classification.BYPASS_OK,
             InternalCallerFilter.classify("/api/v1/ai/translate", // 未来端点
-                false, true, false));
+                false, false, true, false));
     }
 
     @Test
@@ -100,13 +130,13 @@ class InternalCallerFilterTest {
         // R25-Major-3: ai.sse.public 只放 generate/explain/suggest
         assertEquals(Classification.BYPASS_OK,
             InternalCallerFilter.classify("/api/v1/ai/generate",
-                false, false, /*aiSsePublic*/ true));
+                false, false, false, /*aiSsePublic*/ true));
         assertEquals(Classification.BYPASS_OK,
             InternalCallerFilter.classify("/api/v1/ai/explain",
-                false, false, true));
+                false, false, false, true));
         assertEquals(Classification.BYPASS_OK,
             InternalCallerFilter.classify("/api/v1/ai/suggest",
-                false, false, true));
+                false, false, false, true));
     }
 
     @Test
@@ -114,7 +144,7 @@ class InternalCallerFilterTest {
         // R25-Major-3 关键不变式：/complete 永远不被 sse.public 影响
         assertEquals(Classification.REQUIRE_HMAC,
             InternalCallerFilter.classify("/api/v1/ai/complete",
-                false, false, /*aiSsePublic*/ true));
+                false, false, false, /*aiSsePublic*/ true));
     }
 
     @Test
@@ -123,7 +153,7 @@ class InternalCallerFilterTest {
         // 设了 ai.sse.public 也不放过，必须显式扩展 AI_SSE_PATHS
         assertEquals(Classification.REQUIRE_HMAC,
             InternalCallerFilter.classify("/api/v1/ai/translate",
-                false, false, true));
+                false, false, false, true));
     }
 
     @Test
@@ -132,7 +162,7 @@ class InternalCallerFilterTest {
         // 当前实现的优先级顺序，operator 应当显式选择）
         assertEquals(Classification.BYPASS_OK,
             InternalCallerFilter.classify("/api/v1/ai/complete",
-                false, /*aiPublic*/ true, /*aiSsePublic*/ true));
+                false, false, /*aiPublic*/ true, /*aiSsePublic*/ true));
     }
 
     // ============================================================
@@ -147,12 +177,13 @@ class InternalCallerFilterTest {
         // 如果有人把 raw path 传进来，matrix params 会让分类变化。
         // 这个测试记录"约定 = 必须先 normalize"。
         Classification rawPath = InternalCallerFilter.classify(
-            "/api/v1/ai/complete;jsessionid=abc", false, false, false);
+            "/api/v1/ai/complete;jsessionid=abc", false, false, false, false);
         // 因为 isAi 用 startsWith，所以 /api/v1/ai/complete;x 仍被识别 isAi=true。
         // 但更重要的：filter() 入口已 normalize → 实际调用 classify 时不会有 ;。
         // 此处仅断言"原始 raw 路径形态下行为是 REQUIRE_HMAC"，即未 normalize 不会
-        // 引入 BYPASS_OK 这样的危险错分类。
+        // 引入 BYPASS_OK / BYPASS_TRIAL 这样的危险错分类。
         assertNotEquals(Classification.BYPASS_OK, rawPath);
+        assertNotEquals(Classification.BYPASS_TRIAL, rawPath);
     }
 
     // ============================================================

@@ -49,22 +49,50 @@ public class RateLimiter {
             return true;
         }
 
-        Deque<Instant> timestamps = windows.computeIfAbsent(identifier, k -> new ConcurrentLinkedDeque<>());
+        // R-Round-3 关键修复：整个 "evict + check + addLast" 事务搬进
+        // ConcurrentHashMap.compute()，与 evictIdleEntries() 共享同一把
+        // per-bucket 锁。这是唯一能消除 acquire ↔ evict 竞争的姿态：
+        //
+        // 错误姿态（round-2）：
+        //   Deque q = windows.computeIfAbsent(id, ...);
+        //   // bucket 锁已释放 ↓
+        //   synchronized (q) { evict + check + addLast }
+        //   ↑ evictIdleEntries.compute(id, ...) 在这一窗口里可以删掉 q，
+        //   后续的 addLast 把数据写进游离 deque，配额事实上被重置。
+        //
+        // 正确姿态（round-3）：
+        //   windows.compute(id, (k, q) -> {
+        //     evict + check + addLast/skip
+        //     return q.isEmpty() ? null : q;
+        //   });
+        //   ↑ 整个事务全在 bucket 锁内；evictIdleEntries 同样走 compute()，
+        //   两条路径互斥串行。
+        //
+        // 通过/拒绝的返回值用 boolean[1] holder 传出 compute()。
         Instant now = Instant.now();
         Instant windowStart = now.minus(window);
-
-        // 移除过期的时间戳
-        evictExpired(timestamps, windowStart);
-
-        // 检查是否超限
-        if (timestamps.size() >= maxRequests) {
-            LOG.debugf("限流拒绝: identifier=%s, current=%d, max=%d", identifier, timestamps.size(), maxRequests);
-            return false;
-        }
-
-        // 记录本次请求
-        timestamps.addLast(now);
-        return true;
+        // 用 boolean[1] 而非 AtomicBoolean：compute lambda 是同步执行的（被
+        // bucket 锁保护），不需要 volatile / 原子语义；写完 compute 返回后
+        // 当前线程读 holder[0] 已发生在 lambda 写入之后（happens-before
+        // 通过 ConcurrentHashMap 的内部同步保证），所以普通数组单元已经够用。
+        final boolean[] granted = { false };
+        windows.compute(identifier, (k, existing) -> {
+            Deque<Instant> q = existing != null ? existing : new ConcurrentLinkedDeque<>();
+            evictExpired(q, windowStart);
+            if (q.size() >= maxRequests) {
+                LOG.debugf("限流拒绝: identifier=%s, current=%d, max=%d",
+                    k, q.size(), maxRequests);
+                granted[0] = false;
+                // 拒绝路径：保留 q 现状；不释放也不收缩，下次到来按窗口正常 evict。
+                // 如果 q 实际已空（理论上 size == max 且 max == 0 才会，几乎不会发生），
+                // 返回 null 把 entry 从 map 里清出去节省内存。
+                return q.isEmpty() ? null : q;
+            }
+            q.addLast(now);
+            granted[0] = true;
+            return q;
+        });
+        return granted[0];
     }
 
     /**
@@ -80,15 +108,21 @@ public class RateLimiter {
             return maxRequests;
         }
 
-        Deque<Instant> timestamps = windows.get(identifier);
-        if (timestamps == null) {
-            return maxRequests;
-        }
-
+        // 同 tryAcquire：用 compute() 跟 evictIdleEntries 共享 bucket 锁，
+        // 避免 evict + size 读取被中间穿插的清理改写。Holder 用普通 int[1]
+        // 即可——lambda 在 bucket 锁里同步执行，无并发写。
         Instant windowStart = Instant.now().minus(window);
-        evictExpired(timestamps, windowStart);
-
-        return Math.max(0, maxRequests - timestamps.size());
+        final int[] out = { maxRequests };
+        windows.compute(identifier, (k, q) -> {
+            if (q == null) {
+                out[0] = maxRequests;
+                return null;
+            }
+            evictExpired(q, windowStart);
+            out[0] = Math.max(0, maxRequests - q.size());
+            return q.isEmpty() ? null : q;
+        });
+        return out[0];
     }
 
     /**
@@ -99,16 +133,17 @@ public class RateLimiter {
      * @return 最早条目过期时间的 Unix 秒，如果无条目则返回当前时间
      */
     public long resetAtEpochSecond(String identifier, Duration window) {
-        Deque<Instant> timestamps = windows.get(identifier);
-        if (timestamps == null || timestamps.isEmpty()) {
-            return Instant.now().getEpochSecond();
-        }
-
-        Instant oldest = timestamps.peekFirst();
-        if (oldest == null) {
-            return Instant.now().getEpochSecond();
-        }
-        return oldest.plus(window).getEpochSecond();
+        long now = Instant.now().getEpochSecond();
+        final long[] out = { now };
+        windows.compute(identifier, (k, q) -> {
+            if (q == null || q.isEmpty()) return q;
+            Instant oldest = q.peekFirst();
+            if (oldest != null) {
+                out[0] = oldest.plus(window).getEpochSecond();
+            }
+            return q;
+        });
+        return out[0];
     }
 
     /**
@@ -184,12 +219,20 @@ public class RateLimiter {
     @Scheduled(every = "5m")
     void evictIdleEntries() {
         Instant cutoff = Instant.now().minus(Duration.ofMinutes(5));
-        windows.entrySet().removeIf(entry -> {
-            Deque<Instant> q = entry.getValue();
-            evictExpired(q, cutoff);
-            return q.isEmpty();
-        });
+        // R-Round-3 关键：清理和 tryAcquire / remaining / resetAtEpochSecond
+        // 全部走 windows.compute(key, ...)。ConcurrentHashMap 保证同一 key 上
+        // 的 compute() 互斥串行，因此 "tryAcquire 拿到 deque → 还没 addLast"
+        // 这个窗口被消除：cleanup 要么在 acquire 之前发生（删空 deque，acquire
+        // 重建），要么之后（看到 acquire 已加入的时间戳，不会误判为空）。
+        for (String key : windows.keySet()) {
+            windows.compute(key, (k, q) -> {
+                if (q == null) return null;
+                evictExpired(q, cutoff);
+                return q.isEmpty() ? null : q;
+            });
+        }
         connectionCounters.entrySet().removeIf(entry -> entry.getValue().get() == 0);
-        LOG.debugf("限流器空闲清理完成: windows=%d, connections=%d", windows.size(), connectionCounters.size());
+        LOG.debugf("限流器空闲清理完成: windows=%d, connections=%d",
+            windows.size(), connectionCounters.size());
     }
 }

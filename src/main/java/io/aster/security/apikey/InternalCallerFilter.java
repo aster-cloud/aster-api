@@ -45,6 +45,23 @@ public class InternalCallerFilter {
     boolean evaluateSourcePublic;
 
     /**
+     * Marketing-tier "trial" 旁路，专为 aster-lang.dev playground 设计。
+     *
+     * <p>区别于 {@code .public}：
+     * <ul>
+     *   <li>仅放行 {@code /api/v1/policies/evaluate-source} 一条路径。</li>
+     *   <li>放行后必须经过 {@link io.aster.policy.security.TrialEndpointGuard} 的
+     *       Origin / body-size / per-IP 限流二次校验；后者优先级早于本 filter，
+     *       会先把不合规请求 short-circuit 掉。</li>
+     * </ul>
+     *
+     * <p>设计意图：让 operator 不用为了开 marketing playground 而把
+     * {@code aster.security.evaluate-source.public=true}（更大信任口）一起打开。
+     */
+    @ConfigProperty(name = "aster.security.evaluate-source.trial.enabled", defaultValue = "false")
+    boolean evaluateSourceTrial;
+
+    /**
      * R23-Critical-2 + R25-Major-3: 临时旁路开关。
      *
      * <p>{@code aster.security.ai.public}：全量旁路所有 /api/v1/ai/*（含 /complete + SSE）。
@@ -82,10 +99,11 @@ public class InternalCallerFilter {
      *   - BYPASS_OK：被 public 配置旁路（dev / 灰度回退）→ 直接放行
      *   - REQUIRE_HMAC：必须验证 HMAC 签名
      */
-    enum Classification { NOT_PROTECTED, BYPASS_OK, REQUIRE_HMAC }
+    enum Classification { NOT_PROTECTED, BYPASS_OK, BYPASS_TRIAL, REQUIRE_HMAC }
 
     static Classification classify(String normalizedPath,
                                    boolean evaluateSourcePublic,
+                                   boolean evaluateSourceTrial,
                                    boolean aiPublic,
                                    boolean aiSsePublic) {
         boolean isEvaluateSource = normalizedPath.equals("/api/v1/policies/evaluate-source");
@@ -93,7 +111,9 @@ public class InternalCallerFilter {
             // 仅 LLM 代理路径，且必须有 "/ai/<something>" 后缀（防 /api/v1/ai 自身误匹配）
             && normalizedPath.length() > "/api/v1/ai/".length();
         if (!isEvaluateSource && !isAi) return Classification.NOT_PROTECTED;
+        // 优先级：.public（全量旁路）> .trial（仅 evaluate-source，且需经 TrialEndpointGuard）。
         if (isEvaluateSource && evaluateSourcePublic) return Classification.BYPASS_OK;
+        if (isEvaluateSource && evaluateSourceTrial) return Classification.BYPASS_TRIAL;
         if (isAi && aiPublic) return Classification.BYPASS_OK;
         // R25-Major-3：细粒度 SSE 旁路 —— 只放 generate/explain/suggest，
         // /complete 仍要求 HMAC（已走 cloud-side proxy）。
@@ -109,7 +129,8 @@ public class InternalCallerFilter {
         // 参见 ApiKeyAuthFilter.shouldProtect 同样修复。
         String p = io.aster.security.PathNormalizer.normalize(ctx.getUriInfo().getPath());
 
-        Classification cls = classify(p, evaluateSourcePublic, aiPublic, aiSsePublic);
+        Classification cls = classify(p, evaluateSourcePublic, evaluateSourceTrial,
+            aiPublic, aiSsePublic);
         if (cls == Classification.NOT_PROTECTED) return;
         if (cls == Classification.BYPASS_OK) {
             // 旁路命中时打 warn —— 不丢失 operator 可见性
@@ -122,6 +143,19 @@ public class InternalCallerFilter {
                         + "(aster.security.ai.sse.public=true). /complete remains protected.", p);
                 }
             }
+            return;
+        }
+        if (cls == Classification.BYPASS_TRIAL) {
+            // TrialEndpointGuard 优先级早于本 filter，已经做过 Origin/body/IP 限流。
+            // 但 `aster.security.evaluate-source.trial.enabled=true` 是必要而非充分条件：
+            // 必须 **同时** 看到 guard 颁发的 TRIAL_GUARD_PASSED_PROP 凭证，才能放行。
+            // 这一双重校验避免 "trial flag 单开 = 完全无验证匿名端点" 的灰色地带。
+            if (!Boolean.TRUE.equals(ctx.getProperty(
+                    io.aster.policy.security.TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP))) {
+                LOG.warnf("trial bypass denied: guard property missing (path=%s)", p);
+                throw forbidden("trial_guard_not_satisfied", p);
+            }
+            LOG.debugf("evaluate-source served via marketing-tier trial bypass (path=%s)", p);
             return;
         }
         // cls == REQUIRE_HMAC

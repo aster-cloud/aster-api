@@ -45,6 +45,19 @@ public class RequestSignatureFilter {
             return Uni.createFrom().voidItem();
         }
 
+        // Marketing-tier trial endpoint: TrialEndpointGuard 已经在 AUTHENTICATION-100
+        // 优先级上完成 Origin / body-size / per-IP 限流校验，并签发 TRIAL_GUARD_PASSED_PROP
+        // 凭证。该凭证只在 guard 全部闸门通过后才被设上，且只对当前请求生命周期有效；
+        // 这里据此放过 HMAC 签名要求 —— 否则 trial 请求必然没有全局 HMAC，会被全部拒掉。
+        //
+        // 路径精确匹配 /api/v1/policies/evaluate-source（PathNormalizer 归一化后），
+        // 避免任何子路径误用 property 名规避签名。
+        String normalized = io.aster.security.PathNormalizer.normalize(path);
+        if (TrialEndpointGuard.TRIAL_PATH.equals(normalized)
+                && Boolean.TRUE.equals(ctx.getProperty(TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP))) {
+            return Uni.createFrom().voidItem();
+        }
+
         // 如果签名验证未启用，跳过
         if (!signatureEnabled) {
             return Uni.createFrom().voidItem();

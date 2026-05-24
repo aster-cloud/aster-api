@@ -1,0 +1,110 @@
+================================================================
+ASTER-API K8s-PROFILE LONG-RUN BENCHMARK
+Date: Sun May 24 20:23:14 NZST 2026
+Image: aster/policy-api:k8s-bench (includes heap-aware semaphore)
+Container: 2 CPU / 2 GB limit, -Xmx1g -Xms512m
+Startup banner: evaluate-source cap=4 (cpuBound=4, heapBound=16, maxHeap=1024 MB)
+================================================================
+
+=== sustained 10 min @ c=16 on /evaluate ===
+Running 10m test @ http://localhost:48080/api/v1/policies/evaluate
+  4 threads and 16 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     4.03ms    2.59ms 155.51ms   91.68%
+    Req/Sec     1.04k   215.03     1.84k    80.94%
+  Latency Distribution
+     50%    3.60ms
+     75%    4.64ms
+     90%    5.99ms
+     99%   12.45ms
+  2482256 requests in 10.00m, 371.67MB read
+Requests/sec:   4136.54
+Transfer/sec:    634.24KB
+
+  --- per-30s container samples (c=16) ---
+[t+30s] 112.32413288876977|657MB / 2.147GB
+[t+60s] 115.3708175763188|657.4MB / 2.147GB
+[t+90s] 119.24645673953296|659.3MB / 2.147GB
+[t+120s] 122.3110160646247|659.6MB / 2.147GB
+[t+150s] 124.88262607770166|660.3MB / 2.147GB
+[t+180s] 127.05778703167093|660.6MB / 2.147GB
+[t+210s] 128.93410301638028|660.9MB / 2.147GB
+[t+240s] 130.55379692542317|661.1MB / 2.147GB
+[t+270s] 131.92289983225785|661.4MB / 2.147GB
+[t+300s] 133.1625511775833|661.8MB / 2.147GB
+[t+330s] 134.2454404481213|662MB / 2.147GB
+[t+360s] 135.31157445891046|662.5MB / 2.147GB
+[t+390s] 136.2506176353943|663MB / 2.147GB
+[t+420s] 136.32143747565962|662.9MB / 2.147GB
+[t+450s] 136.38793698048505|663.1MB / 2.147GB
+[t+480s] 137.07372442023902|663.5MB / 2.147GB
+[t+510s] 137.71355227609138|664MB / 2.147GB
+[t+540s] 138.34283959532627|664.5MB / 2.147GB
+[t+570s] 138.9225841118015|664.8MB / 2.147GB
+[t+600s] 139.46249094122166|664.9MB / 2.147GB
+
+=== sustained 10 min @ c=64 on /evaluate (peak/saturation) ===
+Running 10m test @ http://localhost:48080/api/v1/policies/evaluate
+  4 threads and 64 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    15.05ms    7.15ms 234.05ms   86.09%
+    Req/Sec     1.10k   219.53     1.54k    83.08%
+  Latency Distribution
+     50%   13.90ms
+     75%   16.89ms
+     90%   21.06ms
+     99%   43.27ms
+  2625331 requests in 10.00m, 394.34MB read
+Requests/sec:   4374.81
+Transfer/sec:    672.90KB
+
+  --- per-30s container samples (c=64) ---
+[t+30s] 134.87768293359997|672.4MB / 2.147GB
+[t+60s] 135.57521944528114|681.7MB / 2.147GB
+[t+90s] 136.2228050430135|682.6MB / 2.147GB
+[t+120s] 136.89376613964626|683.2MB / 2.147GB
+[t+150s] 137.50398949629553|683.4MB / 2.147GB
+[t+180s] 137.8962755717835|684.3MB / 2.147GB
+[t+210s] 138.43203704606958|684.5MB / 2.147GB
+[t+240s] 138.8540597845903|684.5MB / 2.147GB
+[t+270s] 139.2585576962807|685.9MB / 2.147GB
+[t+300s] 139.71301303054003|685.9MB / 2.147GB
+[t+330s] 140.07948046485072|691.5MB / 2.147GB
+[t+360s] 140.55203941788776|686.6MB / 2.147GB
+[t+390s] 140.89408099257537|687.1MB / 2.147GB
+[t+420s] 141.18734437052382|687.1MB / 2.147GB
+[t+450s] 141.52624364615244|686.9MB / 2.147GB
+[t+480s] 141.87912238497452|688.1MB / 2.147GB
+[t+510s] 142.24126553858866|688.2MB / 2.147GB
+[t+540s] 142.5683047938787|688.4MB / 2.147GB
+[t+570s] 142.7853264615729|689MB / 2.147GB
+[t+600s] 142.95191399483969|688.8MB / 2.147GB
+
+=== 2 min @ c=8 on /evaluate-source (heap-aware cap=4 stress) ===
+Running 2m test @ http://localhost:48080/api/v1/policies/evaluate-source
+  4 threads and 8 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   575.55ms    1.20s    9.54s    89.75%
+    Req/Sec   125.08     90.72   410.00     56.63%
+  Latency Distribution
+     50%   26.29ms
+     75%  568.66ms
+     90%    1.83s 
+     99%    5.90s 
+  17067 requests in 2.00m, 3.21MB read
+  Socket errors: connect 0, read 0, write 0, timeout 2
+  Non-2xx or 3xx responses: 76
+Requests/sec:    142.11
+Transfer/sec:     27.40KB
+
+[lua-counts (per-thread)] 503=0 other-5xx=0 4xx=0 total=17067
+
+  --- per-30s container samples (eval-source c=8) ---
+[t+30s] 140.5779287263534|690.1MB / 2.147GB
+[t+60s] 141.70602994793273|1.397GB / 2.147GB
+[t+90s] 142.7351804599111|1.392GB / 2.147GB
+[t+120s] 143.71249458125428|1.39GB / 2.147GB
+
+  --- 503 / OOM count in api logs ---
+  503 rejections: 54
+  OOM errors:     55

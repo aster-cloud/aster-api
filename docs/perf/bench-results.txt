@@ -1,0 +1,314 @@
+================================================================
+ASTER-API CAPACITY SWEEP (v2 — restart-per-endpoint)
+Date: Sun May 24 18:04:20 NZST 2026
+Image: aster/policy-api:loadtest (built from main with all 5 fixes)
+Host: macOS arm64, Podman 5.8 (Linux VM: 5 CPU, 30 GB)
+Sizes: small (1 CPU/1 GB/512m heap), medium (2 CPU/2 GB/1g heap), large (4 CPU/4 GB/2g heap)
+Endpoints: /api/v1/policies/evaluate-source, /api/v1/policies/evaluate
+Sweep: c={1,4,16,64,128} × 30 s after 30 s warm; semaphore=2*CPU on /evaluate-source
+================================================================
+
+################################################################
+# SIZE: small  cpus=1  mem=1g  heap=512m
+################################################################
+
+  === endpoint: /evaluate-source ===
+  smoke=200
+
+  >> /evaluate-source  c=1  t=2  duration=30s
+        --timeout     <T>  Socket/request timeout     
+
+  >> /evaluate-source  c=4  t=2  duration=30s
+    Latency   121.33ms  195.45ms 790.81ms   83.50%
+  Latency Distribution
+     50%   26.27ms
+     75%   95.56ms
+     90%  483.31ms
+     99%  717.66ms
+  Non-2xx or 3xx responses: 8
+Requests/sec:    119.29
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=3591
+
+  >> /evaluate-source  c=16  t=4  duration=30s
+    Latency     2.20s     1.44s    7.46s    71.08%
+  Latency Distribution
+     50%    1.70s 
+     75%    2.89s 
+     90%    3.87s 
+     99%    7.17s 
+  Non-2xx or 3xx responses: 57
+Requests/sec:      7.52
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=226
+
+  >> /evaluate-source  c=64  t=4  duration=30s
+    Latency     5.91s     3.48s    9.48s    35.19%
+  Latency Distribution
+     50%    7.36s 
+     75%    9.48s 
+     90%    9.48s 
+     99%    9.48s 
+  Socket errors: connect 0, read 0, write 0, timeout 51
+  Non-2xx or 3xx responses: 39
+Requests/sec:      3.49
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=105
+  >> /evaluate-source c=128: SKIP (api unhealthy after previous run)
+
+  api cpu=95.92607427443521 mem=800.2MB / 1.074GB
+
+  === endpoint: /evaluate ===
+  smoke=200
+
+  >> /evaluate  c=1  t=2  duration=30s
+        --timeout     <T>  Socket/request timeout     
+
+  >> /evaluate  c=4  t=2  duration=30s
+    Latency     8.35ms   14.03ms  78.99ms   86.21%
+  Latency Distribution
+     50%    1.31ms
+     75%    9.18ms
+     90%   28.84ms
+     99%   61.11ms
+Requests/sec:   1806.35
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=54213
+
+  >> /evaluate  c=16  t=4  duration=30s
+    Latency    11.38ms   14.16ms  95.74ms   82.25%
+  Latency Distribution
+     50%    3.74ms
+     75%   16.18ms
+     90%   36.65ms
+     99%   51.52ms
+Requests/sec:   2749.07
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=82621
+
+  >> /evaluate  c=64  t=4  duration=30s
+    Latency    24.44ms   18.67ms  97.63ms   79.11%
+  Latency Distribution
+     50%   14.46ms
+     75%   36.49ms
+     90%   56.40ms
+     99%   71.52ms
+Requests/sec:   2907.92
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=87463
+
+  >> /evaluate  c=128  t=4  duration=30s
+    Latency    46.76ms   30.27ms 301.94ms   66.31%
+  Latency Distribution
+     50%   38.98ms
+     75%   71.73ms
+     90%   84.81ms
+     99%  115.72ms
+Requests/sec:   2788.87
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=83735
+
+  api cpu=88.24842045710979 mem=484.7MB / 1.074GB
+
+################################################################
+# SIZE: medium  cpus=2  mem=2g  heap=1g
+################################################################
+
+  === endpoint: /evaluate-source ===
+  smoke=200
+
+  >> /evaluate-source  c=1  t=2  duration=30s
+        --timeout     <T>  Socket/request timeout     
+
+  >> /evaluate-source  c=4  t=2  duration=30s
+    Latency   184.70ms  242.60ms 865.60ms   79.24%
+  Latency Distribution
+     50%   16.81ms
+     75%  361.22ms
+     90%  600.01ms
+     99%  788.49ms
+Requests/sec:    106.44
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=3201
+
+  >> /evaluate-source  c=16  t=4  duration=30s
+    Latency     1.50s     1.20s    6.66s    71.93%
+  Latency Distribution
+     50%    1.44s 
+     75%    1.69s 
+     90%    2.94s 
+     99%    5.92s 
+  Non-2xx or 3xx responses: 30
+Requests/sec:     11.10
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=334
+
+  >> /evaluate-source  c=64  t=4  duration=30s
+    Latency     4.96s     2.92s    9.69s    50.00%
+  Latency Distribution
+     50%    5.28s 
+     75%    7.60s 
+     90%    8.99s 
+     99%    9.69s 
+  Socket errors: connect 0, read 1, write 0, timeout 49
+  Non-2xx or 3xx responses: 21
+Requests/sec:      2.36
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=71
+  >> /evaluate-source c=128: SKIP (api unhealthy after previous run)
+
+  api cpu=188.8590134661089 mem=1.361GB / 2.147GB
+
+  === endpoint: /evaluate ===
+  smoke=200
+
+  >> /evaluate  c=1  t=2  duration=30s
+        --timeout     <T>  Socket/request timeout     
+
+  >> /evaluate  c=4  t=2  duration=30s
+    Latency     1.27ms    1.00ms  32.84ms   97.72%
+  Latency Distribution
+     50%    1.13ms
+     75%    1.33ms
+     90%    1.58ms
+     99%    3.90ms
+Requests/sec:   3342.08
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=100291
+
+  >> /evaluate  c=16  t=4  duration=30s
+    Latency     3.83ms    3.00ms 101.27ms   96.53%
+  Latency Distribution
+     50%    3.41ms
+     75%    4.35ms
+     90%    5.41ms
+     99%   12.53ms
+Requests/sec:   4427.39
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=133092
+
+  >> /evaluate  c=64  t=4  duration=30s
+    Latency    13.45ms    4.23ms  56.01ms   73.00%
+  Latency Distribution
+     50%   13.12ms
+     75%   15.74ms
+     90%   18.59ms
+     99%   25.79ms
+Requests/sec:   4765.57
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=143333
+
+  >> /evaluate  c=128  t=4  duration=30s
+    Latency    27.27ms   16.88ms 225.32ms   75.26%
+  Latency Distribution
+     50%   25.09ms
+     75%   34.03ms
+     90%   47.85ms
+     99%   86.23ms
+Requests/sec:   4929.18
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=148195
+
+  api cpu=146.5525248249061 mem=486.8MB / 2.147GB
+
+################################################################
+# SIZE: large  cpus=4  mem=4g  heap=2g
+################################################################
+
+  === endpoint: /evaluate-source ===
+  smoke=200
+
+  >> /evaluate-source  c=1  t=2  duration=30s
+        --timeout     <T>  Socket/request timeout     
+
+  >> /evaluate-source  c=4  t=2  duration=30s
+    Latency   225.31ms  266.44ms 860.40ms   78.37%
+  Latency Distribution
+     50%   85.36ms
+     75%  452.61ms
+     90%  657.72ms
+     99%  814.01ms
+Requests/sec:     48.89
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=1472
+
+  >> /evaluate-source  c=16  t=4  duration=30s
+    Latency     1.11s     1.21s    6.90s    86.94%
+  Latency Distribution
+     50%  789.43ms
+     75%    1.66s 
+     90%    2.82s 
+     99%    5.35s 
+  Non-2xx or 3xx responses: 35
+Requests/sec:     19.21
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=577
+
+  >> /evaluate-source  c=64  t=4  duration=30s
+    Latency     5.30s     2.24s    9.96s    63.00%
+  Latency Distribution
+     50%    5.32s 
+     75%    6.85s 
+     90%    8.46s 
+     99%    9.96s 
+  Socket errors: connect 0, read 0, write 0, timeout 37
+  Non-2xx or 3xx responses: 39
+Requests/sec:      4.55
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=137
+  >> /evaluate-source c=128: SKIP (api unhealthy after previous run)
+
+  api cpu=354.9660770193245 mem=2.473GB / 4.295GB
+
+  === endpoint: /evaluate ===
+  smoke=200
+
+  >> /evaluate  c=1  t=2  duration=30s
+        --timeout     <T>  Socket/request timeout     
+
+  >> /evaluate  c=4  t=2  duration=30s
+    Latency     1.20ms  501.87us  21.72ms   92.64%
+  Latency Distribution
+     50%    1.12ms
+     75%    1.32ms
+     90%    1.56ms
+     99%    2.55ms
+Requests/sec:   3385.81
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=101615
+
+  >> /evaluate  c=16  t=4  duration=30s
+    Latency     3.57ms    1.36ms  35.36ms   76.26%
+  Latency Distribution
+     50%    3.43ms
+     75%    4.25ms
+     90%    5.10ms
+     99%    7.24ms
+Requests/sec:   4505.03
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=135304
+
+  >> /evaluate  c=64  t=4  duration=30s
+    Latency    13.48ms    4.48ms  54.00ms   72.31%
+  Latency Distribution
+     50%   13.24ms
+     75%   15.96ms
+     90%   18.94ms
+     99%   26.34ms
+Requests/sec:   4752.31
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=142852
+
+  >> /evaluate  c=128  t=4  duration=30s
+    Latency    28.33ms   16.46ms 212.34ms   74.93%
+  Latency Distribution
+     50%   26.14ms
+     75%   34.26ms
+     90%   47.48ms
+     99%   87.50ms
+Requests/sec:   4710.46
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=141601
+
+  api cpu=156.15475118740792 mem=483.1MB / 4.295GB
+
+  === supplementary c=1 (large profile) ===
+
+  >> /evaluate-source  c=1  t=1  duration=30s (large)
+    Latency     2.80ms   12.26ms 241.59ms   98.26%
+  Latency Distribution
+     50%    1.42ms
+     75%    1.68ms
+     90%    2.22ms
+     99%   24.35ms
+Requests/sec:    639.59
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=19232
+
+  >> /evaluate  c=1  t=1  duration=30s (large)
+    Latency     0.86ms    0.98ms  37.00ms   99.22%
+  Latency Distribution
+     50%  752.00us
+     75%    0.87ms
+     90%    1.00ms
+     99%    1.58ms
+Requests/sec:   1230.57
+[counts] 2xx=0 4xx=0 5xx=0 (503=0) total=36925

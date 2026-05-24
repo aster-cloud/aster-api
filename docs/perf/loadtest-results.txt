@@ -1,0 +1,474 @@
+===================== aster-api evaluate-source load test =====================
+Date: Sun May 24 16:04:29 NZST 2026
+Endpoint: POST /api/v1/policies/evaluate-source
+Payload: CalcRequest CNL (170 bytes body)
+Container: aster/policy-api:loadtest (JVM, -Xmx6g, G1GC, OTel off, ratelimit off, plan-gate off)
+Host: macOS arm64 (Podman 5.8 inside Linux VM, 5 CPU, 30GB mem)
+================================================================================
+
+==== threads=2 connections=2 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  2 threads and 2 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   387.16ms  582.86ms   2.04s    80.17%
+    Req/Sec   545.46    247.11   828.00     76.08%
+  Latency Distribution
+     50%    1.67ms
+     75%  730.29ms
+     90%    1.43s 
+     99%    1.89s 
+  22424 requests in 1.00m, 4.21MB read
+Requests/sec:    373.23
+Transfer/sec:     71.80KB
+
+--- non-2xx responses: 0 / 22424 ---
+
+==== threads=4 connections=4 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  4 threads and 4 connections
+non-2xx status=500 body={"errorCode":"INTERNAL_ERROR","message":"服务器内部错误，请稍后重试","traceId":"a500b707-5474-4b5d-b6a1-2b8f6a129d02","timestamp":"2026-05-24T04:05:36.030865030Z","details":null}
+non-2xx status=500 body={"errorCode":"INTERNAL_ERROR","message":"服务器内部错误，请稍后重试","traceId":"fee1f4da-8d29-4e33-9543-adb68c146f7d","timestamp":"2026-05-24T04:05:36.030404781Z","details":null}
+non-2xx status=500 body={"errorCode":"INTERNAL_ERROR","message":"服务器内部错误，请稍后重试","traceId":"dee3b233-ae67-42e1-af7b-62fdb6e10679","timestamp":"2026-05-24T04:05:45.133885434Z","details":null}
+non-2xx status=500 body={"errorCode":"INTERNAL_ERROR","message":"服务器内部错误，请稍后重试","traceId":"8d7e9142-695b-41b4-95cc-3ffd732bd7f5","timestamp":"2026-05-24T04:05:49.841602880Z","details":null}
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   990.26ms    1.29s    4.89s    84.58%
+    Req/Sec    12.55     27.58   137.00     89.22%
+  Latency Distribution
+     50%  453.49ms
+     75%    1.66s 
+     90%    3.19s 
+     99%    4.56s 
+  556 requests in 1.00m, 107.77KB read
+  Non-2xx or 3xx responses: 5
+Requests/sec:      9.26
+Transfer/sec:      1.79KB
+
+--- non-2xx responses: 0 / 556 ---
+
+==== threads=4 connections=8 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  4 threads and 8 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     2.78s     2.37s    9.30s    63.82%
+    Req/Sec     2.97      8.73    39.00     90.79%
+  Latency Distribution
+     50%    2.06s 
+     75%    4.09s 
+     90%    5.79s 
+     99%    9.30s 
+  144 requests in 1.00m, 27.98KB read
+  Socket errors: connect 0, read 0, write 0, timeout 2
+Requests/sec:      2.40
+Transfer/sec:     476.94B
+
+--- non-2xx responses: 0 / 144 ---
+
+==== threads=4 connections=16 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  4 threads and 16 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     0.00us    0.00us   0.00us     nan%
+    Req/Sec     0.00      0.00     0.00       nan%
+  Latency Distribution
+     50%    0.00us
+     75%    0.00us
+     90%    0.00us
+     99%    0.00us
+  0 requests in 1.00m, 0.00B read
+Requests/sec:      0.00
+Transfer/sec:       0.00B
+
+--- non-2xx responses: 0 / 0 ---
+
+==== threads=8 connections=32 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  8 threads and 32 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     0.00us    0.00us   0.00us     nan%
+    Req/Sec     0.00      0.00     0.00       nan%
+  Latency Distribution
+     50%    0.00us
+     75%    0.00us
+     90%    0.00us
+     99%    0.00us
+  0 requests in 1.00m, 0.00B read
+Requests/sec:      0.00
+Transfer/sec:       0.00B
+
+--- non-2xx responses: 0 / 0 ---
+
+==== threads=8 connections=64 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  8 threads and 64 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     0.00us    0.00us   0.00us     nan%
+    Req/Sec     0.00      0.00     0.00       nan%
+  Latency Distribution
+     50%    0.00us
+     75%    0.00us
+     90%    0.00us
+     99%    0.00us
+  0 requests in 1.00m, 0.00B read
+Requests/sec:      0.00
+Transfer/sec:       0.00B
+
+--- non-2xx responses: 0 / 0 ---
+
+===================== aster-api evaluate-source load test (warm) =====================
+Date: Sun May 24 16:13:10 NZST 2026
+Endpoint: POST /api/v1/policies/evaluate-source
+Payload: CalcRequest CNL (170B) — full eval per request (new GraalVM context each call)
+Container: aster/policy-api:loadtest (JVM, -Xmx6g, G1GC, OTel off, ratelimit off, plan-gate off)
+Host: macOS arm64 Podman 5.8 (Linux VM: 5 CPU, 30 GB)
+Note: c >= 4 reliably OOMs the Polyglot eval path. Tested at c=1/2/3.
+================================================================================
+
+==== threads=1 connections=1 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  1 threads and 1 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     2.49ms    7.81ms 108.37ms   97.02%
+    Req/Sec   755.25    146.56     0.97k    78.79%
+  Latency Distribution
+     50%    1.26ms
+     75%    1.43ms
+     90%    1.62ms
+     99%   48.82ms
+  43649 requests in 1.00m, 8.20MB read
+Requests/sec:    726.23
+Transfer/sec:    139.72KB
+
+--- non-2xx responses: 0 / 43649 ---
+
+==== threads=1 connections=2 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  1 threads and 2 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   443.25ms  610.66ms   2.20s    79.29%
+    Req/Sec   420.84    425.58     1.47k    81.03%
+  Latency Distribution
+     50%    7.58ms
+     75%  874.94ms
+     90%    1.50s 
+     99%    1.92s 
+  5965 requests in 1.00m, 1.12MB read
+Requests/sec:     99.36
+Transfer/sec:     19.12KB
+
+--- non-2xx responses: 0 / 5965 ---
+
+==== threads=1 connections=3 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  1 threads and 3 connections
+non-2xx status=500 body={"errorCode":"INTERNAL_ERROR","message":"服务器内部错误，请稍后重试","traceId":"93c8f380-817b-44d0-b9b3-dc1c7a3fb278","timestamp":"2026-05-24T04:15:37.143570852Z","details":null}
+non-2xx status=500 body={"errorCode":"INTERNAL_ERROR","message":"服务器内部错误，请稍后重试","traceId":"f14dab7c-6e43-492e-9780-4b0392b2234b","timestamp":"2026-05-24T04:15:41.902353673Z","details":null}
+non-2xx status=500 body={"errorCode":"INTERNAL_ERROR","message":"服务器内部错误，请稍后重试","traceId":"06345311-6fcb-4fda-9db2-271ef12e3d06","timestamp":"2026-05-24T04:15:46.438934088Z","details":null}
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   973.45ms    1.26s    4.73s    85.77%
+    Req/Sec    30.78     55.09   230.00     88.89%
+  Latency Distribution
+     50%  436.06ms
+     75%    1.66s 
+     90%    2.98s 
+     99%    4.51s 
+  429 requests in 1.00m, 83.23KB read
+  Non-2xx or 3xx responses: 4
+Requests/sec:      7.14
+Transfer/sec:      1.39KB
+
+--- non-2xx responses: 0 / 429 ---
+
+==== container state ====
+aster-loadtest-pg cpu=3.2425886474618117 mem=52.19MB / 31.26GB
+aster-loadtest-redis cpu=0.7186876559002215 mem=3.06MB / 31.26GB
+aster-loadtest-api cpu=249.15144609168388 mem=6.851GB / 8.59GB
+
+==== api recent warnings (last 50 lines, warn/error only) ====
+04:15:59 ERROR [io.as.po.re.PolicyEvaluationResource] (executor-thread-40) traceId= Failed to process CNL source: RequestScoped context was not active when trying to obtain a bean instance for a client proxy of PRODUCER_METHOD bean [class=io.quarkus.vertx.http.runtime.CurrentVertxRequest, id=B-Ula3shMCMDHaWGRCHMTrs1SVo]
+04:15:59 ERROR [io.qu.mu.ru.MutinyInfrastructure] (executor-thread-40) traceId= Mutiny had to drop the following exception: jakarta.enterprise.context.ContextNotActiveException: RequestScoped context was not active when trying to obtain a bean instance for a client proxy of PRODUCER_METHOD bean [class=io.quarkus.vertx.http.runtime.CurrentVertxRequest, id=B-Ula3shMCMDHaWGRCHMTrs1SVo]
+
+===================== POST-FIX: evaluate-source (shared Engine) =====================
+Date: Sun May 24 16:46:24 NZST 2026
+Fixes applied: shared GraalVM Engine + ApiQuotaGuard short-circuit + ContextNotActive fix
+================================================================================
+
+==== threads=1 connections=1 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  1 threads and 1 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   266.83ms  500.90ms   1.98s    83.15%
+    Req/Sec   799.39    224.22     1.08k    83.61%
+  Latency Distribution
+     50%    1.22ms
+     75%  263.40ms
+     90%    1.19s 
+     99%    1.77s 
+  29321 requests in 1.00m, 5.51MB read
+Requests/sec:    488.12
+Transfer/sec:     93.91KB
+
+--- non-2xx responses: 0 / 29321 ---
+
+==== threads=1 connections=2 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  1 threads and 2 connections
+non-2xx status=500 body={"errorCode":"INTERNAL_ERROR","message":"服务器内部错误，请稍后重试","traceId":"88582a6e-3baf-438b-8046-b8dd58e4a62e","timestamp":"2026-05-24T04:47:48.191187769Z","details":null}
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   537.35ms  759.75ms   4.08s    82.61%
+    Req/Sec   236.82    346.31     1.04k    77.55%
+  Latency Distribution
+     50%    3.15ms
+     75%  992.90ms
+     90%    1.58s 
+     99%    3.47s 
+  2267 requests in 1.00m, 436.39KB read
+  Non-2xx or 3xx responses: 1
+Requests/sec:     37.72
+Transfer/sec:      7.26KB
+
+--- non-2xx responses: 0 / 2267 ---
+
+==== threads=4 connections=4 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  4 threads and 4 connections
+non-2xx status=500 body={"errorCode":"INTERNAL_ERROR","message":"服务器内部错误，请稍后重试","traceId":"798b74a1-952f-4bcc-b199-0ccb55f84bea","timestamp":"2026-05-24T04:48:40.682926445Z","details":null}
+non-2xx status=500 body={"errorCode":"INTERNAL_ERROR","message":"服务器内部错误，请稍后重试","traceId":"382901f3-5c98-4ac8-899b-2ad5ce5d590d","timestamp":"2026-05-24T04:49:01.797191265Z","details":null}
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   853.59ms    1.15s    4.40s    85.16%
+    Req/Sec    25.69     51.53   237.00     88.19%
+  Latency Distribution
+     50%  247.88ms
+     75%    1.43s 
+     90%    2.78s 
+     99%    4.17s 
+  1042 requests in 1.00m, 200.99KB read
+  Non-2xx or 3xx responses: 2
+Requests/sec:     17.34
+Transfer/sec:      3.35KB
+
+--- non-2xx responses: 0 / 1042 ---
+
+==== threads=4 connections=8 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  4 threads and 8 connections
+non-2xx status=500 body={"errorCode":"INTERNAL_ERROR","message":"服务器内部错误，请稍后重试","traceId":"da19a720-ade5-4b46-a1a0-366598eab9d8","timestamp":"2026-05-24T04:49:12.028420187Z","details":null}
+non-2xx status=500 body={"errorCode":"INTERNAL_ERROR","message":"服务器内部错误，请稍后重试","traceId":"f98a31c2-d857-4db1-b68d-abca6521cb3b","timestamp":"2026-05-24T04:49:45.185798637Z","details":null}
+non-2xx status=500 body={"errorCode":"INTERNAL_ERROR","message":"服务器内部错误，请稍后重试","traceId":"c5d6fbf4-abc3-48cd-8b8c-b3025d2ab373","timestamp":"2026-05-24T04:50:01.226729466Z","details":null}
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     2.33s     2.13s    8.66s    58.33%
+    Req/Sec     1.90      6.40    39.00     95.12%
+  Latency Distribution
+     50%    1.96s 
+     75%    3.85s 
+     90%    5.15s 
+     99%    7.98s 
+  182 requests in 1.00m, 35.64KB read
+  Socket errors: connect 0, read 0, write 0, timeout 4
+  Non-2xx or 3xx responses: 3
+Requests/sec:      3.03
+Transfer/sec:     607.45B
+
+--- non-2xx responses: 0 / 182 ---
+
+==== threads=4 connections=16 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  4 threads and 16 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     9.55s   630.58us   9.55s    66.67%
+    Req/Sec     0.00      0.00     0.00    100.00%
+  Latency Distribution
+     50%    9.55s 
+     75%    9.55s 
+     90%    9.55s 
+     99%    9.55s 
+  3 requests in 1.00m, 620.00B read
+Requests/sec:      0.05
+Transfer/sec:      10.32B
+
+--- non-2xx responses: 0 / 3 ---
+
+==== threads=4 connections=32 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  4 threads and 32 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     0.00us    0.00us   0.00us     nan%
+    Req/Sec     0.00      0.00     0.00       nan%
+  Latency Distribution
+     50%    0.00us
+     75%    0.00us
+     90%    0.00us
+     99%    0.00us
+  0 requests in 1.00m, 0.00B read
+Requests/sec:      0.00
+Transfer/sec:       0.00B
+
+--- non-2xx responses: 0 / 0 ---
+
+==== threads=4 connections=64 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate-source
+  4 threads and 64 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     0.00us    0.00us   0.00us     nan%
+    Req/Sec     0.00      0.00     0.00       nan%
+  Latency Distribution
+     50%    0.00us
+     75%    0.00us
+     90%    0.00us
+     99%    0.00us
+  0 requests in 1.00m, 0.00B read
+Requests/sec:      0.00
+Transfer/sec:       0.00B
+
+--- non-2xx responses: 0 / 0 ---
+
+==== container state ====
+aster-loadtest-pg cpu=5.839451357844205 mem=80.69MB / 31.26GB
+aster-loadtest-redis cpu=0.4215402518928311 mem=3.125MB / 31.26GB
+aster-loadtest-api cpu=404.0178965550069 mem=6.977GB / 8.59GB
+
+===================== POST-FIX: /evaluate (DB-backed, pooled Context) =====================
+Date: Sun May 24 17:02:23 NZST 2026
+Payload: loadtest.zero.compute (zero-arg, returns constant 42 — minimal exec cost)
+Note: TrufflePolicyRuntime uses shared Engine + Context pool sized to CPU count (5)
+================================================================================
+
+==== threads=1 connections=1 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate
+  1 threads and 1 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   832.04us  522.69us  28.49ms   98.96%
+    Req/Sec     1.23k   106.46     1.41k    73.83%
+  Latency Distribution
+     50%  766.00us
+     75%    0.88ms
+     90%    0.99ms
+     99%    1.37ms
+  73650 requests in 1.00m, 11.03MB read
+Requests/sec:   1227.22
+Transfer/sec:    188.16KB
+
+--- non-2xx: 0 / 73650 ---
+
+==== threads=1 connections=2 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate
+  1 threads and 2 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     0.94ms  331.14us  19.64ms   97.17%
+    Req/Sec     2.16k   156.15     2.38k    86.83%
+  Latency Distribution
+     50%    0.90ms
+     75%    0.99ms
+     90%    1.10ms
+     99%    1.51ms
+  129239 requests in 1.00m, 19.35MB read
+Requests/sec:   2153.73
+Transfer/sec:    330.21KB
+
+--- non-2xx: 0 / 129239 ---
+
+==== threads=4 connections=4 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate
+  4 threads and 4 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.20ms  737.61us  27.40ms   97.16%
+    Req/Sec     0.87k   117.76     1.01k    89.00%
+  Latency Distribution
+     50%    1.09ms
+     75%    1.27ms
+     90%    1.50ms
+     99%    3.59ms
+  208447 requests in 1.00m, 31.21MB read
+Requests/sec:   3470.42
+Transfer/sec:    532.09KB
+
+--- non-2xx: 0 / 208447 ---
+
+==== threads=4 connections=8 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate
+  4 threads and 8 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.82ms  635.80us  22.60ms   76.62%
+    Req/Sec     1.11k    99.94     1.41k    69.50%
+  Latency Distribution
+     50%    1.75ms
+     75%    2.13ms
+     90%    2.54ms
+     99%    3.50ms
+  265104 requests in 1.00m, 39.69MB read
+Requests/sec:   4414.73
+Transfer/sec:    676.87KB
+
+--- non-2xx: 0 / 265104 ---
+
+==== threads=4 connections=16 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate
+  4 threads and 16 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     3.53ms    2.24ms  90.10ms   95.36%
+    Req/Sec     1.16k    98.29     1.50k    73.58%
+  Latency Distribution
+     50%    3.35ms
+     75%    4.13ms
+     90%    4.95ms
+     99%    6.93ms
+  277163 requests in 1.00m, 41.50MB read
+Requests/sec:   4613.44
+Transfer/sec:    707.34KB
+
+--- non-2xx: 0 / 277163 ---
+
+==== threads=8 connections=32 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate
+  8 threads and 32 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     6.89ms    3.10ms 103.25ms   85.94%
+    Req/Sec   589.98     57.49     1.34k    74.35%
+  Latency Distribution
+     50%    6.62ms
+     75%    8.08ms
+     90%    9.62ms
+     99%   13.28ms
+  282034 requests in 1.00m, 42.23MB read
+Requests/sec:   4695.23
+Transfer/sec:    719.98KB
+
+--- non-2xx: 0 / 282034 ---
+
+==== threads=8 connections=64 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate
+  8 threads and 64 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    12.94ms    4.20ms  69.22ms   71.63%
+    Req/Sec   622.14     56.13   787.00     69.76%
+  Latency Distribution
+     50%   12.71ms
+     75%   15.36ms
+     90%   18.12ms
+     99%   24.63ms
+  297480 requests in 1.00m, 44.69MB read
+Requests/sec:   4953.03
+Transfer/sec:    761.92KB
+
+--- non-2xx: 0 / 297480 ---
+
+==== threads=8 connections=128 duration=60s ====
+Running 1m test @ http://localhost:28080/api/v1/policies/evaluate
+  8 threads and 128 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    27.19ms   14.46ms 240.78ms   76.02%
+    Req/Sec   611.56     75.51     0.88k    70.18%
+  Latency Distribution
+     50%   25.50ms
+     75%   31.96ms
+     90%   42.46ms
+     99%   81.47ms
+  292517 requests in 1.00m, 44.05MB read
+Requests/sec:   4868.20
+Transfer/sec:    750.68KB
+
+--- non-2xx: 0 / 292517 ---
+
+==== container state ====
+aster-loadtest-pg cpu=49.95572590641667 mem=127MB / 31.26GB
+aster-loadtest-redis cpu=1.88920946480861 mem=3.564MB / 31.26GB
+aster-loadtest-api cpu=99.26633792288322 mem=2.479GB / 8.59GB

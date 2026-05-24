@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.aster.policy.api.convert.NamedContextMapper;
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotAccess;
 import org.graalvm.polyglot.Value;
@@ -33,6 +34,21 @@ public class DynamicCnlExecutor {
     private static final Logger LOG = Logger.getLogger(DynamicCnlExecutor.class);
     private static final ObjectMapper MAPPER = new ObjectMapper()
         .enable(SerializationFeature.INDENT_OUTPUT);
+
+    /**
+     * 进程级共享 Engine。GraalVM 推荐模式：Engine 持有 AST/字节码 cache
+     * 与运行时元数据（重资源、线程安全），可被多个 Context 共享；
+     * Context 仍按调用新建以保证隔离性，但走 Engine 时只分配运行时状态，
+     * 不再每次重做 AST 装载与类初始化。在 evaluate-source 这种"每调用
+     * 一份源码"的场景下，未共享 Engine 会让每个并发请求都付一份完整的
+     * Truffle 初始化代价（GraalVM 文档明确警告"never create per-request
+     * engines"），是 2GB 堆下并发 4 即 OOM 的根因。
+     *
+     * 关闭 WarnInterpreterOnly 警告——CE 版本无 JIT 是已知情况。
+     */
+    private static final Engine SHARED_ENGINE = Engine.newBuilder("aster")
+        .option("engine.WarnInterpreterOnly", "false")
+        .build();
 
     /**
      * 动态执行结果
@@ -191,6 +207,7 @@ public class DynamicCnlExecutor {
         // PolyglotAccess.NONE: 禁止跨语言访问
         // IOAccess.NONE: 禁止文件系统和网络 I/O
         try (Context polyglotContext = Context.newBuilder("aster")
+                .engine(SHARED_ENGINE)  // 复用进程级 Engine，避免 per-request AOT 重做
                 .allowHostAccess(HostAccess.newBuilder()
                     .allowPublicAccess(true)  // 允许访问公开的 Java 对象（如 LambdaValue）
                     .allowArrayAccess(true)   // 允许数组操作
@@ -202,7 +219,6 @@ public class DynamicCnlExecutor {
                 .allowCreateProcess(false)                  // 禁止创建子进程
                 .allowCreateThread(false)                   // 禁止创建线程
                 .allowNativeAccess(false)                   // 禁止本地代码访问
-                .option("engine.WarnInterpreterOnly", "false")
                 .build()) {
 
             // 注册内置函数（如果需要）

@@ -289,6 +289,12 @@ public class PolicyEvaluationResource {
         enforceApiQuota("/api/v1/policies/evaluate-source");
         String tenantId = tenantId();
         String performedBy = performedBy();
+        // 必须在切到 worker pool 前抓取 apiKeyId — RequestScoped 在 lambda
+        // 内已失效，否则 recordApiCall 会抛 ContextNotActiveException 并
+        // 被 Mutiny drop（quota 计数 silently lost）。
+        String apiKeyIdSnap = (routingContext != null && routingContext.request() != null)
+            ? routingContext.request().getHeader("X-Api-Key-Id")
+            : null;
         long apiCallStart = System.currentTimeMillis();
         Timer.Sample sample = businessMetrics.startPolicyEvaluation();
 
@@ -350,28 +356,33 @@ public class PolicyEvaluationResource {
                         execResult.result(),
                         execResult.executionTimeMs()
                     );
-                    recordApiCall("/api/v1/policies/evaluate-source", "success", System.currentTimeMillis() - apiCallStart);
+                    recordApiCall("/api/v1/policies/evaluate-source", "success",
+                        System.currentTimeMillis() - apiCallStart, tenantId, performedBy, apiKeyIdSnap);
                     return EvaluationResponse.success(execResult.result(), execResult.executionTimeMs(), decisionTrace);
                 }
-                recordApiCall("/api/v1/policies/evaluate-source", "success", System.currentTimeMillis() - apiCallStart);
+                recordApiCall("/api/v1/policies/evaluate-source", "success",
+                    System.currentTimeMillis() - apiCallStart, tenantId, performedBy, apiKeyIdSnap);
                 return EvaluationResponse.success(execResult.result(), execResult.executionTimeMs());
 
             } catch (DynamicCnlExecutor.DynamicExecutionException e) {
                 businessMetrics.endPolicyEvaluation(sample);
                 LOG.errorf(e, "Dynamic CNL execution failed: %s", e.getMessage());
-                recordApiCall("/api/v1/policies/evaluate-source", "api_error", System.currentTimeMillis() - apiCallStart);
+                recordApiCall("/api/v1/policies/evaluate-source", "api_error",
+                    System.currentTimeMillis() - apiCallStart, tenantId, performedBy, apiKeyIdSnap);
                 return EvaluationResponse.error("CNL 动态执行失败: " + e.getMessage());
 
             } catch (InProcessCnlParser.CnlParseException e) {
                 businessMetrics.endPolicyEvaluation(sample);
                 LOG.errorf(e, "CNL parsing failed: %s", e.getMessage());
-                recordApiCall("/api/v1/policies/evaluate-source", "api_error", System.currentTimeMillis() - apiCallStart);
+                recordApiCall("/api/v1/policies/evaluate-source", "api_error",
+                    System.currentTimeMillis() - apiCallStart, tenantId, performedBy, apiKeyIdSnap);
                 return EvaluationResponse.error("CNL 解析失败: " + e.getMessage());
 
             } catch (Exception e) {
                 businessMetrics.endPolicyEvaluation(sample);
                 LOG.errorf(e, "Failed to process CNL source: %s", e.getMessage());
-                recordApiCall("/api/v1/policies/evaluate-source", "api_error", System.currentTimeMillis() - apiCallStart);
+                recordApiCall("/api/v1/policies/evaluate-source", "api_error",
+                    System.currentTimeMillis() - apiCallStart, tenantId, performedBy, apiKeyIdSnap);
                 return EvaluationResponse.error("CNL 策略执行失败: " + e.getMessage());
             }
         }).runSubscriptionOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool());
@@ -848,7 +859,12 @@ public class PolicyEvaluationResource {
     }
 
     /**
-     * 异步记录一次 API 调用（fire-and-forget）
+     * 异步记录一次 API 调用（fire-and-forget）。
+     *
+     * 仅可在 RequestScoped 仍然有效时调用（同步路径 / 主 event-loop 线程）。
+     * 若调用点已切换到 worker pool / Uni lambda，RequestScoped 已失效，
+     * 必须改用下面的 {@link #recordApiCall(String, String, long, String, String, String)}
+     * 重载并把 tenant/user/apiKey 预先捕获后传入。
      */
     private void recordApiCall(String endpointPath, String status, long latencyMs) {
         String tenantId = tenantId();
@@ -857,6 +873,16 @@ public class PolicyEvaluationResource {
         if (routingContext != null && routingContext.request() != null) {
             apiKeyId = routingContext.request().getHeader("X-Api-Key-Id");
         }
+        apiQuotaGuard.recordAsync(userId, tenantId, apiKeyId, endpointPath, status, latencyMs);
+    }
+
+    /**
+     * 异步路径专用：tenant/user/apiKey 必须在跨线程跳板前预捕获，
+     * 否则 routingContext 会在 worker thread 上触发
+     * ContextNotActiveException，被 Mutiny drop 后 quota 计数静默丢失。
+     */
+    private void recordApiCall(String endpointPath, String status, long latencyMs,
+                               String tenantId, String userId, String apiKeyId) {
         apiQuotaGuard.recordAsync(userId, tenantId, apiKeyId, endpointPath, status, latencyMs);
     }
 

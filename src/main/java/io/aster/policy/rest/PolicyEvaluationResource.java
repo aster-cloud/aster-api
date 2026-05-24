@@ -56,12 +56,28 @@ public class PolicyEvaluationResource {
     /**
      * Bounded concurrency for /evaluate-source. Each in-flight call
      * holds one Polyglot Context (shared Engine, but per-call runtime
-     * state), and uncapped concurrency under burst load is what drove
-     * the JVM into OOM during the May loadtest sweep — heap exhaustion
-     * at c≥4 was deterministic regardless of -Xmx setting. We cap at
-     * 2× CPU because per-call work is mostly Truffle interpretation
-     * (CPU-bound, not I/O-bound); a 1× cap leaves no room for the
-     * occasional GC pause and a 4× cap puts us back in OOM territory.
+     * state), and uncapped concurrency under burst load drove the JVM
+     * into OOM during loadtest — heap exhaustion at c≥4 was
+     * deterministic regardless of -Xmx setting.
+     *
+     * The cap is min(CPU-bound, heap-bound):
+     *   - CPU bound: 2× cores. Per-call work is Truffle interpretation
+     *     (CPU-bound, not I/O-bound). 1× starves on any GC pause; 4×
+     *     reproduces the original OOM in our sweep.
+     *   - Heap bound: maxHeap / EVAL_SOURCE_HEAP_BUDGET_MB. Empirical
+     *     measurement put each in-flight call at ~30–50 MB of transient
+     *     Polyglot state (Context build + AST instantiation + JSON parse
+     *     of Core IR). We budget 64 MB / call so the cap stays inside
+     *     heap even with GC pauses doubling working-set briefly.
+     *
+     * Why the heap floor matters: the May sweep showed that on a 1 CPU /
+     * 512m heap container, even the 2-permit cap let two concurrent
+     * Context.build() calls OOM mid-construction. The heap bound on the
+     * 512m profile evaluates to 512/64 = 8 — looks fine, but in practice
+     * Quarkus base RSS + buffers leave only ~200m for application heap,
+     * which translates to ~3 concurrent calls. The Semaphore now picks
+     * the *smaller* of the two bounds, so any narrow-heap container
+     * automatically converges on the safer limit.
      *
      * Acquisition uses a short wait window before falling back to 503
      * + Retry-After: marketing playground / dashboard preview users
@@ -72,9 +88,31 @@ public class PolicyEvaluationResource {
      * debounced + min-interval'd in the AsterPlayground component.
      * Defense in depth — any one layer failing still keeps the
      * backend from going down.
+     *
+     * Operators: production deployments should provision ≥1 GB heap.
+     * The startup banner WARNs if maxHeap is below this threshold so
+     * miscalibrated sidecars surface in the logs instead of pager.
      */
-    private static final int EVAL_SOURCE_PERMITS_COUNT =
-        Math.max(2, 2 * Runtime.getRuntime().availableProcessors());
+    private static final long EVAL_SOURCE_HEAP_BUDGET_MB = 64;
+    private static final long MIN_RECOMMENDED_HEAP_MB = 768;
+    private static final int EVAL_SOURCE_PERMITS_COUNT;
+    static {
+        int cpuBound = Math.max(2, 2 * Runtime.getRuntime().availableProcessors());
+        long maxHeapMb = Runtime.getRuntime().maxMemory() / (1024L * 1024L);
+        int heapBound = (int) Math.max(1, maxHeapMb / EVAL_SOURCE_HEAP_BUDGET_MB);
+        EVAL_SOURCE_PERMITS_COUNT = Math.min(cpuBound, heapBound);
+        if (maxHeapMb < MIN_RECOMMENDED_HEAP_MB) {
+            LOG.warnf("evaluate-source: maxHeap=%d MB is below recommended %d MB "
+                + "for production. Concurrency capped to %d permits "
+                + "(cpuBound=%d, heapBound=%d). Increase -Xmx to raise the cap.",
+                maxHeapMb, MIN_RECOMMENDED_HEAP_MB, EVAL_SOURCE_PERMITS_COUNT,
+                cpuBound, heapBound);
+        } else {
+            LOG.infof("evaluate-source: concurrency cap = %d "
+                + "(cpuBound=%d, heapBound=%d, maxHeap=%d MB)",
+                EVAL_SOURCE_PERMITS_COUNT, cpuBound, heapBound, maxHeapMb);
+        }
+    }
     private static final Semaphore EVAL_SOURCE_PERMITS =
         new Semaphore(EVAL_SOURCE_PERMITS_COUNT, true);
     private static final long EVAL_SOURCE_ACQUIRE_TIMEOUT_MS = 250;

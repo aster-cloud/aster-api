@@ -34,6 +34,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Collections;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 
@@ -50,6 +52,32 @@ import java.util.regex.Matcher;
 public class PolicyEvaluationResource {
 
     private static final Logger LOG = Logger.getLogger(PolicyEvaluationResource.class);
+
+    /**
+     * Bounded concurrency for /evaluate-source. Each in-flight call
+     * holds one Polyglot Context (shared Engine, but per-call runtime
+     * state), and uncapped concurrency under burst load is what drove
+     * the JVM into OOM during the May loadtest sweep — heap exhaustion
+     * at c≥4 was deterministic regardless of -Xmx setting. We cap at
+     * 2× CPU because per-call work is mostly Truffle interpretation
+     * (CPU-bound, not I/O-bound); a 1× cap leaves no room for the
+     * occasional GC pause and a 4× cap puts us back in OOM territory.
+     *
+     * Acquisition uses a short wait window before falling back to 503
+     * + Retry-After: marketing playground / dashboard preview users
+     * see "server busy, please retry" instead of a 5xx storm.
+     *
+     * The marketing /api/playground/evaluate-source path (the only
+     * public consumer) is also rate-limited at the BFF and now
+     * debounced + min-interval'd in the AsterPlayground component.
+     * Defense in depth — any one layer failing still keeps the
+     * backend from going down.
+     */
+    private static final int EVAL_SOURCE_PERMITS_COUNT =
+        Math.max(2, 2 * Runtime.getRuntime().availableProcessors());
+    private static final Semaphore EVAL_SOURCE_PERMITS =
+        new Semaphore(EVAL_SOURCE_PERMITS_COUNT, true);
+    private static final long EVAL_SOURCE_ACQUIRE_TIMEOUT_MS = 250;
 
     @Inject
     PolicyEvaluationService evaluationService;
@@ -287,6 +315,44 @@ public class PolicyEvaluationResource {
         @QueryParam("trace") @DefaultValue("false") boolean trace
     ) {
         enforceApiQuota("/api/v1/policies/evaluate-source");
+        // Bounded concurrency gate. Acquire before doing any work; if
+        // the wait window expires, return 503 with Retry-After so the
+        // caller (BFF / playground) backs off instead of piling on.
+        // Release is wired into Uni.onTermination so it fires on
+        // success, failure, AND subscriber cancellation — never leak
+        // a permit.
+        final boolean acquired;
+        try {
+            acquired = EVAL_SOURCE_PERMITS.tryAcquire(
+                EVAL_SOURCE_ACQUIRE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new WebApplicationException(
+                jakarta.ws.rs.core.Response.status(503)
+                    .header("Retry-After", "1")
+                    .entity(Map.of(
+                        "error", "evaluate_source_busy",
+                        "message", "Server interrupted while waiting for an eval slot"))
+                    .type(MediaType.APPLICATION_JSON)
+                    .build()
+            );
+        }
+        if (!acquired) {
+            LOG.warnf("evaluate-source 拒绝：并发达到上限 %d，返回 503",
+                EVAL_SOURCE_PERMITS_COUNT);
+            throw new WebApplicationException(
+                jakarta.ws.rs.core.Response.status(503)
+                    .header("Retry-After", "1")
+                    .entity(Map.of(
+                        "error", "evaluate_source_busy",
+                        "message",
+                        "Too many concurrent evaluate-source requests. "
+                            + "Retry in a moment.",
+                        "concurrencyLimit", EVAL_SOURCE_PERMITS_COUNT))
+                    .type(MediaType.APPLICATION_JSON)
+                    .build()
+            );
+        }
         String tenantId = tenantId();
         String performedBy = performedBy();
         // 必须在切到 worker pool 前抓取 apiKeyId — RequestScoped 在 lambda
@@ -385,7 +451,13 @@ public class PolicyEvaluationResource {
                     System.currentTimeMillis() - apiCallStart, tenantId, performedBy, apiKeyIdSnap);
                 return EvaluationResponse.error("CNL 策略执行失败: " + e.getMessage());
             }
-        }).runSubscriptionOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool());
+        }).runSubscriptionOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool())
+          // onTermination fires on success, failure, AND cancellation —
+          // covers every exit path of the Uni. Without this, a client
+          // disconnect mid-eval would silently leak a permit and over
+          // hours the limit count would drift down to zero, freezing
+          // all evaluate-source traffic.
+          .onTermination().invoke(() -> EVAL_SOURCE_PERMITS.release());
     }
 
     /**

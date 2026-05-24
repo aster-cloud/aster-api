@@ -79,6 +79,13 @@ public class ApiQuotaGuard {
             currentSpan.setAttribute("aster.user_id", userId);
             currentSpan.setAttribute("aster.tenant_id", tenantId == null ? "" : tenantId);
         }
+        // PlanGate 关闭时（aster.plan-gate.enabled=false，e.g. on-prem
+        // 无 cloud BFF 或 loadtest 环境），整个配额体系跳过 — snapshot
+        // 拿不到、cloud 拒连，再走下面任何分支只会换来一次 fail-open
+        // 加几十毫秒延迟。直接放行 enterprise 等价物。
+        if (!config.enabled()) {
+            return new GuardResult(Verdict.ALLOW, -1, 0, 0, null);
+        }
 
         long limit;
         long used;
@@ -218,6 +225,11 @@ public class ApiQuotaGuard {
      */
     public void recordAsync(String userId, String tenantId, String apiKeyId,
                              String endpointPath, String status, long latencyMs) {
+        // PlanGate 关闭：跳过本地计数 + cloud 异步上报。无 cloud 接收方时
+        // 这两步纯粹是 DNS lookup + connection refused 的开销。
+        if (!config.enabled()) {
+            return;
+        }
         // SNAP-5 双写步骤 1：本地 redis INCR（同步，hot path 真源，0 RTT）
         // 仅 success 计数（与 cloud apiCallRecords 表 status='success' 过滤一致）
         if ("success".equals(status) && userId != null) {

@@ -2,7 +2,7 @@ plugins {
     id 'java'
     id 'jacoco'
     // Using latest Quarkus 3.28.3 - testing Gradle 9.0 compatibility
-    id 'io.quarkus' version '3.32.2'
+    id 'io.quarkus' version '3.36.0'
     id 'io.gatling.gradle' version '3.13.1'
     id 'org.gradle.test-retry' version '1.6.0'
 }

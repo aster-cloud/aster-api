@@ -133,16 +133,61 @@ jobs:
           TENANT_ID: perf-tenant
         run: |
           k6 run --summary-export=policy-eval.json evaluate-source.js \
-            || { echo "::error::P0-3 perf threshold breached"; exit 1; }
+            || { echo "::error::P0-3 perf threshold breached (evaluate-source)"; exit 1; }
 
-      - name: Upload k6 summary + aster-api log
+      # Seed the perf policy used by evaluate.js — a trivial zero-arg
+      # CNL rule returning 42. /evaluate requires the policy to exist
+      # in policy_versions + policy_catalog before it can hit the
+      # compiled-policy cache (which is what makes /evaluate fast vs
+      # /evaluate-source's per-call compile path).
+      - name: Seed perf policy (loadtest.zero.compute)
+        env:
+          PGPASSWORD: aster
+        run: |
+          psql -h localhost -U aster -d aster_perf <<'SQL'
+          INSERT INTO policy_versions (
+            policy_id, version, module_name, function_name, content, active,
+            created_at, source_hash, tenant_id, status, is_default
+          ) VALUES (
+            'perf-zero', 1, 'loadtest.zero', 'compute',
+            E'Module loadtest.zero.\n\nRule compute, produce Int:\n  Return 42.',
+            true, NOW(),
+            'zerohash00000000000000000000000000000000000000000000000000000000',
+            'perf-tenant', 'APPROVED', true
+          ) ON CONFLICT DO NOTHING;
+
+          INSERT INTO policy_catalog (
+            id, tenant_id, module_name, function_name, default_version_id,
+            created_at, updated_at
+          )
+          SELECT gen_random_uuid(), 'perf-tenant', 'loadtest.zero', 'compute',
+                 (SELECT id FROM policy_versions WHERE module_name='loadtest.zero' LIMIT 1),
+                 NOW(), NOW()
+          WHERE NOT EXISTS (
+            SELECT 1 FROM policy_catalog
+            WHERE tenant_id='perf-tenant' AND module_name='loadtest.zero'
+          );
+          SQL
+
+      - name: Run /evaluate baseline (DB-backed prod path)
+        working-directory: aster-api/perf
+        env:
+          API_BASE: http://localhost:8080
+          TENANT_ID: perf-tenant
+        run: |
+          k6 run --summary-export=evaluate.json evaluate.js \
+            || { echo "::error::Perf threshold breached (/evaluate)"; exit 1; }
+
+      - name: Upload k6 summaries + aster-api log
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: k6-evaluate-source-${{ github.run_id }}
+          name: k6-perf-${{ github.run_id }}
           path: |
             aster-api/perf/policy-eval.json
             aster-api/perf/policy-eval-summary.json
+            aster-api/perf/evaluate.json
+            aster-api/perf/evaluate-summary.json
             aster-api/aster-api.log
 
       - name: Notify Slack on failure

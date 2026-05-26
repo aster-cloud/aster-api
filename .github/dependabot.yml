@@ -1,0 +1,88 @@
+# Dependabot configuration for aster-api.
+#
+# Two ecosystems active:
+#   - gradle    weekly minor/patch (Quarkus, Drizzle equivalents,
+#               Hibernate, Vert.x, etc.)
+#   - github-actions  weekly
+#
+# Quarkus + GraalVM major bumps are NOT auto-PR'd — those land
+# manually after running the perf-regression suite (see
+# docs/perf/README.md). The ignore block below catches them.
+
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Australia/Melbourne
+    open-pull-requests-limit: 6
+    labels:
+      - dependencies
+      - gradle
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+    ignore:
+      # Quarkus + Truffle/GraalVM majors land manually — they tend
+      # to break Polyglot Context lifecycle and the eval-source path
+      # we measured carefully in the May load tests.
+      - dependency-name: "io.quarkus:*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.graalvm.polyglot:*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "io.quarkus.platform:*"
+        update-types: ["version-update:semver-major"]
+      # aster-lang-core / aster-lang-truffle are owned by us.
+      - dependency-name: "io.aster:*"
+      - dependency-name: "cloud.aster-lang:*"
+
+    groups:
+      quarkus:
+        patterns:
+          - "io.quarkus:*"
+          - "io.quarkus.platform:*"
+        update-types: ["minor", "patch"]
+      hibernate:
+        patterns:
+          - "org.hibernate:*"
+          - "io.agroal:*"
+        update-types: ["minor", "patch"]
+      vertx:
+        patterns:
+          - "io.vertx:*"
+          - "io.smallrye:*"
+        update-types: ["minor", "patch"]
+      test-tooling:
+        dependency-type: development
+        patterns:
+          - "org.junit*:*"
+          - "io.rest-assured:*"
+          - "org.mockito:*"
+          - "org.assertj:*"
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Australia/Melbourne
+    open-pull-requests-limit: 4
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: "ci(deps)"
+      include: scope
+    groups:
+      actions-core:
+        patterns:
+          - "actions/*"
+      docker-actions:
+        patterns:
+          - "docker/*"

@@ -30,7 +30,7 @@ java {
 
 dependencies {
     // Quarkus BOM (Bill of Materials) for dependency management
-    implementation enforcedPlatform('io.quarkus.platform:quarkus-bom:3.32.2')
+    implementation enforcedPlatform('io.quarkus.platform:quarkus-bom:3.35.4')
 
     // Quarkus核心依赖 - Reactive REST endpoints (quarkus-rest already includes reactive support)
     implementation 'io.quarkus:quarkus-rest'

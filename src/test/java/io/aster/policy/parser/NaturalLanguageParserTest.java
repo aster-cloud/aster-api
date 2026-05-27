@@ -160,10 +160,11 @@ class NaturalLanguageParserTest {
     @Test
     void testChineseConstructionFieldCanonicalization() {
         // 回归测试：中文 construction field 含字符串值时，不应出现双句号
+        // ADR-0008 v2: 单字关键字（真/假）已升级为多字（真值/假值）
         Canonicalizer canon = new Canonicalizer(
             LexiconRegistry.getInstance().getOrThrow("zh-CN"));
 
-        String input = "返回 决定 包含 批准 将 设为 假, 理由 将 设为 「申请人未成年」。";
+        String input = "返回 决定 包含 批准 将 设为 假值, 理由 将 设为 「申请人未成年」。";
         String canonicalized = canon.canonicalize(input);
 
         assertFalse(canonicalized.contains("set to."),

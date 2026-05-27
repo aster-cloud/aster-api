@@ -1152,6 +1152,9 @@ public class PolicyGraphQLResourceTest {
     @Timeout(30)
     public void testBatchEvaluateLargeVolume() {
         // 测试目的：验证一次处理 100+ 批量请求时的资源消耗与缓存索引记录
+        // 注: 生产 application.properties 把 max-threads=16 + queue-size=8 用于
+        // /evaluate-source OOM 保护. 测试 application.properties 覆写为
+        // 200 + 200, 让 batch 测试场景不受 prod 边界限制（详见 application.properties 注释）.
         String tenant = "tenant-batch-volume";
         int requestCount = 120;
         List<BatchRequest> requests = new ArrayList<>(requestCount);

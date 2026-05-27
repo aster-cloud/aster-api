@@ -32,7 +32,8 @@ import java.io.IOException;
  * 5. 对于 JSON 响应，需要序列化后再检查（Quarkus 会自动处理）
  *
  * 注意：
- * - 此过滤器采用渐进式启用策略，默认禁用（需显式 aster.pii.enforce=true 启用）
+ * - 此过滤器默认**启用**（ADR-0009 P0-R: aster.pii.enforce=true 是默认值；
+ *   仅开发/调试环境可通过 aster.pii.enforce=false 显式禁用）
  * - 仅处理文本响应（String, JSON）
  * - 二进制响应（图片、文件）会被跳过
  * - 不影响响应状态码和头部

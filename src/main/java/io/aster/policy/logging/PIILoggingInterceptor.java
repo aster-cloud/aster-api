@@ -21,7 +21,8 @@ import org.jboss.logging.Logger;
  * 4. 方法执行后：检查新产生的日志是否包含 PII
  *
  * 注意：
- * - 此拦截器采用渐进式启用策略，默认禁用（需显式 aster.pii.enforce=true 启用）
+ * - 此拦截器默认**启用**（ADR-0009 P0-R: aster.pii.enforce=true 是默认值；
+ *   仅开发/调试环境可通过 aster.pii.enforce=false 显式禁用）
  * - 此实现依赖于 PIIRedactor 进行 PII 检测
  * - 当前实现为演示版本，实际生产环境需要集成日志框架的 Appender
  * - Task 4.4 的端到端测试会验证完整的日志检测功能

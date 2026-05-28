@@ -145,6 +145,16 @@ public class PolicyEvaluationResource {
     RoutingContext routingContext;
 
     /**
+     * R29++ Codex audit：JAX-RS request scope，用于读取
+     * {@link io.aster.policy.security.TrialEndpointGuard#TRIAL_GUARD_PASSED_PROP}
+     * 凭证。该凭证由 TrialEndpointGuard 在 AUTHENTICATION-100 优先级设上，
+     * 只在 trial 请求生命周期内有效。enforceApiQuota 用它做三重校验
+     * （路径 + 凭证 + tenant），避免 quota bypass 只看 tenant 字符串。
+     */
+    @Context
+    jakarta.ws.rs.container.ContainerRequestContext jaxrsCtx;
+
+    /**
      * 评估单个策略
      *
      * POST /api/policies/evaluate
@@ -917,12 +927,26 @@ public class PolicyEvaluationResource {
         String tenantId = tenantId();
         String userId = performedBy();
 
-        // R29 Codex audit：marketing-tier trial 流量已经过 TrialEndpointGuard
-        // 的成本控制（Origin allowlist + body cap + per-IP minute/hour 限流 +
-        // concurrent semaphore），叠加 PlanGate 既无意义又会把 "trial" 当成
-        // 未签约租户 403。这里返回 unlimited 让请求继续，同时不写 quota 响应头
-        // —— trial 用户不该看到任何 quota 暗示。
-        if ("trial".equals(tenantId)) {
+        // R29++ Codex 复审：quota bypass 不能只看 tenant 字符串。如果某条
+        // 非 trial 请求让 TenantContext.currentTenant 变成 "trial"（白名单
+        // 默认关闭、没有 reserved tenant 拦截），/evaluate、/evaluate-json、
+        // /evaluate/batch 也会跳过 PlanGate。
+        //
+        // 改为三重校验，与下游 filter 的 BYPASS_TRIAL 分支保持同一安全边界：
+        //   1) endpointPath 必须是 TrialEndpointGuard.TRIAL_PATH
+        //   2) JAX-RS 请求属性 TRIAL_GUARD_PASSED_PROP 必须为 true
+        //   3) TenantContext 必须为 "trial"
+        // 三者同时满足 → 跳过 PlanGate；任何一项不满足 → 走原路径。
+        //
+        // TrialEndpointGuard 已经做了成本控制（Origin allowlist + body cap +
+        // per-IP minute/hour 限流 + concurrent semaphore），叠加 PlanGate 既
+        // 无意义又会把 "trial" 当成未签约租户 403。
+        boolean isTrialPath = io.aster.policy.security.TrialEndpointGuard.TRIAL_PATH
+            .equals(endpointPath);
+        boolean guardPassed = jaxrsCtx != null
+            && Boolean.TRUE.equals(jaxrsCtx.getProperty(
+                io.aster.policy.security.TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP));
+        if (isTrialPath && guardPassed && "trial".equals(tenantId)) {
             return new ApiQuotaGuard.GuardResult(
                 ApiQuotaGuard.Verdict.ALLOW, -1L, 0L, 0, null);
         }

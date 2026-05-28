@@ -173,7 +173,9 @@ public class TrialEndpointGuard {
      *       不重写 XFF，limit 可被伪造。operator 必须确认 ingress 行为。</li>
      * </ul>
      *
-     * <p>不 fail-fast：trial 是 marketing/demo feature，部署期失败比 boot 失败更易排查。
+     * <p>R29+ 修订：prod profile 对 .public+.trial 同开 / trial+空 origins
+     * 改为 fail-fast。dev/test 保持 warn。trust-forwarded-for=true 仍 warn
+     * （它是合法的生产配置，只是要求 ingress 正确处理 XFF）。
      */
     void auditStartupConfig(@Observes StartupEvent ev) {
         if (!enabled) {

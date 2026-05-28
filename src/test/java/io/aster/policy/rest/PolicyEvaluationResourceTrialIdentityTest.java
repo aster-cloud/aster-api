@@ -1,10 +1,12 @@
 package io.aster.policy.rest;
 
 import io.aster.billing.ApiQuotaGuard;
+import io.aster.policy.security.TrialEndpointGuard;
 import io.aster.policy.tenant.TenantContext;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.ext.web.RoutingContext;
+import jakarta.ws.rs.container.ContainerRequestContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -37,13 +39,31 @@ class PolicyEvaluationResourceTrialIdentityTest {
     private PolicyEvaluationResource newResource(ApiQuotaGuard quotaGuard,
                                                   TenantContext tenantContext,
                                                   RoutingContext routingContext) throws Exception {
+        return newResource(quotaGuard, tenantContext, routingContext, null);
+    }
+
+    private PolicyEvaluationResource newResource(ApiQuotaGuard quotaGuard,
+                                                  TenantContext tenantContext,
+                                                  RoutingContext routingContext,
+                                                  ContainerRequestContext jaxrsCtx) throws Exception {
         PolicyEvaluationResource r = new PolicyEvaluationResource();
 
         setField(r, "apiQuotaGuard", quotaGuard);
         setField(r, "tenantContext", tenantContext);
         setField(r, "routingContext", routingContext);
-
+        if (jaxrsCtx != null) {
+            setField(r, "jaxrsCtx", jaxrsCtx);
+        }
         return r;
+    }
+
+    private ContainerRequestContext jaxrsCtxWithGuardProp(boolean propSet) {
+        ContainerRequestContext c = mock(ContainerRequestContext.class);
+        if (propSet) {
+            when(c.getProperty(TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP))
+                .thenReturn(Boolean.TRUE);
+        }
+        return c;
     }
 
     private static void setField(Object target, String name, Object value) throws Exception {
@@ -96,8 +116,9 @@ class PolicyEvaluationResourceTrialIdentityTest {
     }
 
     @Test
-    @DisplayName("R29: enforceApiQuota() 对 trial 不调用 PlanGate，不写 X-Quota 头")
-    void enforceApiQuotaSkipsForTrialTenant() throws Exception {
+    @DisplayName("R29++: enforceApiQuota() 三重校验通过 → 跳过 PlanGate，零 X-Quota 头")
+    void enforceApiQuotaSkipsForTripleGatedTrial() throws Exception {
+        // R29++ 三重校验：path + guard property + tenant 全部命中才旁路
         TenantContext tc = new TenantContext();
         tc.setCurrentTenant("trial");
 
@@ -108,25 +129,82 @@ class PolicyEvaluationResourceTrialIdentityTest {
         when(rctx.response()).thenReturn(resp);
 
         ApiQuotaGuard quota = mock(ApiQuotaGuard.class);
-        PolicyEvaluationResource r = newResource(quota, tc, rctx);
+        PolicyEvaluationResource r = newResource(quota, tc, rctx,
+            jaxrsCtxWithGuardProp(true));
 
         ApiQuotaGuard.GuardResult result = (ApiQuotaGuard.GuardResult)
             invoke(r, "enforceApiQuota", new Class<?>[]{String.class},
                 "/api/v1/policies/evaluate-source");
 
-        // 1. quota guard never invoked
         verify(quota, never()).check(anyString(), anyString());
         verify(quota, never()).checkRate(anyString(), anyString());
 
-        // 2. no X-Quota-* headers written
         verify(resp, never()).putHeader(eqMatch("X-Quota-Limit"), anyString());
         verify(resp, never()).putHeader(eqMatch("X-Quota-Remaining"), anyString());
         verify(resp, never()).putHeader(eqMatch("X-Quota-Reset"), anyString());
         verify(resp, never()).putHeader(eqMatch("X-Quota-Warning"), anyString());
 
-        // 3. returned verdict is ALLOW with -1 (unlimited)
         assertEquals(ApiQuotaGuard.Verdict.ALLOW, result.verdict());
         assertEquals(-1L, result.limit());
+    }
+
+    @Test
+    @DisplayName("R29++: tenant=trial 但 endpoint 不是 evaluate-source → 不旁路（防 sentinel 滥用）")
+    void enforceApiQuotaDoesNotSkipForTrialTenantOnWrongPath() throws Exception {
+        // 关键安全断言：即便 TenantContext 被设成 "trial"，只要请求路径
+        // 不是 TRIAL_PATH，也必须走原 PlanGate 流程。这把 R29+ 的弱耦合补上。
+        TenantContext tc = new TenantContext();
+        tc.setCurrentTenant("trial");
+
+        RoutingContext rctx = mock(RoutingContext.class);
+        HttpServerRequest req = mock(HttpServerRequest.class);
+        HttpServerResponse resp = mock(HttpServerResponse.class);
+        when(rctx.request()).thenReturn(req);
+        when(rctx.response()).thenReturn(resp);
+        when(req.getHeader("X-User-Id")).thenReturn(null);
+
+        ApiQuotaGuard quota = mock(ApiQuotaGuard.class);
+        when(quota.check(anyString(), anyString())).thenReturn(
+            new ApiQuotaGuard.GuardResult(
+                ApiQuotaGuard.Verdict.ALLOW, 1000L, 10L, 1, null));
+
+        PolicyEvaluationResource r = newResource(quota, tc, rctx,
+            jaxrsCtxWithGuardProp(true));  // guard prop 设了，但路径错
+
+        invoke(r, "enforceApiQuota", new Class<?>[]{String.class},
+            "/api/v1/policies/evaluate");  // 注意：不是 evaluate-source
+
+        verify(quota, times(1)).check(anyString(), anyString());
+        verify(resp).putHeader(eqMatch("X-Quota-Limit"), anyString());
+    }
+
+    @Test
+    @DisplayName("R29++: TRIAL_PATH + tenant=trial 但缺 guard property → 不旁路")
+    void enforceApiQuotaDoesNotSkipWithoutGuardProperty() throws Exception {
+        // path 对、tenant 对，但 jaxrsCtx 没有 TRIAL_GUARD_PASSED_PROP →
+        // 不放行。证明 bypass 不能仅靠 TenantContext sentinel。
+        TenantContext tc = new TenantContext();
+        tc.setCurrentTenant("trial");
+
+        RoutingContext rctx = mock(RoutingContext.class);
+        HttpServerRequest req = mock(HttpServerRequest.class);
+        HttpServerResponse resp = mock(HttpServerResponse.class);
+        when(rctx.request()).thenReturn(req);
+        when(rctx.response()).thenReturn(resp);
+
+        ApiQuotaGuard quota = mock(ApiQuotaGuard.class);
+        when(quota.check(anyString(), anyString())).thenReturn(
+            new ApiQuotaGuard.GuardResult(
+                ApiQuotaGuard.Verdict.ALLOW, 1000L, 10L, 1, null));
+
+        // jaxrsCtx 不设 TRIAL_GUARD_PASSED_PROP
+        PolicyEvaluationResource r = newResource(quota, tc, rctx,
+            jaxrsCtxWithGuardProp(false));
+
+        invoke(r, "enforceApiQuota", new Class<?>[]{String.class},
+            "/api/v1/policies/evaluate-source");
+
+        verify(quota, times(1)).check(anyString(), anyString());
     }
 
     @Test

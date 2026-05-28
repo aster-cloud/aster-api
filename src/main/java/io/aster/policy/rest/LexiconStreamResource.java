@@ -99,7 +99,13 @@ public class LexiconStreamResource {
             emitter.emit(json);
         } catch (Exception e) {
             LOG.warnf(e, "SSE emit failed; closing subscriber");
-            try { emitter.fail(e); } catch (Exception ignored) {}
+            try {
+                emitter.fail(e);
+            } catch (Exception failEx) {
+                // P2-R20: secondary failure during error propagation; downgrade to
+                // debug since the primary error has already been warn-logged.
+                LOG.debugf("SSE emitter.fail() also threw: %s", failEx.getMessage());
+            }
         } finally {
             emitLock.unlock();
         }

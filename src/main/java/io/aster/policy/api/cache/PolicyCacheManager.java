@@ -343,11 +343,24 @@ public class PolicyCacheManager {
         if (redisSubscriber != null) {
             try {
                 redisSubscriber.unsubscribe();
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                // P2-R20: log instead of silently swallow during shutdown
+                LOG.debugf("Redis unsubscribe during shutdown failed: %s", e.getMessage());
             }
         }
         if (invalidationExecutor != null) {
-            invalidationExecutor.shutdownNow();
+            // P3-R20: graceful shutdown — give in-flight tasks 2s to finish
+            // before forcing interrupt. Prevents losing the last cache
+            // invalidation message during rolling restarts.
+            invalidationExecutor.shutdown();
+            try {
+                if (!invalidationExecutor.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS)) {
+                    invalidationExecutor.shutdownNow();
+                }
+            } catch (InterruptedException ie) {
+                invalidationExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 package io.aster.security.apikey;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.WebApplicationException;
@@ -121,6 +122,35 @@ public class InternalCallerFilter {
             return Classification.BYPASS_OK;
         }
         return Classification.REQUIRE_HMAC;
+    }
+
+    /**
+     * P2-R20: startup config validation. If all bypass flags are false AND
+     * hmacKey is missing/empty, the internal API endpoints are silently
+     * unreachable in production. Log a clear startup warning so operators
+     * notice misconfiguration before traffic arrives instead of discovering
+     * it via 403 logs at request time.
+     *
+     * <p>Bypass flags (evaluateSourcePublic / evaluateSourceTrial / aiPublic /
+     * aiSsePublic) intentionally don't require HMAC; only flag absence makes
+     * the missing key load-bearing.
+     */
+    @PostConstruct
+    void validateHmacKeyConfig() {
+        boolean anyBypass = evaluateSourcePublic || evaluateSourceTrial || aiPublic || aiSsePublic;
+        boolean keyMissing = hmacKey.isEmpty() || hmacKey.get().isBlank();
+        if (keyMissing && !anyBypass) {
+            LOG.error(
+                "aster.plan-gate.hmac-key is missing/empty and no bypass flags are set. " +
+                "All HMAC-protected internal endpoints (/api/v1/ai/*, /api/v1/policies/evaluate-source) " +
+                "will return 403. Set hmacKey or enable explicit bypass flag for the environment.");
+        } else if (keyMissing) {
+            LOG.warnf(
+                "aster.plan-gate.hmac-key is missing/empty; relying on bypass flags " +
+                "(evaluateSourcePublic=%s, evaluateSourceTrial=%s, aiPublic=%s, aiSsePublic=%s). " +
+                "Acceptable for dev/playground but unsafe for production.",
+                evaluateSourcePublic, evaluateSourceTrial, aiPublic, aiSsePublic);
+        }
     }
 
     @ServerRequestFilter(priority = Priorities.AUTHENTICATION + 50)

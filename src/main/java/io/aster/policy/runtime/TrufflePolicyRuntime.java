@@ -6,7 +6,9 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
+import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.io.IOAccess;
 import org.jboss.logging.Logger;
 
 import java.util.HashMap;
@@ -44,11 +46,33 @@ public class TrufflePolicyRuntime {
 
         LOG.infof("创建 Context 池，大小: %d", poolSize);
 
+        // P0-R21 (audit R21): 收紧 polyglot sandbox 策略.
+        // 之前 `allowAllAccess(true)` 把 host classpath / file IO / native /
+        // socket / process 全部开放给策略代码——策略来自 untrusted tenant
+        // input, 等价于 RCE. 现在显式列举允许的能力, 默认 deny.
+        //
+        // 允许:
+        //   - HostAccess.EXPLICIT: 仅 @HostAccess.Export 标注的 host 方法可调用
+        //     (Truffle DSL 节点 + Builtins 表都用了 @HostAccess.Export)
+        //   - createThread/createProcess: 已隐式禁用 (allowCreateThread 默认 false)
+        // 禁止:
+        //   - IO (文件/网络) — 策略不应读盘或发起 socket
+        //   - Native access — 不应 dlopen
+        //   - Host class lookup — 不应 `Java.type("java.lang.Runtime")`
+        //   - Polyglot bindings 共享 — 各 Context 隔离
+        //
+        // 对比 DynamicCnlExecutor (parser/) 已是 EXPLICIT + IOAccess.NONE,
+        // 这次把 production execution path 拉齐.
         for (int i = 0; i < poolSize; i++) {
             // 注意：engine 选项已在 sharedEngine 上设置，Context 不能重复设置
             Context ctx = Context.newBuilder("aster")
                 .engine(sharedEngine)
-                .allowAllAccess(true)
+                .allowHostAccess(HostAccess.EXPLICIT)
+                .allowIO(IOAccess.NONE)
+                .allowNativeAccess(false)
+                .allowHostClassLookup(name -> false)
+                .allowPolyglotAccess(org.graalvm.polyglot.PolyglotAccess.NONE)
+                .allowCreateProcess(false)
                 .build();
 
             contextPool.offer(ctx);

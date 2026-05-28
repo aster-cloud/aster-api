@@ -1,10 +1,18 @@
 package io.aster.security.apikey;
 
+import io.quarkus.runtime.StartupEvent;
+import jakarta.enterprise.event.Observes;
 import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 
 import static io.aster.security.apikey.InternalCallerFilter.Classification;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * R27-Minor-3：InternalCallerFilter 单元测试。
@@ -228,5 +236,74 @@ class InternalCallerFilterTest {
         String a = InternalCallerFilter.sign("k", "POST\n/api/v1/ai/complete\n1700000000");
         String b = InternalCallerFilter.sign("k", "GET\n/api/v1/ai/complete\n1700000000");
         assertNotEquals(a, b, "method 不同必须产生不同签名");
+    }
+
+    // ============================================================
+    // R22 后处理：HMAC startup 校验必须由 StartupEvent 触发
+    //
+    // 历史背景：曾经用 @PostConstruct，但 @ApplicationScoped 在 Quarkus 是 CDI
+    // 懒初始化 —— @PostConstruct 直到首个请求到达才会跑，于是配置错误的生产
+    // 部署可能在收到流量之前一直吞掉警告（podman /ccg:test 实测确认）。
+    // 改成观察 StartupEvent 后，Quarkus 启动期间一定会触发该方法。
+    //
+    // 这里用反射钉住契约：任何把它改回 @PostConstruct 或去掉 @Observes 的
+    // 重构都会让这个测试失败，避免静默回归。
+    // ============================================================
+
+    @Test
+    void hmacValidatorIsWiredAsStartupEventObserver() {
+        Method observer = null;
+        for (Method m : InternalCallerFilter.class.getDeclaredMethods()) {
+            if (!"validateHmacKeyConfig".equals(m.getName())) continue;
+            observer = m;
+            break;
+        }
+        assertNotNull(observer,
+            "validateHmacKeyConfig 方法必须存在 —— 它是 HMAC 配置缺失的启动期可见性");
+
+        Parameter[] params = observer.getParameters();
+        assertEquals(1, params.length,
+            "validateHmacKeyConfig 必须仅接收一个 @Observes StartupEvent 参数");
+
+        Parameter p = params[0];
+        assertEquals(StartupEvent.class, p.getType(),
+            "参数类型必须是 io.quarkus.runtime.StartupEvent —— 这是 Quarkus 启动期触发器，"
+                + "不要换成 @PostConstruct（@ApplicationScoped 懒初始化 = 启动期不触发）");
+
+        boolean hasObserves = false;
+        for (var annotation : p.getAnnotations()) {
+            if (annotation.annotationType().equals(Observes.class)) {
+                hasObserves = true;
+                break;
+            }
+        }
+        assertTrue(hasObserves,
+            "StartupEvent 参数必须标 @Observes —— 否则 CDI 不会把该方法注册为观察者");
+    }
+
+    @Test
+    void hmacValidatorIsNotAnnotatedWithPostConstruct() {
+        // 配套防御：直接确认没有 @PostConstruct 注解残留。
+        // 即便参数签名对了，如果同时还挂着 @PostConstruct，行为会变得难以预测。
+        Method observer;
+        try {
+            observer = InternalCallerFilter.class
+                .getDeclaredMethod("validateHmacKeyConfig", StartupEvent.class);
+        } catch (NoSuchMethodException e) {
+            fail("validateHmacKeyConfig(StartupEvent) 必须存在");
+            return;
+        }
+        try {
+            Class<?> postConstruct = Class.forName("jakarta.annotation.PostConstruct");
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            boolean hasPostConstruct = observer.isAnnotationPresent(
+                (Class) postConstruct);
+            assertTrue(!hasPostConstruct,
+                "validateHmacKeyConfig 不应再带 @PostConstruct —— "
+                    + "@ApplicationScoped + @PostConstruct 在 Quarkus 是懒触发，"
+                    + "已迁移到 StartupEvent 以保证启动期一定执行");
+        } catch (ClassNotFoundException ignored) {
+            // PostConstruct 不在 classpath 上，更不可能用到它 —— 通过
+        }
     }
 }

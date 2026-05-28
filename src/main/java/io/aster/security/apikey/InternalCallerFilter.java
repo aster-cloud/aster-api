@@ -1,7 +1,8 @@
 package io.aster.security.apikey;
 
-import jakarta.annotation.PostConstruct;
+import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.container.ContainerRequestContext;
@@ -125,8 +126,8 @@ public class InternalCallerFilter {
     }
 
     /**
-     * P2-R20: startup config validation. If all bypass flags are false AND
-     * hmacKey is missing/empty, the internal API endpoints are silently
+     * P2-R20/R22: startup config validation. If all bypass flags are false
+     * AND hmacKey is missing/empty, the internal API endpoints are silently
      * unreachable in production. Log a clear startup warning so operators
      * notice misconfiguration before traffic arrives instead of discovering
      * it via 403 logs at request time.
@@ -134,9 +135,17 @@ public class InternalCallerFilter {
      * <p>Bypass flags (evaluateSourcePublic / evaluateSourceTrial / aiPublic /
      * aiSsePublic) intentionally don't require HMAC; only flag absence makes
      * the missing key load-bearing.
+     *
+     * <p>R22 change: observes Quarkus {@link StartupEvent} instead of
+     * {@code @PostConstruct}. The previous {@code @PostConstruct} fired
+     * lazily on first request because {@code @ApplicationScoped} beans
+     * are CDI lazy-init by default — so a misconfigured production deploy
+     * could swallow the warning until a real request arrived (live
+     * podman validation in /ccg:test cycle confirmed this).
+     * {@code StartupEvent} is fired by Quarkus during the boot
+     * lifecycle, guaranteeing the check runs at startup time.
      */
-    @PostConstruct
-    void validateHmacKeyConfig() {
+    void validateHmacKeyConfig(@Observes StartupEvent ev) {
         boolean anyBypass = evaluateSourcePublic || evaluateSourceTrial || aiPublic || aiSsePublic;
         boolean keyMissing = hmacKey.isEmpty() || hmacKey.get().isBlank();
         if (keyMissing && !anyBypass) {
@@ -150,6 +159,8 @@ public class InternalCallerFilter {
                 "(evaluateSourcePublic=%s, evaluateSourceTrial=%s, aiPublic=%s, aiSsePublic=%s). " +
                 "Acceptable for dev/playground but unsafe for production.",
                 evaluateSourcePublic, evaluateSourceTrial, aiPublic, aiSsePublic);
+        } else {
+            LOG.info("InternalCallerFilter HMAC key configured; HMAC-protected endpoints active.");
         }
     }
 

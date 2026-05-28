@@ -6,6 +6,7 @@ import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -138,5 +139,26 @@ class TenantFilterTrialBypassTest {
         filter.filter(ctx);
 
         verify(ctx, never()).abortWith(any());
+    }
+
+    @Test
+    @DisplayName("R29: trial 凭证落在非 trial 路径 → 不旁路，仍走原 X-Tenant-Id 校验")
+    void trialPropertyOnNonTrialPathDoesNotBypass() throws Exception {
+        // Codex R28 audit 指出：TenantFilter 不复查路径会出现弱耦合。
+        // 修复后即便有 property，路径不是 TRIAL_PATH 就回到普通校验。
+        TenantFilter filter = newFilter();
+        ContainerRequestContext ctx = newCtx(
+            "POST",
+            "/api/v1/policies/evaluate",  // 注意：不是 evaluate-source
+            Map.of(),                     // 无 X-Tenant-Id
+            Map.of(TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP, Boolean.TRUE)
+        );
+
+        filter.filter(ctx);
+
+        ArgumentCaptor<Response> resp = ArgumentCaptor.forClass(Response.class);
+        verify(ctx).abortWith(resp.capture());
+        Assertions.assertEquals(400, resp.getValue().getStatus(),
+            "guard property 不应该让 trial 路径外的请求拿到伪租户");
     }
 }

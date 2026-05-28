@@ -138,6 +138,9 @@ public class PolicyEvaluationResource {
     @Inject
     ApiQuotaGuard apiQuotaGuard;
 
+    @Inject
+    io.aster.policy.tenant.TenantContext tenantContext;
+
     @Context
     RoutingContext routingContext;
 
@@ -869,6 +872,15 @@ public class PolicyEvaluationResource {
      * 从 X-Tenant-Id 请求头提取租户ID，如果不存在则返回 "default"
      */
     private String tenantId() {
+        // R29 Codex audit：trial 路径不带 X-Tenant-Id，TenantFilter 已将
+        // TenantContext 设为 "trial"。先查 TenantContext，再回退 header，
+        // 确保 quota/audit/metrics 对 trial 流量记账到 "trial" 而非 "default"。
+        if (tenantContext != null) {
+            String ctxTenant = tenantContext.getCurrentTenant();
+            if (ctxTenant != null && !ctxTenant.isBlank()) {
+                return ctxTenant;
+            }
+        }
         if (routingContext == null || routingContext.request() == null) {
             return "default";
         }
@@ -882,6 +894,12 @@ public class PolicyEvaluationResource {
      * 从 X-User-Id 请求头提取用户ID，如果不存在则返回 "anonymous"
      */
     private String performedBy() {
+        // R29: trial 流量统一记账 performedBy=trial-anonymous，与租户 "trial"
+        // 配对。审计/metrics 才能把 marketing playground 流量从普通 anonymous
+        // 中分离出来。
+        if (tenantContext != null && "trial".equals(tenantContext.getCurrentTenant())) {
+            return "trial-anonymous";
+        }
         if (routingContext == null || routingContext.request() == null) {
             return "anonymous";
         }
@@ -898,6 +916,17 @@ public class PolicyEvaluationResource {
     private ApiQuotaGuard.GuardResult enforceApiQuota(String endpointPath) {
         String tenantId = tenantId();
         String userId = performedBy();
+
+        // R29 Codex audit：marketing-tier trial 流量已经过 TrialEndpointGuard
+        // 的成本控制（Origin allowlist + body cap + per-IP minute/hour 限流 +
+        // concurrent semaphore），叠加 PlanGate 既无意义又会把 "trial" 当成
+        // 未签约租户 403。这里返回 unlimited 让请求继续，同时不写 quota 响应头
+        // —— trial 用户不该看到任何 quota 暗示。
+        if ("trial".equals(tenantId)) {
+            return new ApiQuotaGuard.GuardResult(
+                ApiQuotaGuard.Verdict.ALLOW, -1L, 0L, 0, null);
+        }
+
         ApiQuotaGuard.GuardResult result = apiQuotaGuard.check(tenantId, userId);
 
         // 写响应头（API-5）

@@ -84,8 +84,14 @@ public class TenantFilter implements ContainerRequestFilter {
         // TrialEndpointGuard 已经在 AUTHENTICATION-100 完成三重校验并设置
         // TRIAL_GUARD_PASSED_PROP；这里识别该凭证后用 "trial" 作为伪租户，
         // 与 RoleEnforcementFilter 和 InternalCallerFilter 的 trial 处理对齐。
+        //
+        // R29 Codex audit：必须复查路径以与 RBAC bypass 保持同一边界。
+        // property 单独不足以构成 bypass —— 路径必须正好是 TRIAL_PATH，
+        // 防止其它路径误用 property 拿到伪租户。
         if (Boolean.TRUE.equals(
-                requestContext.getProperty(TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP))) {
+                requestContext.getProperty(TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP))
+            && TrialEndpointGuard.TRIAL_PATH.equals(
+                io.aster.security.PathNormalizer.normalize(path))) {
             tenantContext.setCurrentTenant("trial");
             LOG.debugf("Tenant set to 'trial' for guarded trial request (path=%s)", path);
             return;

@@ -62,6 +62,19 @@ public class RateLimitFilter {
             return null;
         }
 
+        // R29 Codex audit：本 filter 优先级 AUTHENTICATION+1，会在 JAX-RS
+        // TenantFilter 之前执行，意味着对 trial 路径 tenantContext 还没 set，
+        // 落入 IP fallback —— 而 TrialEndpointGuard 已经提供了 per-IP 的
+        // minute/hour/concurrent 三层成本控制，叠加全局 REST limiter 既冗余
+        // 又会把不同来源的 trial 用户挤到同一个 rest:ip:unknown 桶。
+        // 识别 guard 凭证 + TRIAL_PATH 后直接放行。
+        if (Boolean.TRUE.equals(ctx.getProperty(TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP))
+            && TrialEndpointGuard.TRIAL_PATH.equals(
+                io.aster.security.PathNormalizer.normalize(path))) {
+            LOG.debugf("rate limit bypassed for guarded trial path %s", path);
+            return null;
+        }
+
         // 使用租户ID作为限流 key（TenantFilter 已在前置过滤器中校验并设置）
         String identifier;
         if (tenantContext.isInitialized()) {

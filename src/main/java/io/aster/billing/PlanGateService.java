@@ -38,10 +38,10 @@ public class PlanGateService {
     PlanGateConfig config;
 
     @Inject
-    io.vertx.mutiny.core.Vertx mutinyVertx;
+    io.aster.common.http.SharedWebClient sharedWebClient;
 
-    private volatile WebClient webClient;
     private Cache<String, PlanInfo> cache;
+    // P0-R19: WebClient DCL consolidated into SharedWebClient
 
     void onStart(@Observes StartupEvent ev) {
         cache = Caffeine.newBuilder()
@@ -164,13 +164,6 @@ public class PlanGateService {
     }
 
     private WebClient getClient() {
-        if (webClient == null) {
-            synchronized (this) {
-                if (webClient == null) {
-                    webClient = WebClient.create(mutinyVertx.getDelegate());
-                }
-            }
-        }
-        return webClient;
+        return sharedWebClient.client();
     }
 }

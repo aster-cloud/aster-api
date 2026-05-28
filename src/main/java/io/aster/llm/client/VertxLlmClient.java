@@ -34,6 +34,9 @@ public class VertxLlmClient implements LlmClient {
     io.vertx.mutiny.core.Vertx mutinyVertx;
 
     @Inject
+    io.aster.common.http.SharedWebClient sharedWebClient;
+
+    @Inject
     LlmConfig config;
 
     @Inject
@@ -42,17 +45,10 @@ public class VertxLlmClient implements LlmClient {
     @Inject
     LlmMetrics llmMetrics;
 
-    private volatile WebClient webClient;
-
+    // P0-R19: WebClient DCL consolidated into SharedWebClient.
+    // mutinyVertx still injected for createHttpClient (non-WebClient path).
     private WebClient getClient() {
-        if (webClient == null) {
-            synchronized (this) {
-                if (webClient == null) {
-                    webClient = WebClient.create(mutinyVertx.getDelegate());
-                }
-            }
-        }
-        return webClient;
+        return sharedWebClient.client();
     }
 
     @Override

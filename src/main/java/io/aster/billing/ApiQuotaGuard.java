@@ -57,12 +57,11 @@ public class ApiQuotaGuard {
     PlanGateConfig config;
 
     @Inject
-    io.vertx.mutiny.core.Vertx mutinyVertx;
+    io.aster.common.http.SharedWebClient sharedWebClient;
 
     @Inject
     io.aster.billing.snapshot.LocalQuotaSnapshotService snapshot;
-
-    private volatile WebClient webClient;
+    // P0-R19: WebClient DCL consolidated into SharedWebClient
 
     /**
      * 同步检查（< 5ms hot path）：本地 redis snapshot 优先
@@ -327,14 +326,7 @@ public class ApiQuotaGuard {
     }
 
     private WebClient getClient() {
-        if (webClient == null) {
-            synchronized (this) {
-                if (webClient == null) {
-                    webClient = WebClient.create(mutinyVertx.getDelegate());
-                }
-            }
-        }
-        return webClient;
+        return sharedWebClient.client();
     }
 
     private static String sign(String key, String message) {

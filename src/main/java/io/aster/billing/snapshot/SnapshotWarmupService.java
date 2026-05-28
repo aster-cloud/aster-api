@@ -45,9 +45,8 @@ public class SnapshotWarmupService {
     PlanGateConfig config;
 
     @Inject
-    io.vertx.mutiny.core.Vertx mutinyVertx;
-
-    private volatile WebClient webClient;
+    io.aster.common.http.SharedWebClient sharedWebClient;
+    // P0-R19: WebClient DCL consolidated into SharedWebClient
 
     // Shutdown latch: integration tests start the app briefly then exit.
     // The 2s warm-up delay below routinely outlives the test JVM's
@@ -199,14 +198,7 @@ public class SnapshotWarmupService {
     }
 
     private WebClient getClient() {
-        if (webClient == null) {
-            synchronized (this) {
-                if (webClient == null) {
-                    webClient = WebClient.create(mutinyVertx.getDelegate());
-                }
-            }
-        }
-        return webClient;
+        return sharedWebClient.client();
     }
 
     private static String sign(String key, String message) {

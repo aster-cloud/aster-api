@@ -197,7 +197,9 @@ public class HotPlugLexiconLoader {
     void onStop(@Observes ShutdownEvent ev) {
         running.set(false);
         if (watchService != null) {
-            try { watchService.close(); } catch (IOException ignored) {}
+            try { watchService.close(); } catch (IOException e) {
+                LOG.debugf("WatchService close failed during shutdown: %s", e.getMessage());
+            }
         }
         if (watcherThread != null) {
             watcherThread.interrupt();
@@ -252,8 +254,9 @@ public class HotPlugLexiconLoader {
                         }
                         Files.deleteIfExists(p);
                         LOG.infof("Cleaned stale pending artifact: %s", p.getFileName());
-                    } catch (IOException ignored) {
+                    } catch (IOException e) {
                         // 单文件清理失败不阻塞启动 —— 下次重启再试
+                        LOG.debugf("Stale pending artifact cleanup failed for %s: %s", p, e.getMessage());
                     }
                 });
         } catch (IOException e) {
@@ -608,18 +611,24 @@ public class HotPlugLexiconLoader {
             } catch (java.nio.channels.OverlappingFileLockException
                      | java.nio.channels.ClosedChannelException ex) {
                 // R13-Minor：仅同进程重复 tryLock / channel 已关 → 视为竞争
-                try { ch.close(); } catch (IOException ignored) {}
+                try { ch.close(); } catch (IOException e) {
+                    LOG.debugf("FileChannel close failed after lock competition: %s", e.getMessage());
+                }
                 LOG.debugf("tryLock(%s) competition: %s", lockPath, ex.getClass().getSimpleName());
                 return Optional.empty();
             } catch (IOException ioe) {
-                try { ch.close(); } catch (IOException ignored) {}
+                try { ch.close(); } catch (IOException e) {
+                    LOG.debugf("FileChannel close failed after tryLock IO error: %s", e.getMessage());
+                }
                 LOG.warnf(ioe, "tryLock(%s) IO failed", lockPath);
                 return Optional.empty();
             }
             // OutOfMemoryError 等 Error 故意不 catch —— 它们应当 propagate
             if (fl == null) {
                 // 另一 JVM 持有锁
-                try { ch.close(); } catch (IOException ignored) {}
+                try { ch.close(); } catch (IOException e) {
+                    LOG.debugf("FileChannel close failed when no lock acquired: %s", e.getMessage());
+                }
                 return Optional.empty();
             }
             return Optional.of(new CrossReplicaLock(fl, ch));
@@ -658,8 +667,12 @@ public class HotPlugLexiconLoader {
         @Override
         public void close() {
             // R13-Critical：先 release lock，再 close channel；**不**删 lockfile
-            try { fl.release(); } catch (IOException ignored) {}
-            try { ch.close(); } catch (IOException ignored) {}
+            try { fl.release(); } catch (IOException e) {
+                LOG.debugf("FileLock release failed: %s", e.getMessage());
+            }
+            try { ch.close(); } catch (IOException e) {
+                LOG.debugf("FileChannel close failed: %s", e.getMessage());
+            }
         }
     }
 
@@ -747,7 +760,9 @@ public class HotPlugLexiconLoader {
     // ----------------------------------------------------------- helpers
 
     private static void closeQuietly(URLClassLoader loader) {
-        try { loader.close(); } catch (IOException ignored) {}
+        try { loader.close(); } catch (IOException e) {
+            LOG.debugf("URLClassLoader close failed: %s", e.getMessage());
+        }
     }
 
     /**

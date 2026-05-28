@@ -48,7 +48,10 @@ public class MixpanelClient {
     @Inject
     io.vertx.mutiny.core.Vertx mutinyVertx;
 
-    private volatile WebClient webClient;
+    @Inject
+    io.aster.common.http.SharedWebClient sharedWebClient;
+    // P0-R19: WebClient DCL consolidated into SharedWebClient; mutinyVertx
+    // still injected for setPeriodic / setTimer below.
     private final ConcurrentLinkedQueue<MixpanelEvent> queue = new ConcurrentLinkedQueue<>();
     private final AtomicInteger queueSize = new AtomicInteger(0);
     private final AtomicInteger consecutiveFailures = new AtomicInteger(0);
@@ -212,13 +215,6 @@ public class MixpanelClient {
     }
 
     private WebClient getClient() {
-        if (webClient == null) {
-            synchronized (this) {
-                if (webClient == null) {
-                    webClient = WebClient.create(mutinyVertx.getDelegate());
-                }
-            }
-        }
-        return webClient;
+        return sharedWebClient.client();
     }
 }

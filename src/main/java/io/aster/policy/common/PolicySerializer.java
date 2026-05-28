@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -109,28 +110,37 @@ public class PolicySerializer {
             }
             pb.redirectErrorStream(true);
             Process process = pb.start();
+            try {
+                // 写入 JSON 到 stdin
+                try (OutputStream os = process.getOutputStream()) {
+                    os.write(json.getBytes(StandardCharsets.UTF_8));
+                }
 
-            // 写入 JSON 到 stdin
-            try (OutputStream os = process.getOutputStream()) {
-                os.write(json.getBytes(StandardCharsets.UTF_8));
+                // 读取 CNL 输出 (P0-R19: try-with-resources 防止 FD 泄漏)
+                String cnl;
+                try (InputStream is = process.getInputStream()) {
+                    cnl = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                }
+
+                // 等待进程完成（带超时）
+                boolean finished = process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (!finished) {
+                    process.destroyForcibly();
+                    throw new PolicySerializationException("CLI execution timed out after " + PROCESS_TIMEOUT_SECONDS + "s", null);
+                }
+
+                int exitCode = process.exitValue();
+                if (exitCode != 0) {
+                    throw new PolicySerializationException("CLI failed with exit code " + exitCode + ": " + cnl, null);
+                }
+
+                return cnl;
+            } finally {
+                // P0-R19: 兜底, 确保进程在所有 exception 路径都被回收, 避免 zombie
+                if (process.isAlive()) {
+                    process.destroyForcibly();
+                }
             }
-
-            // 读取 CNL 输出
-            String cnl = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-
-            // 等待进程完成（带超时）
-            boolean finished = process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-                throw new PolicySerializationException("CLI execution timed out after " + PROCESS_TIMEOUT_SECONDS + "s", null);
-            }
-
-            int exitCode = process.exitValue();
-            if (exitCode != 0) {
-                throw new PolicySerializationException("CLI failed with exit code " + exitCode + ": " + cnl, null);
-            }
-
-            return cnl;
         } catch (IOException e) {
             throw new PolicySerializationException("Failed to execute aster-convert CLI", e);
         } catch (InterruptedException e) {
@@ -195,29 +205,38 @@ public class PolicySerializer {
             }
             pb.redirectErrorStream(true);
             Process process = pb.start();
+            try {
+                // 写入 CNL 到 stdin
+                try (OutputStream os = process.getOutputStream()) {
+                    os.write(cnl.getBytes(StandardCharsets.UTF_8));
+                }
 
-            // 写入 CNL 到 stdin
-            try (OutputStream os = process.getOutputStream()) {
-                os.write(cnl.getBytes(StandardCharsets.UTF_8));
+                // 读取 JSON 输出 (P0-R19: try-with-resources 防止 FD 泄漏)
+                String json;
+                try (InputStream is = process.getInputStream()) {
+                    json = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                }
+
+                // 等待进程完成（带超时）
+                boolean finished = process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (!finished) {
+                    process.destroyForcibly();
+                    throw new PolicySerializationException("CLI execution timed out after " + PROCESS_TIMEOUT_SECONDS + "s", null);
+                }
+
+                int exitCode = process.exitValue();
+                if (exitCode != 0) {
+                    throw new PolicySerializationException("CLI failed with exit code " + exitCode + ": " + json, null);
+                }
+
+                // 反序列化 JSON 为对象
+                return fromJson(json, clazz);
+            } finally {
+                // P0-R19: 兜底, 确保进程在所有 exception 路径都被回收, 避免 zombie
+                if (process.isAlive()) {
+                    process.destroyForcibly();
+                }
             }
-
-            // 读取 JSON 输出
-            String json = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-
-            // 等待进程完成（带超时）
-            boolean finished = process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-                throw new PolicySerializationException("CLI execution timed out after " + PROCESS_TIMEOUT_SECONDS + "s", null);
-            }
-
-            int exitCode = process.exitValue();
-            if (exitCode != 0) {
-                throw new PolicySerializationException("CLI failed with exit code " + exitCode + ": " + json, null);
-            }
-
-            // 反序列化 JSON 为对象
-            return fromJson(json, clazz);
         } catch (IOException e) {
             throw new PolicySerializationException("Failed to execute aster-convert CLI", e);
         } catch (InterruptedException e) {

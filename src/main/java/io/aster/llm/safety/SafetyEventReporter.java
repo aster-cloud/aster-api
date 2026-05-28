@@ -30,12 +30,11 @@ public class SafetyEventReporter {
     private static final Logger LOG = Logger.getLogger(SafetyEventReporter.class);
 
     @Inject
-    io.vertx.mutiny.core.Vertx mutinyVertx;
+    io.aster.common.http.SharedWebClient sharedWebClient;
 
     @Inject
     PlanGateConfig config;
-
-    private volatile WebClient webClient;
+    // P0-R19: WebClient DCL consolidated into SharedWebClient
 
     /**
      * @param tenantId 用作 userId（aster-cloud 端 recordAiUsage 接受 userId）
@@ -90,14 +89,7 @@ public class SafetyEventReporter {
     }
 
     private WebClient getClient() {
-        if (webClient == null) {
-            synchronized (this) {
-                if (webClient == null) {
-                    webClient = WebClient.create(mutinyVertx.getDelegate());
-                }
-            }
-        }
-        return webClient;
+        return sharedWebClient.client();
     }
 
     private static String sign(String key, String message) {

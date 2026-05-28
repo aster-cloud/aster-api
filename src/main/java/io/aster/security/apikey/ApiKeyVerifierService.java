@@ -47,12 +47,11 @@ public class ApiKeyVerifierService {
     PlanGateConfig config;
 
     @Inject
-    io.vertx.mutiny.core.Vertx mutinyVertx;
+    io.aster.common.http.SharedWebClient sharedWebClient;
 
     @Inject
     io.aster.billing.snapshot.LocalQuotaSnapshotService localSnapshot;
-
-    private volatile WebClient webClient;
+    // P0-R19: WebClient DCL consolidated into SharedWebClient
     private Cache<String, ApiKeyVerifyResult> cache;
     /** userId → 该用户所有缓存过的 keyHash，用于按用户批量失效 */
     private final ConcurrentHashMap<String, Set<String>> userIndex = new ConcurrentHashMap<>();
@@ -187,14 +186,7 @@ public class ApiKeyVerifierService {
     }
 
     private WebClient getClient() {
-        if (webClient == null) {
-            synchronized (this) {
-                if (webClient == null) {
-                    webClient = WebClient.create(mutinyVertx.getDelegate());
-                }
-            }
-        }
-        return webClient;
+        return sharedWebClient.client();
     }
 
     private static String sign(String key, String message) {

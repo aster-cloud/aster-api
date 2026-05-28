@@ -39,6 +39,13 @@ public class PolicySerializer {
     private static final int CACHE_MAX_SIZE = 1000;
     private static final int CACHE_EXPIRE_MINUTES = 60;
     private static final int PROCESS_TIMEOUT_SECONDS = 5;
+    /**
+     * R20 enterprise hardening: hard limit on serialized payload size handed
+     * to the CLI subprocess. Prevents DoS via giant policies (a 100 MB policy
+     * would consume process heap + take many seconds even with timeout).
+     * 4 MB is generous for legitimate policies; real corpora rarely exceed 256 KB.
+     */
+    private static final int MAX_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
     private final ObjectMapper objectMapper;
     private final Cache<String, Object> compilationCache;
@@ -97,6 +104,14 @@ public class PolicySerializer {
         try {
             // 如果输入已经是 JSON 字符串，直接使用；否则序列化
             String json = (policy instanceof String) ? (String) policy : toJson(policy);
+
+            // R20 enterprise hardening: payload size guard
+            if (json.length() > MAX_PAYLOAD_BYTES) {
+                throw new PolicySerializationException(
+                    "Policy JSON exceeds " + MAX_PAYLOAD_BYTES + " byte limit (got "
+                        + json.length() + "); refuse to fork CLI subprocess",
+                    null);
+            }
 
             // 根据 CLI 路径类型构建命令
             String cliPath = resolveCliPath();
@@ -192,6 +207,13 @@ public class PolicySerializer {
      * 内部 CNL 编译实现（不使用缓存）
      */
     private <T> T compileCNLInternal(String cnl, Class<T> clazz) {
+        // R20 enterprise hardening: payload size guard
+        if (cnl.length() > MAX_PAYLOAD_BYTES) {
+            throw new PolicySerializationException(
+                "Policy CNL exceeds " + MAX_PAYLOAD_BYTES + " byte limit (got "
+                    + cnl.length() + "); refuse to fork CLI subprocess",
+                null);
+        }
         try {
             // 根据 CLI 路径类型构建命令
             String cliPath = resolveCliPath();

@@ -1,5 +1,7 @@
 package io.aster.policy.api;
 
+import io.opentelemetry.instrumentation.annotations.SpanAttribute;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import io.aster.policy.api.cache.PolicyCacheManager;
 import io.aster.policy.api.convert.PolicyTypeConverter;
 import io.aster.policy.api.model.BatchEvaluationResult;
@@ -99,10 +101,11 @@ public class PolicyEvaluationService {
      * @param context 上下文参数
      * @return Uni包装的评估结果
      */
+    @WithSpan("policy.evaluate")
     public Uni<PolicyEvaluationResult> evaluatePolicy(
-            String tenantId,
-            String policyModule,
-            String policyFunction,
+            @SpanAttribute("tenant.id") String tenantId,
+            @SpanAttribute("policy.module") String policyModule,
+            @SpanAttribute("policy.function") String policyFunction,
             Object[] context) {
 
         Object[] normalizedContext = normalizeContext(tenantId, context);
@@ -426,6 +429,7 @@ public class PolicyEvaluationService {
      * @param requests 策略评估请求列表
      * @return Uni包装的评估结果列表
      */
+    @WithSpan("policy.evaluateBatch")
     public Uni<java.util.List<PolicyEvaluationResult>> evaluateBatch(
             java.util.List<BatchRequest> requests) {
 

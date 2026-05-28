@@ -27,7 +27,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U aster"
+          --health-cmd "pg_isready -U aster -d aster_perf"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -76,6 +76,13 @@ jobs:
         env:
           ASTER_SECURITY_SIGNATURE_ENABLED: "false"
           ASTER_SECURITY_RBAC_ENABLED: "false"
+          # /evaluate prod path goes through ApiKeyAuthFilter which 401s
+          # without a Bearer token; evaluate.js intentionally has no API
+          # key (perf isolates latency from auth costs). Disable for perf
+          # bench. evaluate.js docstring already documents this requirement
+          # but the workflow forgot to set it — caused 5/26 onwards Nightly
+          # perf benchmark 100% error-rate failures.
+          ASTER_SECURITY_APIKEY_ENABLED: "false"
           # The endpoint is gated by InternalCallerFilter (HMAC) and by
           # RateLimitFilter (60 req / 60s per IP). Both block perf load
           # from the runner — bypass for the duration of the benchmark.

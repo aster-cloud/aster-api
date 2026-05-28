@@ -41,6 +41,10 @@ export const options = {
     'eval_errors':   ['rate<0.001'],
     'http_req_failed': ['rate<0.001'],
   },
+  // k6 default trend stats omit p(99); handleSummary's "P99 < 500ms FAIL"
+  // display would always show FAIL due to Infinity fallback even when the
+  // actual threshold passed.
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
 };
 
 // 10 条 tier1 等价规则的最简代表（覆盖多 lexicon + 常见控制流）

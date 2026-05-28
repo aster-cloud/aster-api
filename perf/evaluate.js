@@ -53,6 +53,9 @@ export const options = {
     'eval_errors':   ['rate<0.001'],
     'http_req_failed': ['rate<0.001'],
   },
+  // k6 default trend stats omit p(99); handleSummary needs it for the
+  // text report. Default = ["avg","min","med","max","p(90)","p(95)"].
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
 };
 
 const REQ = {

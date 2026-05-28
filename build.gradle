@@ -293,6 +293,12 @@ tasks.register('testChaos', Test) {
     useJUnitPlatform {
         includeTags 'chaos'
     }
+    // P0-R18: Quarkus ArcProcessor bean generation + Truffle polyglot + chaos
+    // workflow tests easily blow Gradle's default 512m test executor heap.
+    // Local reproduction: OutOfMemoryError during ArcProcessor.generateResources
+    // → "Could not execute test class TimerCrashRecoveryTest" et al. Bump to
+    // 2g to match production JVM headroom and CI runners' 7g RAM.
+    maxHeapSize = '2g'
     systemProperty 'java.util.logging.manager', 'org.jboss.logmanager.LogManager'
     systemProperty 'quarkus.test.flat-class-path', 'true'
     jvmArgs '--add-opens', 'java.base/java.lang=ALL-UNNAMED'

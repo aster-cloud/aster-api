@@ -1,5 +1,6 @@
 package io.aster.policy.tenant;
 
+import io.aster.policy.security.TrialEndpointGuard;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
@@ -78,6 +79,17 @@ public class TenantFilter implements ContainerRequestFilter {
         }
 
         String path = requestContext.getUriInfo().getPath();
+
+        // R28 端到端测试发现：trial 流（匿名访客）不可能持有 X-Tenant-Id。
+        // TrialEndpointGuard 已经在 AUTHENTICATION-100 完成三重校验并设置
+        // TRIAL_GUARD_PASSED_PROP；这里识别该凭证后用 "trial" 作为伪租户，
+        // 与 RoleEnforcementFilter 和 InternalCallerFilter 的 trial 处理对齐。
+        if (Boolean.TRUE.equals(
+                requestContext.getProperty(TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP))) {
+            tenantContext.setCurrentTenant("trial");
+            LOG.debugf("Tenant set to 'trial' for guarded trial request (path=%s)", path);
+            return;
+        }
 
         // 豁免路径：管理端点、schema 端点、AI 端点（浏览器直连，无 X-Tenant-Id）
         // /api/internal/* 跨服务接口：tenantId 在路径里或不需要，自带 HMAC 验签

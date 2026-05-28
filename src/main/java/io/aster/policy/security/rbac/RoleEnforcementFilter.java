@@ -1,5 +1,6 @@
 package io.aster.policy.security.rbac;
 
+import io.aster.policy.security.TrialEndpointGuard;
 import jakarta.annotation.Priority;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.container.ContainerRequestContext;
@@ -44,6 +45,24 @@ public class RoleEnforcementFilter implements ContainerRequestFilter {
 
         RequireRole annotation = getRequireRoleAnnotation();
         if (annotation == null) {
+            return;
+        }
+
+        // R28 端到端测试发现：marketing-tier trial 流没有 X-User-Role
+        // —— 匿名访客不可能持有租户角色。TrialEndpointGuard 已经在
+        // AUTHENTICATION-100 完成 Origin/IP/body 三重校验并设上
+        // TRIAL_GUARD_PASSED_PROP 凭证，这里识别该凭证后跳过 RBAC，
+        // 与 InternalCallerFilter 的 BYPASS_TRIAL 分支语义对齐。
+        //
+        // 安全边界：只对 evaluate-source 这一条 trial 专属路径生效。
+        // 其它端点即便 RBAC enabled=false 也仍按 @RequireRole 处理。
+        if (Boolean.TRUE.equals(
+                requestContext.getProperty(TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP))
+            && TrialEndpointGuard.TRIAL_PATH.equals(
+                io.aster.security.PathNormalizer.normalize(
+                    requestContext.getUriInfo().getPath()))) {
+            LOG.debugf("RBAC bypassed for trial path %s (TRIAL_GUARD_PASSED_PROP set)",
+                TrialEndpointGuard.TRIAL_PATH);
             return;
         }
 

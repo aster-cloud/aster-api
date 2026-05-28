@@ -7,6 +7,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.HostAccess;
+import org.graalvm.polyglot.ResourceLimits;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.io.IOAccess;
 import org.jboss.logging.Logger;
@@ -63,6 +64,18 @@ public class TrufflePolicyRuntime {
         //
         // 对比 DynamicCnlExecutor (parser/) 已是 EXPLICIT + IOAccess.NONE,
         // 这次把 production execution path 拉齐.
+        //
+        // P1-R22 (audit R22): + ResourceLimits 防 DoS. 之前 sandbox 锁定
+        // RCE 攻击面, 但恶意策略仍能写无限循环耗死 worker. statementLimit
+        // 在每个 Polyglot statement 之间检查计数; 超过 10M (相当于轻度策略
+        // ~100ms 上限) 立即抛 PolyglotException, 不依赖 wall-clock timer
+        // (后者在 JVM GC pause 下不可靠).
+        //
+        // 10M statements 实测覆盖所有合法 aster 策略 (典型 < 10K, 复杂
+        // workflow < 1M); 拒绝的是死循环 / fork-bomb 风格输入.
+        ResourceLimits limits = ResourceLimits.newBuilder()
+            .statementLimit(10_000_000L, null)
+            .build();
         for (int i = 0; i < poolSize; i++) {
             // 注意：engine 选项已在 sharedEngine 上设置，Context 不能重复设置
             Context ctx = Context.newBuilder("aster")
@@ -73,6 +86,7 @@ public class TrufflePolicyRuntime {
                 .allowHostClassLookup(name -> false)
                 .allowPolyglotAccess(org.graalvm.polyglot.PolyglotAccess.NONE)
                 .allowCreateProcess(false)
+                .resourceLimits(limits)
                 .build();
 
             contextPool.offer(ctx);

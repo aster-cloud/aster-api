@@ -185,19 +185,36 @@ public class TrialEndpointGuard {
             maxBodyBytes, perIpMinuteMax, perIpHourMax, perIpConcurrentMax,
             trustForwardedFor, parseOrigins(allowedOriginsCsv));
 
+        boolean isProd = io.quarkus.runtime.LaunchMode.current()
+            == io.quarkus.runtime.LaunchMode.NORMAL;
+
         if (evaluateSourcePublic) {
-            LOG.warnf("CONFIG SMELL: both aster.security.evaluate-source.public=true AND "
+            // R29 Codex audit：生产 profile 下 .public 与 .trial 同开是配置冲突
+            // ——.public 完全绕过本守门，trial 限流形同虚设。提升为 fail-fast
+            // 避免 operator 误开后 marketing 流量裸奔。
+            String msg = "Both aster.security.evaluate-source.public=true AND "
                 + "aster.security.evaluate-source.trial.enabled=true are set. "
-                + ".public takes precedence (TrialEndpointGuard never runs); the trial limiter is "
-                + "effectively dead. Pick one: .public is a no-defense bypass, .trial is rate-limited.");
+                + ".public is no-defense bypass and would mask the trial limiter. "
+                + "Pick exactly one for production.";
+            if (isProd) {
+                throw new IllegalStateException("aster-api startup aborted: " + msg);
+            }
+            LOG.warnf("CONFIG SMELL (dev/test profile): %s", msg);
         }
         if (parseOrigins(allowedOriginsCsv).isEmpty()) {
-            LOG.warnf("CONFIG SMELL: aster.security.evaluate-source.trial.enabled=true but "
-                + "aster.security.trial.allowed-origins is empty. Origin allowlist is OFF; any "
-                + "Origin (including curl with a forged header) will pass the first gate. "
-                + "Set the property unless you intentionally want a wide-open trial.");
+            // 同样是生产风险：开 trial 但没有 Origin 白名单 = 任何来源都能
+            // 进入限流前的第一道闸门，等于把成本控制减半。
+            String msg = "aster.security.evaluate-source.trial.enabled=true but "
+                + "aster.security.trial.allowed-origins is empty — Origin allowlist OFF. "
+                + "Any caller (including curl with forged Origin) reaches the per-IP limiter.";
+            if (isProd) {
+                throw new IllegalStateException("aster-api startup aborted: " + msg);
+            }
+            LOG.warnf("CONFIG SMELL (dev/test profile): %s", msg);
         }
         if (trustForwardedFor) {
+            // 这一项保持 WARN：trustForwardedFor=true 在生产是合法配置，只是
+            // 要求 ingress 正确处理 XFF。fail-fast 会误伤合法部署。
             LOG.warnf("CONFIG SMELL: aster.security.trial.trust-forwarded-for=true. The ingress in "
                 + "front of aster-api MUST be configured to OVERWRITE X-Forwarded-For (not append). "
                 + "Otherwise clients can forge XFF to shard around per-IP rate limits.");

@@ -15,8 +15,14 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -31,7 +37,7 @@ import static org.mockito.Mockito.when;
  */
 class RateLimitFilterTrialBypassTest {
 
-    private RateLimitFilter newFilter(boolean enabled) throws Exception {
+    private RateLimitFilter newFilter(boolean enabled, RateLimiter rateLimiter) throws Exception {
         RateLimitFilter filter = new RateLimitFilter();
         Field f = RateLimitFilter.class.getDeclaredField("enabled");
         f.setAccessible(true);
@@ -44,12 +50,24 @@ class RateLimitFilterTrialBypassTest {
         win.setAccessible(true);
         win.setInt(filter, 60);
 
-        // tenantContext is referenced for the non-bypass path; trial bypass
-        // returns before touching it, but @Inject still expects a non-null.
         Field tc = RateLimitFilter.class.getDeclaredField("tenantContext");
         tc.setAccessible(true);
         tc.set(filter, new TenantContext());
+
+        Field rl = RateLimitFilter.class.getDeclaredField("rateLimiter");
+        rl.setAccessible(true);
+        rl.set(filter, rateLimiter);
         return filter;
+    }
+
+    private RateLimitFilter newFilter(boolean enabled) throws Exception {
+        // Default convenience: produce a permissive mock limiter so tests
+        // that don't care about interactions still work.
+        RateLimiter limiter = mock(RateLimiter.class);
+        when(limiter.tryAcquire(anyString(), anyInt(), any())).thenReturn(true);
+        when(limiter.remaining(anyString(), anyInt(), any())).thenReturn(59);
+        when(limiter.resetAtEpochSecond(anyString(), any())).thenReturn(0L);
+        return newFilter(enabled, limiter);
     }
 
     private ContainerRequestContext newCtx(String path,
@@ -72,9 +90,11 @@ class RateLimitFilterTrialBypassTest {
     }
 
     @Test
-    @DisplayName("R29: trial guard 凭证 + TRIAL_PATH → 跳过全局 REST 限流")
+    @DisplayName("R29: trial guard 凭证 + TRIAL_PATH → RateLimiter 零交互")
     void trialPathWithGuardPropertyBypassesRateLimiter() throws Exception {
-        RateLimitFilter filter = newFilter(true);
+        // R29+ 改进版：用 mock 验证 RateLimiter 完全未被调用，比 NPE 证明硬
+        RateLimiter limiter = mock(RateLimiter.class);
+        RateLimitFilter filter = newFilter(true, limiter);
         ContainerRequestContext ctx = newCtx(
             "/api/v1/policies/evaluate-source",
             Map.of(TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP, Boolean.TRUE)
@@ -82,26 +102,30 @@ class RateLimitFilterTrialBypassTest {
 
         Response result = filter.filter(ctx);
 
-        assertNull(result,
-            "trial 路径放行：filter 应返回 null，不阻断 chain");
+        assertNull(result, "trial 路径放行：filter 返回 null 不阻断 chain");
+        verifyNoInteractions(limiter);
     }
 
     @Test
-    @DisplayName("R29: trial 凭证但非 trial 路径 → 不旁路（继续走限流逻辑）")
+    @DisplayName("R29: trial 凭证但非 trial 路径 → 仍然调用 RateLimiter (反证 short-circuit 未触发)")
     void trialPropertyOnNonTrialPathDoesNotBypass() throws Exception {
-        // 与 RBAC + Tenant 一致的纵深防御：property + 路径双重校验。
-        // 这里通过观察 filter 是否进入到下游依赖（RateLimiter）来反证
-        // 短路未命中：rateLimiter 未注入 → NPE 抛出，说明 filter 没有
-        // 在 trial 短路里早返回。如果将来把短路改回只看 property，
-        // 该测试会无 NPE 通过 = 失败。
-        RateLimitFilter filter = newFilter(true);
+        // 用 mock RateLimiter 显式验证非 trial 路径走完了限流链路。
+        // 这比依赖 NullPointerException 更可靠：如果未来把短路改回只看
+        // property，本断言会立刻失败（mock 不会被调用）。
+        RateLimiter limiter = mock(RateLimiter.class);
+        when(limiter.tryAcquire(anyString(), anyInt(), any())).thenReturn(true);
+        when(limiter.remaining(anyString(), anyInt(), any())).thenReturn(59);
+        when(limiter.resetAtEpochSecond(anyString(), any())).thenReturn(0L);
+
+        RateLimitFilter filter = newFilter(true, limiter);
         ContainerRequestContext ctx = newCtx(
-            "/api/v1/policies/evaluate",  // 注意：不是 evaluate-source
+            "/api/v1/policies/evaluate",  // 不是 evaluate-source
             Map.of(TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP, Boolean.TRUE)
         );
 
-        assertThrows(NullPointerException.class, () -> filter.filter(ctx),
-            "非 trial 路径必须走完限流链路，触达 rateLimiter 依赖");
+        filter.filter(ctx);
+
+        verify(limiter, atLeastOnce()).tryAcquire(anyString(), anyInt(), any());
     }
 
     @Test

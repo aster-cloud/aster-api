@@ -68,11 +68,17 @@ public class LlmResponseCache {
      * 计算 prompt hash
      */
     public static String hashPrompt(String prompt) {
+        // R30+ audit P2：原版 catch (Exception e) 把 NoSuchAlgorithmException
+        // 当 routine fallback 处理，掩盖了"JVM 不支持 SHA-256"这种真实故障。
+        // 改成只接 checked exception；任何运行时异常应当冒上去触发监控。
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] hash = md.digest(prompt.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash).substring(0, 16);
-        } catch (Exception e) {
+        } catch (java.security.NoSuchAlgorithmException e) {
+            // SHA-256 mandatory per JLS — 现代 JVM 不会到这里。落地 fallback
+            // 加 warn 让 ops 看见，hash 退化但功能不挂。
+            LOG.warnf("SHA-256 unavailable; falling back to hashCode-based key: %s", e.getMessage());
             return String.valueOf(prompt.hashCode());
         }
     }

@@ -220,7 +220,18 @@ public class SnapshotWarmupService {
             })
             .onFailure(future::completeExceptionally);
 
-        return future.get(15, TimeUnit.SECONDS);
+        // R30+ audit P1：原 15s 是为 cloud-side endpoint slow-start 留的，
+        // 但 daemon 卡 15s 期间 ShutdownEvent 进来就只能等。降到 8s + 配合
+        // shuttingDown 标志快速返回，整体 warm-up 在最坏情况下不超过
+        // 8s × MAX_PAGES = 800s（与原 15s × 100 相比）。
+        // 实际 cloud 健康时单页 < 1s；超时已是病理路径，长尾减半合理。
+        try {
+            return future.get(8, TimeUnit.SECONDS);
+        } catch (java.util.concurrent.TimeoutException te) {
+            // 主动 cancel 让 WebClient release connection，避免 connection pool 泄漏
+            future.cancel(true);
+            throw te;
+        }
     }
 
     private WebClient getClient() {

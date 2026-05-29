@@ -4,6 +4,7 @@ import aster.core.ast.Module;
 import aster.core.ir.CoreModel;
 import aster.core.lowering.CoreLowering;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.aster.common.JacksonMappers;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.aster.policy.entity.PolicyArtifact;
 import io.aster.policy.entity.PolicyVersion;
@@ -28,8 +29,7 @@ import java.util.Optional;
 public class PolicyCompiler {
 
     private static final Logger LOG = Logger.getLogger(PolicyCompiler.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper()
-        .enable(SerializationFeature.INDENT_OUTPUT);
+    private static final ObjectMapper MAPPER = JacksonMappers.PRETTY;
 
     private final PolicySourceRepository policySourceRepository;
 

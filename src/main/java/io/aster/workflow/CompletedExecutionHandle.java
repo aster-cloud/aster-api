@@ -2,6 +2,7 @@ package io.aster.workflow;
 
 import aster.runtime.workflow.ExecutionHandle;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.aster.common.JacksonMappers;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -54,7 +55,7 @@ public class CompletedExecutionHandle implements ExecutionHandle {
         }
 
         try {
-            ObjectMapper mapper = new ObjectMapper();
+            ObjectMapper mapper = JacksonMappers.DEFAULT;
             return mapper.readValue(result, Object.class);
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize workflow result", e);

@@ -2,6 +2,7 @@ package io.aster.workflow;
 
 import aster.runtime.workflow.WorkflowEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.aster.common.JacksonMappers;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.aster.monitoring.BusinessMetrics;
 import io.quarkus.logging.Log;
@@ -415,7 +416,7 @@ public class WorkflowSchedulerService {
             return null;
         }
         try {
-            ObjectMapper mapper = new ObjectMapper();
+            ObjectMapper mapper = JacksonMappers.DEFAULT;
             mapper.registerModule(new JavaTimeModule());
             return mapper.readValue(clockTimesJson, DeterminismSnapshot.class);
         } catch (Exception e) {

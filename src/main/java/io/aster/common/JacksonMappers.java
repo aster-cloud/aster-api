@@ -33,4 +33,12 @@ public final class JacksonMappers {
     public static final ObjectMapper LENIENT = new ObjectMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
         .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
+
+    /**
+     * 缩进输出 mapper —— 给 debug / compiler / policy serializer 用。
+     * 与 DEFAULT 共享同一份 BeanSerializer cache（Jackson 内部按 class
+     * 缓存，feature 开关只影响序列化器选择），不会重复 build 反射 metadata。
+     */
+    public static final ObjectMapper PRETTY = new ObjectMapper()
+        .enable(SerializationFeature.INDENT_OUTPUT);
 }

@@ -4,6 +4,7 @@ import aster.core.ast.Module;
 import aster.core.ir.CoreModel;
 import aster.core.lowering.CoreLowering;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.aster.common.JacksonMappers;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.aster.policy.api.convert.NamedContextMapper;
 import org.graalvm.polyglot.Context;
@@ -32,8 +33,7 @@ import java.util.Map;
 public class DynamicCnlExecutor {
 
     private static final Logger LOG = Logger.getLogger(DynamicCnlExecutor.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper()
-        .enable(SerializationFeature.INDENT_OUTPUT);
+    private static final ObjectMapper MAPPER = JacksonMappers.PRETTY;
 
     /**
      * 进程级共享 Engine。GraalVM 推荐模式：Engine 持有 AST/字节码 cache

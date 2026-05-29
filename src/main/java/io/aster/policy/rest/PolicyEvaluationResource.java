@@ -358,6 +358,16 @@ public class PolicyEvaluationResource {
      * 支持两种 context 格式：
      * 1. 命名格式: { "申请": {...}, "年龄": 25 } - 参数名与函数定义匹配
      * 2. 位置格式: [{...}, 25] - 按位置顺序传参
+     *
+     * <p>R30+ audit P1：本方法 149 行，主要承担 5 个职责（quota / permit /
+     * tenant snapshot / Truffle 执行 / 审计发布）。重构计划（R31）：
+     * <ol>
+     *   <li>提取 {@code EvaluationDispatcher} 处理 CNL → Truffle 调用 + 错误归一</li>
+     *   <li>提取 {@code AuditEventPublisher} 包装 publishPolicyEvaluationEvent</li>
+     *   <li>permit acquire/release 用 try-with-resources AutoCloseable 包装</li>
+     * </ol>
+     * 暂不动是因为本方法被 R28→R30 5 轮 audit 反复读过，行为契约稳定，
+     * 重构需要先补端到端 IT 才能安全推进（QuotaChainIT 是第一步）。
      */
     @POST
     @Path("/evaluate-source")

@@ -2,6 +2,7 @@ package io.aster.workflow;
 
 import aster.runtime.workflow.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.aster.common.JacksonMappers;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.aster.policy.entity.PolicyVersion;
 import io.aster.policy.service.PolicyVersionService;
@@ -414,7 +415,7 @@ public class PostgresWorkflowRuntime implements WorkflowRuntime {
                 return null;
             }
 
-            ObjectMapper mapper = new ObjectMapper();
+            ObjectMapper mapper = JacksonMappers.DEFAULT;
             mapper.registerModule(new JavaTimeModule());
             return mapper.writeValueAsString(snapshot);
         } catch (Exception e) {

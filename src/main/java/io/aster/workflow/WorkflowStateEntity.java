@@ -2,6 +2,7 @@ package io.aster.workflow;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.aster.common.JacksonMappers;
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.persistence.*;
@@ -22,7 +23,7 @@ import java.util.*;
 @Table(name = "workflow_state")
 public class WorkflowStateEntity extends PanacheEntityBase {
 
-    private static final ObjectMapper SNAPSHOT_MAPPER = new ObjectMapper();
+    private static final ObjectMapper SNAPSHOT_MAPPER = JacksonMappers.DEFAULT;
 
     @Id
     @Column(name = "workflow_id")

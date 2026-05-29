@@ -74,6 +74,12 @@ public class InProcessCnlParser {
             // 2. 创建词法分析器
             CharStream charStream = CharStreams.fromString(canonicalizedSource);
             AsterCustomLexer lexer = new AsterCustomLexer(charStream);
+            // R30+ audit P1：ANTLR 默认 lexer 把错误打到 stderr 然后继续，
+            // 漏掉的 token 会让 parser 看到一个"看起来合法但语义残缺"的流。
+            // 显式挂同一份错误监听器，保证 lexer 错误能传给 CnlParseException。
+            CnlErrorListener errorListener = new CnlErrorListener();
+            lexer.removeErrorListeners();
+            lexer.addErrorListener(errorListener);
 
             // 3. 创建语法分析器
             CommonTokenStream tokens = new CommonTokenStream(lexer);
@@ -81,9 +87,13 @@ public class InProcessCnlParser {
             tokens.seek(0);
 
             AsterParser parser = new AsterParser(tokens);
+            // R30+ audit P1：ANTLR 默认 LL 模式在病理语法下会回溯 O(2^n)，
+            // 给个 SLL 上限作为 DoS 防御。在正常语法上 SLL 与 LL 等价；
+            // 解析失败时 ANTLR 会自动 fallback 到 LL，对正常输入零代价。
+            parser.getInterpreter().setPredictionMode(
+                org.antlr.v4.runtime.atn.PredictionMode.SLL);
 
-            // 3. 添加错误监听器
-            CnlErrorListener errorListener = new CnlErrorListener();
+            // 3. 添加错误监听器（与 lexer 共享同一份）
             parser.removeErrorListeners();
             parser.addErrorListener(errorListener);
 

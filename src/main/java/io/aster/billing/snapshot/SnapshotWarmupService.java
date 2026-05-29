@@ -56,8 +56,20 @@ public class SnapshotWarmupService {
     // silent no-op instead of a stack trace.
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
+    // R30+ audit P0：在多 StartupEvent / multi-restart 场景里不让 warm-up
+    // 线程累积。StartupEvent 在正常 Quarkus 生命周期内只 fire 一次，但
+    // 测试热重启 / dev-mode reload 会触发多次。引用一个静态守门，确保同一
+    // 进程内只有一条活跃 warm-up 线程；onShutdown 同时 interrupt 中断
+    // sleep / future.get，避免守护线程在 JVM 强制退出前继续做无意义工作。
+    private static final java.util.concurrent.atomic.AtomicReference<Thread> WARMUP_THREAD =
+        new java.util.concurrent.atomic.AtomicReference<>();
+
     void onShutdown(@Observes ShutdownEvent ev) {
         shuttingDown.set(true);
+        Thread t = WARMUP_THREAD.getAndSet(null);
+        if (t != null && t.isAlive()) {
+            t.interrupt();
+        }
     }
 
     void onStart(@Observes StartupEvent ev) {
@@ -94,9 +106,23 @@ public class SnapshotWarmupService {
                 } else {
                     LOG.warnf("snapshot warm-up failed (will retry on 1h cron): %s", e.getMessage());
                 }
+            } finally {
+                // 不论怎么退出，清掉守门引用，让下一次 onStart 可以重启
+                WARMUP_THREAD.compareAndSet(Thread.currentThread(), null);
             }
         }, "snapshot-warmup");
         t.setDaemon(true);
+
+        // check-then-set：如果已经有 warm-up 线程存活，直接放弃本次
+        Thread existing = WARMUP_THREAD.get();
+        if (existing != null && existing.isAlive()) {
+            LOG.debug("snapshot warm-up already running, skipping duplicate start");
+            return;
+        }
+        if (!WARMUP_THREAD.compareAndSet(existing, t)) {
+            LOG.debug("snapshot warm-up race lost to another StartupEvent");
+            return;
+        }
         t.start();
     }
 

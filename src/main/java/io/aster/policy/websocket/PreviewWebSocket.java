@@ -9,6 +9,7 @@ import jakarta.websocket.server.ServerEndpoint;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.aster.common.JacksonMappers;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.time.Duration;
@@ -33,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PreviewWebSocket {
 
     private static final Logger LOG = Logger.getLogger(PreviewWebSocket.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = JacksonMappers.DEFAULT;
 
     @Inject
     PolicyEvaluationService evaluationService;

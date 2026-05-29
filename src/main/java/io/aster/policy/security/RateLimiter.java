@@ -37,6 +37,19 @@ public class RateLimiter {
     boolean enabled;
 
     /**
+     * R30+ audit P1：DoS 攻击下 high-cardinality identifier（如轮换的 IP）
+     * 会在 5 分钟的 idle eviction 窗口内让 windows/connectionCounters
+     * 单调增长。给一个硬上限：当 map 大小越过门槛时立刻触发一次 evict，
+     * 把窗口从 5min 缩到「下一次 acquire/release」。
+     *
+     * 50k 条目对应 ~50k * 24bytes = 1.2MB 常驻，足以让正常 tenant 自由
+     * 使用，又能在攻击场景下把内存占用钉在 ~2MB 量级。门槛可以通过
+     * ConfigProperty 调，默认值与 trial guard 的成本控制窗口对齐。
+     */
+    @ConfigProperty(name = "aster.ratelimit.bounded.max-entries", defaultValue = "50000")
+    int maxBoundedEntries;
+
+    /**
      * 尝试获取一个请求许可
      *
      * @param identifier  限流标识（如租户ID、IP地址）
@@ -75,6 +88,11 @@ public class RateLimiter {
         // bucket 锁保护），不需要 volatile / 原子语义；写完 compute 返回后
         // 当前线程读 holder[0] 已发生在 lambda 写入之后（happens-before
         // 通过 ConcurrentHashMap 的内部同步保证），所以普通数组单元已经够用。
+        // R30+：DoS 防御 —— 写之前先检查 map 是否越过硬上限，越过就立即
+        // evict 一次。compute() 在持有 bucket 锁，全 map 扫描放在外面避免
+        // 与 evictIdleEntries 抢锁。
+        maybeEagerEvict(windowStart);
+
         final boolean[] granted = { false };
         windows.compute(identifier, (k, existing) -> {
             Deque<Instant> q = existing != null ? existing : new ConcurrentLinkedDeque<>();
@@ -93,6 +111,34 @@ public class RateLimiter {
             return q;
         });
         return granted[0];
+    }
+
+    /**
+     * R30+ audit P1：当 windows 大小越过 maxBoundedEntries 时立刻触发一次
+     * 全量 evictExpired。不阻塞调用线程：用 AtomicBoolean 互斥避免并发抢
+     * 锁，单线程跑完即可。这是 best-effort 减压，不保证严格上限。
+     *
+     * <p>正常负载下永远不会进入分支（默认 50k）。攻击场景下让内存增长被
+     * 锚定到一个常数，而非任意 IP 数量。
+     */
+    private final java.util.concurrent.atomic.AtomicBoolean eagerEvictInFlight =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    private void maybeEagerEvict(Instant windowStart) {
+        if (windows.size() <= maxBoundedEntries) return;
+        if (!eagerEvictInFlight.compareAndSet(false, true)) return;
+        try {
+            for (String key : windows.keySet()) {
+                windows.compute(key, (k, q) -> {
+                    if (q == null) return null;
+                    evictExpired(q, windowStart);
+                    return q.isEmpty() ? null : q;
+                });
+            }
+            LOG.warnf("限流器触发 eager evict：windows.size 达上限 %d", maxBoundedEntries);
+        } finally {
+            eagerEvictInFlight.set(false);
+        }
     }
 
     /**

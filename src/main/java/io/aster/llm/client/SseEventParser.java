@@ -3,6 +3,7 @@ package io.aster.llm.client;
 import io.aster.llm.model.LlmStreamEvent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.aster.common.JacksonMappers;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.jboss.logging.Logger;
 
@@ -20,7 +21,7 @@ import org.jboss.logging.Logger;
 public class SseEventParser {
 
     private static final Logger LOG = Logger.getLogger(SseEventParser.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = JacksonMappers.DEFAULT;
 
     /**
      * 解析单个 SSE data 行

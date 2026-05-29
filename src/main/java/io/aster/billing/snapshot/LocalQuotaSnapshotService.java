@@ -1,6 +1,7 @@
 package io.aster.billing.snapshot;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.aster.common.JacksonMappers;
 import io.quarkus.redis.datasource.RedisDataSource;
 import io.quarkus.redis.datasource.keys.KeyCommands;
 import io.quarkus.redis.datasource.value.ValueCommands;
@@ -35,7 +36,7 @@ public class LocalQuotaSnapshotService {
     private static final Logger LOG = Logger.getLogger(LocalQuotaSnapshotService.class);
     private static final Duration SNAPSHOT_TTL = Duration.ofHours(1);
     private static final String NS = "aq:";
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = JacksonMappers.DEFAULT;
 
     @Inject
     Instance<RedisDataSource> redisDataSource;

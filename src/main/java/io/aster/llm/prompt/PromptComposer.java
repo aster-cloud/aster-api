@@ -7,6 +7,7 @@ import io.aster.llm.api.dto.SuggestRequest;
 import io.aster.llm.config.LlmConfig;
 import io.aster.llm.model.ValidationResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.aster.common.JacksonMappers;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -22,7 +23,7 @@ import java.util.Map;
 @ApplicationScoped
 public class PromptComposer {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = JacksonMappers.DEFAULT;
 
     @Inject
     PromptTemplateRegistry templates;

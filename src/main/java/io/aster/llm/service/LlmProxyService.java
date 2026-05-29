@@ -14,6 +14,7 @@ import io.aster.llm.prompt.PromptComposer;
 import io.aster.llm.prompt.PromptContext;
 import io.aster.llm.tenant.TenantLlmKeyProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.aster.common.JacksonMappers;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -33,7 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class LlmProxyService {
 
     private static final Logger LOG = Logger.getLogger(LlmProxyService.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = JacksonMappers.DEFAULT;
 
     @Inject
     PromptComposer promptComposer;

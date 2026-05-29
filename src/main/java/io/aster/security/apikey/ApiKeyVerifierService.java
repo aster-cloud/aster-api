@@ -172,8 +172,14 @@ public class ApiKeyVerifierService {
         try {
             fresh = fetchFromCloud(keyHash);
         } catch (Exception e) {
-            // cloud 不可达 + cache miss → 拒绝
-            LOG.warnf("apikey verify cloud unreachable, denying: %s", e.getMessage());
+            // R32 hotfix：原来只 log e.getMessage()，对 NPE / wrapped 异常
+            // 看到 "null" 没法 diagnose。加 class + cause 链帮排查。
+            Throwable cause = e.getCause();
+            LOG.warnf("apikey verify cloud unreachable, denying: %s (cause=%s, msg=%s)",
+                e.getClass().getName(),
+                cause != null ? cause.getClass().getName() : "null",
+                e.getMessage() != null ? e.getMessage()
+                    : (cause != null ? cause.getMessage() : "null"));
             return ApiKeyVerifyResult.invalid("verify_unavailable");
         }
         cache.put(keyHash, fresh);

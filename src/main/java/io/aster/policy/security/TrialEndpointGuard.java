@@ -103,6 +103,13 @@ public class TrialEndpointGuard {
     RateLimiter rateLimiter;
 
     /**
+     * R31-4：cf Turnstile 验证器。默认 enabled=false 时 verify 直接返回 true，
+     * 零开销；启用后在 body-size 通过、per-IP 限流之前调一次。
+     */
+    @Inject
+    TurnstileVerifier turnstileVerifier;
+
+    /**
      * Vert.x RoutingContext —— 用来读取 socket 远端地址（在 trust-forwarded-for
      * 默认关闭时优先于 XFF）。JAX-RS ContainerRequestContext 不暴露源 IP，
      * 走 Vert.x 通道。
@@ -326,8 +333,28 @@ public class TrialEndpointGuard {
                 .build();
         }
 
-        // 3) Per-IP 滑动窗口（双层）
+        // R31-4：Turnstile 校验（per ADR-0012）。enabled=false 时直接 true，
+        // 零开销；enabled=true 需要 X-Trial-Turnstile-Token 头。
+        // 放在 Origin / body-size 之后、per-IP 限流之前：让显式合法的
+        // browser playground 提交不消耗 IP 配额，反而让 token 缺失或
+        // 伪造的请求在还没"占 IP 槽位"前就被拒。
         String ip = clientIp(ctx, routingContext, trustForwardedFor);
+        String turnstileToken = ctx.getHeaderString("X-Trial-Turnstile-Token");
+        // turnstileVerifier 在 unit-test 反射构造的 guard 上可能为 null —
+        // 等价于 enabled=false 语义直接放行，CDI 生产环境永不为 null。
+        if (turnstileVerifier != null && !turnstileVerifier.verify(turnstileToken, ip)) {
+            LOG.warnf("trial guard rejected: ip=%s turnstile failed", ip);
+            return Response.status(403)
+                .entity(Map.of(
+                    "error", "turnstile_failed",
+                    "message", "Trial endpoint requires a valid Turnstile token. "
+                        + "Refresh the playground widget and retry."
+                ))
+                .type(MediaType.APPLICATION_JSON)
+                .build();
+        }
+
+        // 3) Per-IP 滑动窗口（双层）
 
         String minuteKey = "trial:ip:" + ip + ":1m";
         Duration minute = Duration.ofSeconds(60);

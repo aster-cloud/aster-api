@@ -8,6 +8,7 @@ import org.jboss.logging.Logger;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Deque;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -125,9 +126,11 @@ public class RateLimiter {
         new java.util.concurrent.atomic.AtomicBoolean(false);
 
     private void maybeEagerEvict(Instant windowStart) {
-        if (windows.size() <= maxBoundedEntries) return;
+        // R31-5：<=0 表示 unbounded（测试 / 老配置缺省）。
+        if (maxBoundedEntries <= 0 || windows.size() <= maxBoundedEntries) return;
         if (!eagerEvictInFlight.compareAndSet(false, true)) return;
         try {
+            // 第一步：扫一遍把已过期 deque 清掉（不影响活跃 identifier）
             for (String key : windows.keySet()) {
                 windows.compute(key, (k, q) -> {
                     if (q == null) return null;
@@ -135,7 +138,34 @@ public class RateLimiter {
                     return q.isEmpty() ? null : q;
                 });
             }
-            LOG.warnf("限流器触发 eager evict：windows.size 达上限 %d", maxBoundedEntries);
+            // 第二步：如果还是越限，挑"距离过期最远"的 entry 淘汰。
+            //
+            // R31-5 关键修复：原版只 evictExpired，high-cardinality 攻击
+            // 下每个 entry 的 timestamp 都在窗口内 → 没有任何 entry 被清，
+            // map 持续增长。现在用 deque 最早 timestamp 排序，把最旧的
+            // tail 一次性淘汰到 maxBoundedEntries 以下。
+            //
+            // 牺牲：被淘汰的 identifier 下次 acquire 会重新计算窗口，等于
+            // 重置 rate-limit。攻击场景下这是可接受 trade-off —— 攻击者
+            // 仍要付出"被周期性 throttle"成本，但不会让我们 OOM。
+            if (windows.size() > maxBoundedEntries) {
+                int toDrop = windows.size() - maxBoundedEntries;
+                // 按最早 timestamp 排序 (LRU-ish)
+                var sorted = new java.util.ArrayList<Map.Entry<String, Instant>>();
+                for (var e : windows.entrySet()) {
+                    Instant head = e.getValue().peekFirst();
+                    if (head != null) sorted.add(Map.entry(e.getKey(), head));
+                }
+                sorted.sort(Map.Entry.comparingByValue());
+                int dropped = 0;
+                for (int i = 0; i < sorted.size() && dropped < toDrop; i++) {
+                    if (windows.remove(sorted.get(i).getKey()) != null) dropped++;
+                }
+                LOG.warnf("限流器越限 eager evict：active dropped=%d (剩余 size=%d, bound=%d)",
+                    dropped, windows.size(), maxBoundedEntries);
+            } else {
+                LOG.warnf("限流器触发 eager evict：windows.size 达上限 %d", maxBoundedEntries);
+            }
         } finally {
             eagerEvictInFlight.set(false);
         }
@@ -150,7 +180,7 @@ public class RateLimiter {
         new java.util.concurrent.atomic.AtomicBoolean(false);
 
     private void maybeEagerEvictConnections() {
-        if (connectionCounters.size() <= maxBoundedEntries) return;
+        if (maxBoundedEntries <= 0 || connectionCounters.size() <= maxBoundedEntries) return;
         if (!eagerEvictConnInFlight.compareAndSet(false, true)) return;
         try {
             connectionCounters.entrySet().removeIf(e -> e.getValue().get() == 0);

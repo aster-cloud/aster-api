@@ -133,6 +133,9 @@ public class PolicyEvaluationResource {
     Event<AuditEvent> auditEventPublisher;
 
     @Inject
+    PolicyAuditPublisher auditPublisher;
+
+    @Inject
     NsmTelemetry nsmTelemetry;
 
     @Inject
@@ -841,6 +844,11 @@ public class PolicyEvaluationResource {
         });
     }
 
+    // R31-1：publishPolicyEvaluationEvent + buildEvaluationMetadata 提取到
+    // PolicyAuditPublisher。这里保留 thin pass-through 避免一次性改全部 13
+    // 个调用点，让 diff 集中在新建文件上，行为零变化。后续 R31-1.2 时
+    // 直接把每个 call site 替换为 auditPublisher.publish(...) 即可移除
+    // 这两个 thin wrapper，再减 ~25 行。
     private void publishPolicyEvaluationEvent(
         String tenantId,
         EvaluationRequest request,
@@ -850,40 +858,12 @@ public class PolicyEvaluationResource {
         String errorMessage,
         Map<String, Object> metadata
     ) {
-        if (auditEventPublisher == null) {
-            return;
-        }
-        auditEventPublisher.fireAsync(
-            AuditEvent.policyEvaluation(
-                tenantId,
-                request.policyModule(),
-                request.policyFunction(),
-                performedBy,
-                success,
-                executionTimeMs,
-                errorMessage,
-                metadata == null ? Collections.emptyMap() : metadata
-            )
-        );
+        auditPublisher.publish(tenantId, request, performedBy,
+            success, executionTimeMs, errorMessage, metadata);
     }
 
     private Map<String, Object> buildEvaluationMetadata(EvaluationRequest request) {
-        if (request == null || request.context() == null || request.context().length == 0) {
-            return Collections.emptyMap();
-        }
-
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("contextSize", request.context().length);
-
-        Object firstContext = request.context()[0];
-        if (firstContext instanceof Map<?, ?> contextMap) {
-            Object applicantId = contextMap.get("applicantId");
-            if (applicantId != null) {
-                metadata.put("applicantId", applicantId.toString());
-            }
-        }
-
-        return metadata.isEmpty() ? Collections.emptyMap() : metadata;
+        return auditPublisher.buildMetadata(request);
     }
 
     /**

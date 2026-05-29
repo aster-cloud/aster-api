@@ -142,6 +142,25 @@ public class RateLimiter {
     }
 
     /**
+     * R30+ audit follow-up：connectionCounters 的 best-effort 守门，跟
+     * {@link #maybeEagerEvict} 用同一份 max-entries 配置。零计数 entry
+     * 直接清，正在被持有的连接保留 —— 与 evictIdleEntries 的策略一致。
+     */
+    private final java.util.concurrent.atomic.AtomicBoolean eagerEvictConnInFlight =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    private void maybeEagerEvictConnections() {
+        if (connectionCounters.size() <= maxBoundedEntries) return;
+        if (!eagerEvictConnInFlight.compareAndSet(false, true)) return;
+        try {
+            connectionCounters.entrySet().removeIf(e -> e.getValue().get() == 0);
+            LOG.warnf("限流器触发 connectionCounters eager evict：达上限 %d", maxBoundedEntries);
+        } finally {
+            eagerEvictConnInFlight.set(false);
+        }
+    }
+
+    /**
      * 查询剩余可用请求数
      *
      * @param identifier  限流标识
@@ -203,6 +222,12 @@ public class RateLimiter {
         if (!enabled) {
             return true;
         }
+
+        // R30+ audit P3：和 windows 一样，connectionCounters 在 high-cardinality
+        // 攻击下会单调增长直到 5 分钟 cron 扫到。复用同一份 best-effort 守门：
+        // 越过 maxBoundedEntries 时立刻把所有零计数 entry 清掉，把内存锚在
+        // 一个常数上。
+        maybeEagerEvictConnections();
 
         AtomicInteger counter = connectionCounters.computeIfAbsent(identifier, k -> new AtomicInteger(0));
 

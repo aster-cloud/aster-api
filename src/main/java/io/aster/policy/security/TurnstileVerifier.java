@@ -74,11 +74,22 @@ public class TurnstileVerifier {
     }
 
     /**
-     * 校验一个 trial 请求的 Turnstile token。同步阻塞 ≤ {@link #timeoutMs}。
+     * 校验一个 trial 请求的 Turnstile token。
+     *
+     * <p><b>线程契约：</b>方法签名是同步的，但内部用 {@code future.get(timeout)}
+     * 阻塞等待 cf siteverify 响应。所以：
+     * <ul>
+     *   <li><b>禁止</b>在 Vert.x event-loop 线程上调用 —— 会饿死 reactor。</li>
+     *   <li>调用方必须在 worker pool / virtual thread 上跑（Quarkus 默认
+     *       @ServerRequestFilter 跑 event loop；加 @Blocking 或 @RunOnVirtualThread）。</li>
+     *   <li>R32 audit P0：TrialEndpointGuard.filterRequest 在 enabled=false 时
+     *       根本不调本方法；enabled=true 时该方法在 cf 慢响应下会卡住 reactor。
+     *       解决：调用方按需 offload，或用 {@link #verifyAsync(String, String)}。</li>
+     * </ul>
      *
      * @param token cf widget 返回的 token，可能为 null / 空
      * @param remoteIp 客户端 IP，用于 cf 端 fraud-detection
-     * @return true = 通过；false = 拒绝（包含未启用时的"放行"语义已在 enabled 分支处理）
+     * @return true = 通过；false = 拒绝（未启用时直接返回 true 放行，零开销）
      */
     public boolean verify(String token, String remoteIp) {
         if (!enabled) return true;
@@ -109,6 +120,98 @@ public class TurnstileVerifier {
         }
         cache.put(key, new CacheEntry(now, ok));
         return ok;
+    }
+
+    /**
+     * R32 P0 fix：async-friendly variant for callers on the event loop.
+     *
+     * <p>Returns a {@link CompletionStage} that completes with the
+     * verification result without blocking. Use this from any reactive
+     * pipeline (Mutiny, CompletionStage chain, Vert.x handler) to avoid
+     * pinning the reactor thread while waiting for cf siteverify.
+     *
+     * <p>Behaviour mirrors {@link #verify(String, String)}:
+     * <ul>
+     *   <li>disabled → {@code completedFuture(true)} immediately</li>
+     *   <li>missing token / secret → {@code completedFuture(false)}</li>
+     *   <li>cache hit → {@code completedFuture(hit.verified())}</li>
+     *   <li>cf miss → underlying WebClient call is already async; just
+     *       chain its CompletableFuture instead of blocking on it</li>
+     * </ul>
+     */
+    public java.util.concurrent.CompletionStage<Boolean> verifyAsync(String token, String remoteIp) {
+        if (!enabled) return java.util.concurrent.CompletableFuture.completedFuture(true);
+        if (token == null || token.isBlank()) {
+            return java.util.concurrent.CompletableFuture.completedFuture(false);
+        }
+        if (secret.isEmpty() || secret.get().isBlank()) {
+            return java.util.concurrent.CompletableFuture.completedFuture(false);
+        }
+
+        String key = sha256(token);
+        long now = System.currentTimeMillis();
+        CacheEntry hit = cache.get(key);
+        if (hit != null && hit.isFresh(now)) {
+            return java.util.concurrent.CompletableFuture.completedFuture(hit.verified());
+        }
+        if (cache.size() >= CACHE_MAX) shrinkCache(now);
+
+        return doVerifyAsync(token, remoteIp)
+            .handle((ok, ex) -> {
+                if (ex != null) {
+                    LOG.warnf("Turnstile verifyAsync failed: %s → reject (fail-closed)",
+                        ex.getMessage());
+                    return Boolean.FALSE;
+                }
+                cache.put(key, new CacheEntry(now, Boolean.TRUE.equals(ok)));
+                return ok;
+            });
+    }
+
+    private java.util.concurrent.CompletableFuture<Boolean> doVerifyAsync(String token, String remoteIp) {
+        String form;
+        try {
+            form = buildVerifyForm(token, remoteIp);
+        } catch (Exception e) {
+            return java.util.concurrent.CompletableFuture.failedFuture(e);
+        }
+
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        java.net.URI uri = java.net.URI.create(CF_VERIFY_URL);
+        boolean ssl = "https".equals(uri.getScheme());
+        int port = uri.getPort() == -1 ? 443 : uri.getPort();
+
+        sharedWebClient.client()
+            .post(port, uri.getHost(), uri.getPath())
+            .ssl(ssl)
+            .timeout(timeoutMs)
+            .putHeader("Content-Type", "application/x-www-form-urlencoded")
+            .sendBuffer(io.vertx.core.buffer.Buffer.buffer(form))
+            .onSuccess(resp -> {
+                try {
+                    if (resp.statusCode() != 200) {
+                        future.complete(false);
+                        return;
+                    }
+                    JsonObject body = resp.bodyAsJsonObject();
+                    boolean success = body.getBoolean("success", false);
+                    future.complete(success);
+                } catch (Exception e) {
+                    future.completeExceptionally(e);
+                }
+            })
+            .onFailure(future::completeExceptionally);
+        return future;
+    }
+
+    private String buildVerifyForm(String token, String remoteIp) {
+        return "secret=" + java.net.URLEncoder.encode(secret.get(),
+            java.nio.charset.StandardCharsets.UTF_8)
+            + "&response=" + java.net.URLEncoder.encode(token,
+                java.nio.charset.StandardCharsets.UTF_8)
+            + (remoteIp == null || remoteIp.isBlank() ? ""
+                : "&remoteip=" + java.net.URLEncoder.encode(remoteIp,
+                    java.nio.charset.StandardCharsets.UTF_8));
     }
 
     private boolean doVerify(String token, String remoteIp) throws Exception {

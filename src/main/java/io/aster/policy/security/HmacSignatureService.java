@@ -8,6 +8,7 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -23,6 +24,12 @@ import java.util.HexFormat;
  */
 @ApplicationScoped
 public class HmacSignatureService {
+
+    // R32 audit P0：原代码 4 处用 java.util.logging，与项目 JBoss Logging
+    // 体系不一致，导致 traceId / MDC 丢失，HMAC 失败排查时间序无法关联。
+    // 用项目统一的 JBoss Logger 取代。
+    private static final Logger LOG = Logger.getLogger(HmacSignatureService.class);
+
 
     @Inject
     SecurityEventService securityEventService;
@@ -70,8 +77,7 @@ public class HmacSignatureService {
         String previousSecret = loadPreviousSecret(tenantId);
         if (previousSecret != null && constantTimeEquals(hmacSha256(previousSecret, canonical), signature)) {
             // grace period 命中旧密钥，记录便于观察轮换完成度
-            java.util.logging.Logger.getLogger(getClass().getName())
-                .warning("HMAC 命中旧密钥（grace period），tenant=" + tenantId);
+            LOG.warnf("HMAC 命中旧密钥（grace period），tenant=%s", tenantId);
             return;
         }
 
@@ -146,24 +152,20 @@ public class HmacSignatureService {
                 String envKey = "ASTER_HMAC_SECRET_" + tenantId.toUpperCase().replace("-", "_");
                 String envSecret = System.getenv(envKey);
                 if (envSecret != null && !envSecret.isBlank()) {
-                    java.util.logging.Logger.getLogger(getClass().getName())
-                        .info("从环境变量加载租户密钥: " + envKey);
+                    LOG.infof("从环境变量加载租户密钥: %s", envKey);
                     return envSecret;
                 }
             }
 
             // 2. 尝试使用全局配置密钥
             if (globalSecretKey.isPresent() && !globalSecretKey.get().isBlank()) {
-                java.util.logging.Logger.getLogger(getClass().getName())
-                    .info("使用全局配置密钥");
+                LOG.info("使用全局配置密钥");
                 return globalSecretKey.get();
             }
 
             // 3. 开发环境回退（仅当签名验证禁用时）
-            java.util.logging.Logger logger = java.util.logging.Logger.getLogger(getClass().getName());
-            logger.severe("⚠️ 未配置 HMAC 密钥！租户: " + tenantId);
-            logger.severe("请配置环境变量 ASTER_HMAC_SECRET_" + tenantId.toUpperCase().replace("-", "_"));
-            logger.severe("或设置 aster.security.hmac.secret-key 配置项");
+            LOG.errorf("⚠️ 未配置 HMAC 密钥！租户: %s。请配置环境变量 ASTER_HMAC_SECRET_%s 或 aster.security.hmac.secret-key",
+                tenantId, tenantId.toUpperCase().replace("-", "_"));
 
             // 抛出异常而非返回不安全的默认值
             throw new WebApplicationException(

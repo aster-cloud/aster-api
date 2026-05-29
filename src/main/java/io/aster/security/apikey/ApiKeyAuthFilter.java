@@ -86,6 +86,14 @@ public class ApiKeyAuthFilter {
         if (ctx.getHeaderString("X-Api-Key-Id") == null) {
             ctx.getHeaders().putSingle("X-Api-Key-Id", result.apiKeyId());
         }
+        // R32 hotfix：RoleEnforcementFilter @RequireRole(MEMBER) 要求 X-User-Role
+        // 头。aster-cloud BFF 调用时会显式带上；直接拿 API key 的 raw curl
+        // 调用没有这个头会被 403 "Missing role information"。
+        // API key 是 user 自己生成的，本质上代表 user → 默认给 MEMBER
+        // 角色（足够执行 evaluate / read，不能做 admin mutate）。
+        if (ctx.getHeaderString("X-User-Role") == null) {
+            ctx.getHeaders().putSingle("X-User-Role", "MEMBER");
+        }
     }
 
     /**

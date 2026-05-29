@@ -56,6 +56,24 @@ public class ApiKeyVerifierService {
     /** userId → 该用户所有缓存过的 keyHash，用于按用户批量失效 */
     private final ConcurrentHashMap<String, Set<String>> userIndex = new ConcurrentHashMap<>();
 
+    /**
+     * R32 hotfix：cache-miss verify path 会做两件 event-loop 禁止的事情：
+     *   1) blocking Redis read (Quarkus ValueCommands<String>)
+     *   2) future.get(8s) waiting for Vert.x WebClient response
+     * ApiKeyAuthFilter @ServerRequestFilter 跑在 event loop，触发
+     * "thread cannot be blocked" 异常，verify 进入 catch 返回
+     * verify_unavailable → 401。
+     *
+     * 用一个 daemon ExecutorService 把整个慢路径 offload。Filter 调
+     * verify() 时同步阻塞这个 future —— 但 filter 不在 event loop 上
+     * 等（实际上是 RESTEasy 的内部线程持有），调用链终归是同步语义。
+     *
+     * 容量：4 个 worker thread 处理所有并发 cache miss。每次 verify
+     * cf 边缘 ~50-100ms，4 worker = ~40-80 req/sec verify 吞吐。
+     * Caffeine 命中后零开销，所以稳态远超此数。
+     */
+    private java.util.concurrent.ExecutorService verifyPool;
+
     void onStart(@Observes StartupEvent ev) {
         cache = Caffeine.newBuilder()
             .maximumSize(CACHE_MAX)
@@ -67,7 +85,27 @@ public class ApiKeyVerifierService {
                 }
             })
             .build();
+        // R32 hotfix：4 daemon worker pool for verify offload
+        verifyPool = java.util.concurrent.Executors.newFixedThreadPool(4, r -> {
+            Thread t = new Thread(r, "apikey-verify-worker");
+            t.setDaemon(true);
+            return t;
+        });
         LOG.info("ApiKeyVerifierService started: cacheTtl=" + CACHE_TTL);
+    }
+
+    void onStop(@Observes io.quarkus.runtime.ShutdownEvent ev) {
+        if (verifyPool != null) {
+            verifyPool.shutdown();
+            try {
+                if (!verifyPool.awaitTermination(2, TimeUnit.SECONDS)) {
+                    verifyPool.shutdownNow();
+                }
+            } catch (InterruptedException ie) {
+                verifyPool.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     /**
@@ -90,6 +128,32 @@ public class ApiKeyVerifierService {
             return cached;
         }
 
+        // R32 hotfix：cache-miss path 含两个 blocking 操作（redis read +
+        // future.get cf call）。Vert.x event-loop 线程禁止阻塞，所以如果
+        // 当前线程名以 "vert.x-eventloop" 开头，把整个慢路径丢到
+        // verifyPool 上跑，本线程阻塞等结果（caller 是 RESTEasy 调度，
+        // 不是 event loop）。
+        String threadName = Thread.currentThread().getName();
+        if (threadName != null && threadName.startsWith("vert.x-eventloop")) {
+            try {
+                return verifyPool.submit(() -> doSlowPathVerify(keyHash)).get();
+            } catch (java.util.concurrent.ExecutionException ee) {
+                LOG.warnf("apikey verify offload failed: %s", ee.getCause() == null ? "null" : ee.getCause().getMessage());
+                return ApiKeyVerifyResult.invalid("verify_unavailable");
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                return ApiKeyVerifyResult.invalid("verify_unavailable");
+            }
+        }
+        return doSlowPathVerify(keyHash);
+    }
+
+    /**
+     * R32 hotfix：cache-miss 真正干活的部分。被 {@link #verify} 在合适
+     * 的线程上调用 —— 当 caller 已在 worker 上时直接跑；当 caller 在
+     * event-loop 上时通过 verifyPool offload。
+     */
+    private ApiKeyVerifyResult doSlowPathVerify(String keyHash) {
         // SNAP-5: Caffeine miss → 先查 redis snapshot（cloud webhook 推过来的）
         java.util.Optional<io.aster.billing.snapshot.ApiKeySnapshot> redisHit = localSnapshot.getApiKey(keyHash);
         if (redisHit.isPresent()) {

@@ -41,6 +41,11 @@ public class ApiKeyAuthFilter {
     @ConfigProperty(name = "aster.security.apikey.enabled", defaultValue = "true")
     boolean enabled;
 
+    // R32：filter 在 event loop 上运行。底层 Redis getApiKey 抛
+    // "cannot be blocked" 是因为 LocalQuotaSnapshotService 用了同步
+    // ValueCommands<String>。修复在 snapshot service 层用 try/catch
+    // 包住 IllegalStateException，让 redis 路径 fall through 到 cloud
+    // verify 而不是抛到 filter（fail-closed → 401）。
     @ServerRequestFilter(priority = Priorities.AUTHENTICATION + 100)
     public void filter(ContainerRequestContext ctx) {
         if (!enabled) return;

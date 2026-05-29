@@ -2,6 +2,7 @@ package io.aster.billing;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.client.WebClient;
@@ -13,9 +14,15 @@ import org.jboss.logging.Logger;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.net.URI;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.HexFormat;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -40,19 +47,49 @@ public class PlanGateService {
     @Inject
     io.aster.common.http.SharedWebClient sharedWebClient;
 
+    @Inject
+    io.aster.common.http.SharedHttpClient sharedHttpClient;
+
     private Cache<String, PlanInfo> cache;
     // P0-R19: WebClient DCL consolidated into SharedWebClient
+
+    /**
+     * R32 hotfix v3: 同 ApiQuotaGuard，hot path 不能阻塞 event-loop 等 cf 回包。
+     * Cache miss 时立刻返回 failOpen + 后台 warmup，下次同 tenantId 命中走 0 RTT 路径。
+     */
+    private ExecutorService lookupPool;
+    private final ConcurrentHashMap<String, Boolean> lookupInFlight = new ConcurrentHashMap<>();
+    private static final Duration LOOKUP_TIMEOUT = Duration.ofMillis(1500);
 
     void onStart(@Observes StartupEvent ev) {
         cache = Caffeine.newBuilder()
             .maximumSize(config.cacheMaxEntries())
             .expireAfterWrite(config.cacheTtl())
             .build();
+        lookupPool = Executors.newFixedThreadPool(4, r -> {
+            Thread t = new Thread(r, "plan-gate-worker");
+            t.setDaemon(true);
+            return t;
+        });
         if (!config.enabled()) {
             LOG.info("PlanGate 未启用：aster.plan-gate.enabled=false，所有调用按 Pro 档处理");
         } else {
             LOG.infof("PlanGate 启动：cloudUrl=%s, cacheTtl=%s",
                 config.cloudInternalUrl(), config.cacheTtl());
+        }
+    }
+
+    void onStop(@Observes ShutdownEvent ev) {
+        if (lookupPool != null) {
+            lookupPool.shutdown();
+            try {
+                if (!lookupPool.awaitTermination(2, TimeUnit.SECONDS)) {
+                    lookupPool.shutdownNow();
+                }
+            } catch (InterruptedException ie) {
+                lookupPool.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
@@ -68,6 +105,21 @@ public class PlanGateService {
         PlanInfo cached = cache.getIfPresent(tenantId);
         if (cached != null) return cached;
 
+        // R32 hotfix v3: hot path 不能阻塞 event-loop 等 cf 回包。Cache miss 时
+        // 立刻 fail-open 并把真正的 fetch 丢到 worker pool 上跑，下次同 tenant
+        // 5min TTL 内命中 Caffeine 即走 0 RTT 路径。
+        //
+        // 安全模型：plan 信息仅用于 soft tier-check（如 enterprise 不限 RPS）。
+        // 真正的 plan-based access 控制由 ApiKeyVerifierService 的 cloud verify
+        // 持有 authority（包括 plan 字段），那条路径已经在 Caffeine 5min 缓存。
+        // 这里 fail-open 不会让"不该执行的用户"绕过任何门控。
+        String threadName = Thread.currentThread().getName();
+        if (threadName != null && threadName.startsWith("vert.x-eventloop")) {
+            triggerAsyncLookup(tenantId);
+            return PlanInfo.failOpen();
+        }
+
+        // Caller 在 worker 上时直接 fetch（同步路径，e.g. CDI 内部调用 / 后台任务）
         try {
             PlanInfo fetched = fetchFromCloud(tenantId);
             cache.put(tenantId, fetched);
@@ -80,6 +132,56 @@ public class PlanGateService {
             }
             return PlanInfo.failOpen();
         }
+    }
+
+    private void triggerAsyncLookup(String tenantId) {
+        if (tenantId == null || lookupPool == null) return;
+        if (lookupInFlight.putIfAbsent(tenantId, Boolean.TRUE) != null) return;
+        try {
+            lookupPool.submit(() -> {
+                try {
+                    PlanInfo fetched = fetchFromCloudHttpClient(tenantId);
+                    cache.put(tenantId, fetched);
+                } catch (Exception e) {
+                    LOG.debugf("async plan-gate warmup failed tenant=%s: %s",
+                        tenantId, e.getMessage());
+                } finally {
+                    lookupInFlight.remove(tenantId);
+                }
+            });
+        } catch (RuntimeException submitFail) {
+            lookupInFlight.remove(tenantId);
+        }
+    }
+
+    /**
+     * R32 hotfix v3: 同步阻塞 send()，跑在 lookupPool 上不依赖任何 event-loop 调度。
+     */
+    private PlanInfo fetchFromCloudHttpClient(String tenantId) throws Exception {
+        URI baseUri = URI.create(config.cloudInternalUrl());
+        String path = "/api/internal/tenant/" + tenantId + "/plan";
+        URI fullUri = baseUri.resolve(path);
+
+        long timestamp = System.currentTimeMillis() / 1000;
+        String signature = config.hmacKey()
+            .map(key -> sign(key, "GET\n" + path + "\n" + timestamp))
+            .orElse("");
+
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(fullUri)
+            .timeout(LOOKUP_TIMEOUT)
+            .header("X-Aster-Timestamp", String.valueOf(timestamp))
+            .header("X-Aster-Signature", signature)
+            .GET()
+            .build();
+
+        HttpResponse<String> resp = sharedHttpClient.client()
+            .send(request, HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() != 200) {
+            throw new RuntimeException(
+                "cloud /internal/tenant/" + tenantId + "/plan 返回 " + resp.statusCode());
+        }
+        return toPlanInfo(new JsonObject(resp.body()));
     }
 
     /** 是否允许审批流（≥Pro 档） */

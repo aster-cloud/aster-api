@@ -1,5 +1,7 @@
 package io.aster.billing;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.opentelemetry.api.trace.Span;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.client.WebClient;
@@ -10,11 +12,17 @@ import org.jboss.logging.Logger;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.HexFormat;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -60,8 +68,63 @@ public class ApiQuotaGuard {
     io.aster.common.http.SharedWebClient sharedWebClient;
 
     @Inject
+    io.aster.common.http.SharedHttpClient sharedHttpClient;
+
+    @Inject
     io.aster.billing.snapshot.LocalQuotaSnapshotService snapshot;
     // P0-R19: WebClient DCL consolidated into SharedWebClient
+
+    /**
+     * R32 hotfix v3: precheck cold-path 原来用 Vert.x WebClient + future.get(10s)
+     * 在 event-loop 上等回调，回调本身要等 event-loop 调度 → 10s 超时 → fail-open。
+     * 客户端每次 cache miss 都要白等 10s，把 50ms 的策略执行放大成 11s 总耗时。
+     *
+     * 修复策略（HMAC + fail-open 语义不变，只换交付）：
+     *   1. {@link Caffeine} 进程内缓存 PrecheckResult 5 min — 同一用户 5min 内不
+     *      重复 fetch，把 cf round-trip 从每次 evaluate 摊销到几乎 0。
+     *   2. {@link java.net.http.HttpClient}（{@link io.aster.common.http.SharedHttpClient}
+     *      共享单例）替代 WebClient，{@code send()} 同步阻塞 + 复用 keep-alive
+     *      连接 + TLS session resumption。
+     *   3. event-loop 检测：caller 在 vert.x-eventloop-thread-N 上时丢到 4-worker
+     *      offload pool 跑，本线程同步 get() 等结果（caller 终归在 RESTEasy 调度，
+     *      不在 event loop）。
+     *   4. precheck timeout 收紧到 1.5s（fail-open 是兜底，cf 边缘正常 ~200ms，
+     *      等 10s 比立刻 fail-open 更糟）。
+     */
+    private Cache<String, PrecheckResult> precheckCache;
+    private ExecutorService precheckPool;
+    private static final java.time.Duration PRECHECK_CACHE_TTL = java.time.Duration.ofMinutes(5);
+    private static final int PRECHECK_CACHE_MAX = 10_000;
+    /** precheck 单次最长等待。cf 正常 ~200ms；超过 1.5s 直接 fail-open 比死等更友好。 */
+    private static final java.time.Duration PRECHECK_TIMEOUT = java.time.Duration.ofMillis(1500);
+
+    void onStart(@jakarta.enterprise.event.Observes io.quarkus.runtime.StartupEvent ev) {
+        precheckCache = Caffeine.newBuilder()
+            .maximumSize(PRECHECK_CACHE_MAX)
+            .expireAfterWrite(PRECHECK_CACHE_TTL)
+            .build();
+        precheckPool = Executors.newFixedThreadPool(4, r -> {
+            Thread t = new Thread(r, "quota-precheck-worker");
+            t.setDaemon(true);
+            return t;
+        });
+        LOG.info("ApiQuotaGuard started: precheckTtl=" + PRECHECK_CACHE_TTL
+            + ", timeout=" + PRECHECK_TIMEOUT);
+    }
+
+    void onStop(@jakarta.enterprise.event.Observes io.quarkus.runtime.ShutdownEvent ev) {
+        if (precheckPool != null) {
+            precheckPool.shutdown();
+            try {
+                if (!precheckPool.awaitTermination(2, TimeUnit.SECONDS)) {
+                    precheckPool.shutdownNow();
+                }
+            } catch (InterruptedException ie) {
+                precheckPool.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
 
     /**
      * 同步检查（< 5ms hot path）：本地 redis snapshot 优先
@@ -103,22 +166,33 @@ public class ApiQuotaGuard {
             unlimited = s.unlimitedApi();
             used = snapshot.getCounter(userId);
         } else {
-            if (currentSpan != null) {
-                currentSpan.setAttribute("aster.quota.source", "cloud_lazy");
-            }
-            // Cold path: lazy fetch cloud + 写 redis
-            try {
-                PrecheckResult pre = fetchPrecheck(userId);
-                limit = pre.apiCallsLimit;
-                used = pre.monthlyUsed;
+            // R32 hotfix v3: 先查进程内 Caffeine（5min TTL），命中即 0 RTT。
+            PrecheckResult cached = precheckCache == null ? null
+                : precheckCache.getIfPresent(userId == null ? "" : userId);
+            if (cached != null) {
+                if (currentSpan != null) {
+                    currentSpan.setAttribute("aster.quota.source", "local_caffeine");
+                }
+                limit = cached.apiCallsLimit;
+                used = cached.monthlyUsed;
                 apiAccessAllowed = limit != 0;
                 unlimited = limit == -1;
-                // 写本地 redis 缓存（无 banned 信息时按未封禁处理）
-                snapshot.setUser(new io.aster.billing.snapshot.UserSnapshot(
-                    userId, pre.plan, pre.apiCallsLimit, null, null, null
-                ));
-            } catch (Exception e) {
-                LOG.warnf("precheck 失败 + 本地无缓存，fail-open: %s", e.getMessage());
+            } else {
+                // Cache miss + redis miss。Hot path 不能阻塞 event-loop 等 cf 回包
+                // （旧实现等 10s 然后 fail-open，把 50ms 策略放大成 11s）。
+                //
+                // 安全模型：API key 已经被 {@link ApiKeyVerifierService} 验证过
+                // （cf authoritative，会 reject 已撤销 / 过期 / Free-plan-上禁用的 key）。
+                // 此处的 precheck 只是配额计量门控（soft warn at 80% / hard reject
+                // at 200%），首次调用 fail-open 不会让"未授权"用户进来。
+                //
+                // 策略：立刻 fail-open 返回 ALLOW，同时把真正的 fetchPrecheck 丢
+                // 到 worker pool 上跑、结果写进 Caffeine + redis snapshot，下次
+                // 同 userId 命中 (< 5min TTL) 即走快路径，配额执行恢复全保真。
+                if (currentSpan != null) {
+                    currentSpan.setAttribute("aster.quota.source", "fail_open_warming");
+                }
+                triggerAsyncPrefetch(userId);
                 PlanInfo fallback = PlanInfo.failOpen();
                 return new GuardResult(Verdict.ALLOW, fallback.apiCallsLimit(), 0, 0, null);
             }
@@ -153,65 +227,69 @@ public class ApiQuotaGuard {
     }
 
     /**
-     * 同步检查 per-API-key per-second 限流（< 5ms；Redis 不可达 fail-open）
+     * 同步检查 per-API-key per-second 限流（< 50ms；任何故障 fail-open）。
+     *
+     * R32 hotfix v3：原来用 Vert.x WebClient + 700ms future.get，event-loop
+     * 上调用同样会被回调排队卡死。改成 SharedHttpClient + 同步 send()
+     * + event-loop 检测 offload。HMAC 签名链路不变。
      */
     public RateCheck checkRate(String tenantId, String apiKeyId) {
         if (apiKeyId == null || apiKeyId.isBlank()) {
-            // 无 API key（UI 路径）→ 不参与 per-key 限流
             return new RateCheck(true, 0, 0);
         }
         String plan;
         try {
             plan = planGateService.lookupPlan(tenantId).plan();
         } catch (Exception e) {
-            return new RateCheck(true, 0, 0); // fail-open
+            return new RateCheck(true, 0, 0);
         }
+        try {
+            String threadName = Thread.currentThread().getName();
+            if (threadName != null && threadName.startsWith("vert.x-eventloop") && precheckPool != null) {
+                return precheckPool.submit(() -> checkRateSync(apiKeyId, plan)).get();
+            }
+            return checkRateSync(apiKeyId, plan);
+        } catch (Exception e) {
+            return new RateCheck(true, 0, 0);
+        }
+    }
 
+    private RateCheck checkRateSync(String apiKeyId, String plan) {
         try {
             URI baseUri = URI.create(config.cloudInternalUrl());
-            int port = baseUri.getPort() == -1
-                ? ("https".equals(baseUri.getScheme()) ? 443 : 80)
-                : baseUri.getPort();
-            boolean ssl = "https".equals(baseUri.getScheme());
             String path = "/api/internal/api/rate-check";
+            URI fullUri = baseUri.resolve(path);
 
-            JsonObject body = new JsonObject()
+            String bodyJson = new JsonObject()
                 .put("apiKeyId", apiKeyId)
-                .put("plan", plan);
+                .put("plan", plan)
+                .encode();
 
             long timestamp = System.currentTimeMillis() / 1000;
             String signature = config.hmacKey()
                 .map(k -> sign(k, "POST\n" + path + "\n" + timestamp))
                 .orElse("");
 
-            CompletableFuture<RateCheck> future = new CompletableFuture<>();
-            getClient()
-                .post(port, baseUri.getHost(), path)
-                .ssl(ssl)
-                .timeout(Math.min(500, config.requestTimeout().toMillis()))
-                .putHeader("X-Aster-Timestamp", String.valueOf(timestamp))
-                .putHeader("X-Aster-Signature", signature)
-                .putHeader("Content-Type", "application/json")
-                .sendBuffer(body.toBuffer())
-                .onSuccess(resp -> {
-                    if (resp.statusCode() != 200) {
-                        future.complete(new RateCheck(true, 0, 0));
-                        return;
-                    }
-                    try {
-                        JsonObject json = resp.bodyAsJsonObject();
-                        future.complete(new RateCheck(
-                            json.getBoolean("allowed", true),
-                            json.getInteger("used", 0),
-                            json.getInteger("limit", 0)
-                        ));
-                    } catch (Exception ex) {
-                        future.complete(new RateCheck(true, 0, 0));
-                    }
-                })
-                .onFailure(err -> future.complete(new RateCheck(true, 0, 0)));
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(fullUri)
+                .timeout(Duration.ofMillis(700))
+                .header("X-Aster-Timestamp", String.valueOf(timestamp))
+                .header("X-Aster-Signature", signature)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(bodyJson, StandardCharsets.UTF_8))
+                .build();
 
-            return future.get(700, TimeUnit.MILLISECONDS);
+            HttpResponse<String> resp = sharedHttpClient.client()
+                .send(request, HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() != 200) {
+                return new RateCheck(true, 0, 0);
+            }
+            JsonObject json = new JsonObject(resp.body());
+            return new RateCheck(
+                json.getBoolean("allowed", true),
+                json.getInteger("used", 0),
+                json.getInteger("limit", 0)
+            );
         } catch (Exception e) {
             return new RateCheck(true, 0, 0);
         }
@@ -281,49 +359,84 @@ public class ApiQuotaGuard {
      */
     private record PrecheckResult(long apiCallsLimit, long monthlyUsed, String plan) {}
 
-    private PrecheckResult fetchPrecheck(String userId) throws Exception {
+    /** 限制并发预热：同一 userId 已有 in-flight 任务时不重复提交。 */
+    private final java.util.concurrent.ConcurrentHashMap<String, Boolean> prefetchInFlight
+        = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * R32 hotfix v3: hot path 不能阻塞 event-loop。fail-open 立刻返回后，
+     * 把真正的 precheck 丢到 worker pool 上跑，结果写进 Caffeine + redis snapshot。
+     * 下一次该 userId 命中即走快路径。
+     */
+    private void triggerAsyncPrefetch(String userId) {
+        if (userId == null || precheckPool == null) return;
+        // 防止"同一用户连续 N 个请求 → N 个 fetch in-flight"打爆 cf 端。
+        if (prefetchInFlight.putIfAbsent(userId, Boolean.TRUE) != null) return;
+        try {
+            precheckPool.submit(() -> {
+                try {
+                    PrecheckResult pre = fetchPrecheckSync(userId);
+                    if (precheckCache != null) {
+                        precheckCache.put(userId, pre);
+                    }
+                    try {
+                        snapshot.setUser(new io.aster.billing.snapshot.UserSnapshot(
+                            userId, pre.plan, pre.apiCallsLimit, null, null, null));
+                    } catch (Exception ignore) {
+                        // snapshot 内部已 catch；这里再兜一层
+                    }
+                } catch (Exception e) {
+                    LOG.debugf("async precheck warmup failed userId=%s: %s",
+                        userId, e.getMessage());
+                } finally {
+                    prefetchInFlight.remove(userId);
+                }
+            });
+        } catch (RuntimeException submitFail) {
+            prefetchInFlight.remove(userId);
+        }
+    }
+
+    /**
+     * R32 hotfix v3: 用 java.net.http.HttpClient 同步阻塞 send()，不依赖 Vert.x
+     * event-loop 调度。共享 HttpClient 实例（{@link io.aster.common.http.SharedHttpClient}）
+     * 保留 keep-alive 连接 + TLS session resumption，hot path 实测 ~50ms。
+     * timeout 收紧到 {@value #PRECHECK_TIMEOUT_MS}ms — 超过即 fail-open，cf 边缘
+     * 正常 ~200ms，1.5s 已经留足缓冲。
+     */
+    private PrecheckResult fetchPrecheckSync(String userId) throws Exception {
         URI baseUri = URI.create(config.cloudInternalUrl());
-        int port = baseUri.getPort() == -1
-            ? ("https".equals(baseUri.getScheme()) ? 443 : 80)
-            : baseUri.getPort();
-        boolean ssl = "https".equals(baseUri.getScheme());
         String path = "/api/internal/api/precheck";
-        String query = "userId=" + urlEncode(userId);
+        String query = "userId=" + urlEncode(userId == null ? "" : userId);
+        URI fullUri = baseUri.resolve(path + "?" + query);
 
         long timestamp = System.currentTimeMillis() / 1000;
         String signature = config.hmacKey()
             .map(k -> sign(k, "GET\n" + path + "\n" + timestamp))
             .orElse("");
 
-        CompletableFuture<PrecheckResult> future = new CompletableFuture<>();
-        getClient()
-            .get(port, baseUri.getHost(), path + "?" + query)
-            .ssl(ssl)
-            .timeout(config.requestTimeout().toMillis())
-            .putHeader("X-Aster-Timestamp", String.valueOf(timestamp))
-            .putHeader("X-Aster-Signature", signature)
-            .send()
-            .onSuccess(resp -> {
-                if (resp.statusCode() != 200) {
-                    future.completeExceptionally(new RuntimeException(
-                        "precheck 返回 " + resp.statusCode()));
-                    return;
-                }
-                try {
-                    JsonObject json = resp.bodyAsJsonObject();
-                    future.complete(new PrecheckResult(
-                        json.getLong("apiCallsLimit", 0L),
-                        json.getLong("monthlyUsed", 0L),
-                        json.getString("plan", "free")
-                    ));
-                } catch (Exception e) {
-                    future.completeExceptionally(e);
-                }
-            })
-            .onFailure(future::completeExceptionally);
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(fullUri)
+            .timeout(PRECHECK_TIMEOUT)
+            .header("X-Aster-Timestamp", String.valueOf(timestamp))
+            .header("X-Aster-Signature", signature)
+            .GET()
+            .build();
 
-        return future.get(config.requestTimeout().toMillis() + 500, TimeUnit.MILLISECONDS);
+        HttpResponse<String> resp = sharedHttpClient.client()
+            .send(request, HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() != 200) {
+            throw new RuntimeException("precheck 返回 " + resp.statusCode());
+        }
+        JsonObject json = new JsonObject(resp.body());
+        return new PrecheckResult(
+            json.getLong("apiCallsLimit", 0L),
+            json.getLong("monthlyUsed", 0L),
+            json.getString("plan", "free")
+        );
     }
+
+    private static final long PRECHECK_TIMEOUT_MS = 1500;
 
     private WebClient getClient() {
         return sharedWebClient.client();

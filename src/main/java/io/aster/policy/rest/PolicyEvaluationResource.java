@@ -422,9 +422,7 @@ public class PolicyEvaluationResource {
         // 必须在切到 worker pool 前抓取 apiKeyId — RequestScoped 在 lambda
         // 内已失效，否则 recordApiCall 会抛 ContextNotActiveException 并
         // 被 Mutiny drop（quota 计数 silently lost）。
-        String apiKeyIdSnap = (routingContext != null && routingContext.request() != null)
-            ? routingContext.request().getHeader("X-Api-Key-Id")
-            : null;
+        String apiKeyIdSnap = apiKeyIdFromContext();
         long apiCallStart = System.currentTimeMillis();
         Timer.Sample sample = businessMetrics.startPolicyEvaluation();
 
@@ -881,6 +879,16 @@ public class PolicyEvaluationResource {
                 return ctxTenant;
             }
         }
+        // R32 hotfix v3: ApiKeyAuthFilter 把 verify 结果写进 ctx.property，
+        // 比 Vert.x routingContext.request().getHeader 更可靠 — filter 改
+        // header 是 JAX-RS 层 mutation，部分 RESTEasy 配置下 Vert.x layer
+        // 看不到。先认 property，再回退 Vert.x header。
+        if (jaxrsCtx != null) {
+            Object tenantProp = jaxrsCtx.getProperty("aster.apikey.tenantId");
+            if (tenantProp instanceof String s && !s.isBlank()) {
+                return s.trim();
+            }
+        }
         if (routingContext == null || routingContext.request() == null) {
             return "default";
         }
@@ -889,16 +897,33 @@ public class PolicyEvaluationResource {
     }
 
     /**
-     * 提取执行者信息
-     *
-     * 从 X-User-Id 请求头提取用户ID，如果不存在则返回 "anonymous"
+     * R32 hotfix v3: 读 API-key 上下文。filter 写在 jaxrsCtx.property，比
+     * Vert.x header 更可靠。Header 是回退路径（trial endpoint / 老调用方）。
      */
+    private String apiKeyIdFromContext() {
+        if (jaxrsCtx != null) {
+            Object p = jaxrsCtx.getProperty("aster.apikey.apiKeyId");
+            if (p instanceof String s && !s.isBlank()) return s.trim();
+        }
+        if (routingContext == null || routingContext.request() == null) return null;
+        String h = routingContext.request().getHeader("X-Api-Key-Id");
+        return h == null || h.isBlank() ? null : h.trim();
+    }
+
     private String performedBy() {
         // R29: trial 流量统一记账 performedBy=trial-anonymous，与租户 "trial"
         // 配对。审计/metrics 才能把 marketing playground 流量从普通 anonymous
         // 中分离出来。
         if (tenantContext != null && "trial".equals(tenantContext.getCurrentTenant())) {
             return "trial-anonymous";
+        }
+        // R32 hotfix v3: 优先用 filter 写入的 ctx.property（authoritative，
+        // 来自 ApiKeyVerifyResult.userId()），再回退 Vert.x header。详见 tenantId()。
+        if (jaxrsCtx != null) {
+            Object userProp = jaxrsCtx.getProperty("aster.apikey.userId");
+            if (userProp instanceof String s && !s.isBlank()) {
+                return s.trim();
+            }
         }
         if (routingContext == null || routingContext.request() == null) {
             return "anonymous";
@@ -976,11 +1001,8 @@ public class PolicyEvaluationResource {
             default -> { /* ALLOW: 即使 soft warn 也继续 */ }
         }
 
-        // API-7: per-API-key per-second 限流（仅当请求带 X-Api-Key-Id 时生效）
-        String apiKeyId = null;
-        if (routingContext != null && routingContext.request() != null) {
-            apiKeyId = routingContext.request().getHeader("X-Api-Key-Id");
-        }
+        // API-7: per-API-key per-second 限流（API key 命中 verifier 后生效）
+        String apiKeyId = apiKeyIdFromContext();
         if (apiKeyId != null && !apiKeyId.isBlank()) {
             ApiQuotaGuard.RateCheck rate = apiQuotaGuard.checkRate(tenantId, apiKeyId);
             if (routingContext != null && routingContext.response() != null) {
@@ -1017,10 +1039,7 @@ public class PolicyEvaluationResource {
     private void recordApiCall(String endpointPath, String status, long latencyMs) {
         String tenantId = tenantId();
         String userId = performedBy();
-        String apiKeyId = null;
-        if (routingContext != null && routingContext.request() != null) {
-            apiKeyId = routingContext.request().getHeader("X-Api-Key-Id");
-        }
+        String apiKeyId = apiKeyIdFromContext();
         apiQuotaGuard.recordAsync(userId, tenantId, apiKeyId, endpointPath, status, latencyMs);
     }
 

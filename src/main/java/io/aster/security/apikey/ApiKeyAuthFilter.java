@@ -46,37 +46,66 @@ public class ApiKeyAuthFilter {
     // ValueCommands<String>。修复在 snapshot service 层用 try/catch
     // 包住 IllegalStateException，让 redis 路径 fall through 到 cloud
     // verify 而不是抛到 filter（fail-closed → 401）。
+    /**
+     * R32 hotfix v3: 返回 {@code Uni<Response>}（null = continue chain）。
+     * RESTEasy Reactive 看到 Uni 就不会阻塞 event-loop 等结果，而是 subscribe
+     * 后让出线程；verify 在 {@link ApiKeyVerifierService#verifyPool} 上跑完
+     * 再触发下游 emission。Cache 命中走 fast path 同步返回，不付 Uni 调度开销。
+     *
+     * @return null/Uni.item(null) = 继续；Uni.item(Response) = 401 短路
+     */
     @ServerRequestFilter(priority = Priorities.AUTHENTICATION + 100)
-    public void filter(ContainerRequestContext ctx) {
-        if (!enabled) return;
+    public io.smallrye.mutiny.Uni<Response> filter(ContainerRequestContext ctx) {
+        if (!enabled) return null;
 
         String path = ctx.getUriInfo().getPath();
         if (!shouldProtect(path)) {
-            return;
+            return null;
         }
 
         String auth = ctx.getHeaderString("Authorization");
         if (auth == null || !auth.startsWith("Bearer ")) {
-            throw unauthorized("missing_authorization");
+            return io.smallrye.mutiny.Uni.createFrom().item(unauthorizedResponse("missing_authorization"));
         }
         String key = auth.substring(7).trim();
         if (key.isEmpty()) {
-            throw unauthorized("empty_token");
+            return io.smallrye.mutiny.Uni.createFrom().item(unauthorizedResponse("empty_token"));
         }
 
-        ApiKeyVerifyResult result = verifier.verify(key);
+        // Cache fast path：Caffeine 命中即同步返回，不付 Uni 调度开销。
+        ApiKeyVerifyResult cached = verifier.tryCacheLookup(key);
+        if (cached != null) {
+            return applyResult(ctx, cached, path);
+        }
+
+        // Cache miss：把 verify 丢到 verifyPool，event-loop 立刻让出。
+        return io.smallrye.mutiny.Uni
+            .createFrom().item(() -> verifier.verify(key))
+            .runSubscriptionOn(verifier.verifyExecutor())
+            .onItem().transform(result -> applyResultSync(ctx, result, path));
+    }
+
+    /**
+     * Cache 命中或 fast path 同步路径：apply 结果并返回 Uni（null = continue）。
+     */
+    private io.smallrye.mutiny.Uni<Response> applyResult(ContainerRequestContext ctx,
+                                                         ApiKeyVerifyResult result,
+                                                         String path) {
+        Response r = applyResultSync(ctx, result, path);
+        return r == null ? io.smallrye.mutiny.Uni.createFrom().nullItem()
+                         : io.smallrye.mutiny.Uni.createFrom().item(r);
+    }
+
+    /** 返回 null = 验证通过继续；非 null = 401 短路。 */
+    private Response applyResultSync(ContainerRequestContext ctx,
+                                     ApiKeyVerifyResult result, String path) {
         if (!result.valid()) {
             LOG.infof("apikey verify rejected: path=%s reason=%s", path, result.reason());
-            throw unauthorized(result.reason() != null ? result.reason() : "invalid_key");
+            return unauthorizedResponse(result.reason() != null ? result.reason() : "invalid_key");
         }
-
-        // 写入 request context，下游 PolicyEvaluationResource 可读
-        // tenantId / userId / apiKeyId 一并 propagate
         ctx.setProperty("aster.apikey.userId", result.userId());
         ctx.setProperty("aster.apikey.tenantId", result.tenantId());
         ctx.setProperty("aster.apikey.apiKeyId", result.apiKeyId());
-
-        // 兜底：如果客户端没传 X-Tenant-Id / X-User-Id / X-Api-Key-Id，自动补齐
         if (ctx.getHeaderString("X-Tenant-Id") == null) {
             ctx.getHeaders().putSingle("X-Tenant-Id", result.tenantId());
         }
@@ -86,14 +115,10 @@ public class ApiKeyAuthFilter {
         if (ctx.getHeaderString("X-Api-Key-Id") == null) {
             ctx.getHeaders().putSingle("X-Api-Key-Id", result.apiKeyId());
         }
-        // R32 hotfix：RoleEnforcementFilter @RequireRole(MEMBER) 要求 X-User-Role
-        // 头。aster-cloud BFF 调用时会显式带上；直接拿 API key 的 raw curl
-        // 调用没有这个头会被 403 "Missing role information"。
-        // API key 是 user 自己生成的，本质上代表 user → 默认给 MEMBER
-        // 角色（足够执行 evaluate / read，不能做 admin mutate）。
         if (ctx.getHeaderString("X-User-Role") == null) {
             ctx.getHeaders().putSingle("X-User-Role", "MEMBER");
         }
+        return null;
     }
 
     /**
@@ -137,15 +162,17 @@ public class ApiKeyAuthFilter {
     }
 
     private static WebApplicationException unauthorized(String reason) {
-        return new WebApplicationException(
-            Response.status(401)
-                .entity(Map.of(
-                    "error", "unauthorized",
-                    "reason", reason,
-                    "message", "Invalid or revoked API key. See https://aster-lang.cloud/billing/api-keys"
-                ))
-                .type(MediaType.APPLICATION_JSON)
-                .build()
-        );
+        return new WebApplicationException(unauthorizedResponse(reason));
+    }
+
+    private static Response unauthorizedResponse(String reason) {
+        return Response.status(401)
+            .entity(Map.of(
+                "error", "unauthorized",
+                "reason", reason,
+                "message", "Invalid or revoked API key. See https://aster-lang.cloud/billing/api-keys"
+            ))
+            .type(MediaType.APPLICATION_JSON)
+            .build();
     }
 }

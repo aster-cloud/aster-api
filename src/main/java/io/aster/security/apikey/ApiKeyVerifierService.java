@@ -13,7 +13,6 @@ import org.jboss.logging.Logger;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -49,6 +48,9 @@ public class ApiKeyVerifierService {
 
     @Inject
     io.aster.billing.snapshot.LocalQuotaSnapshotService localSnapshot;
+
+    @Inject
+    io.aster.common.http.SharedHttpClient sharedHttpClient;
     private Cache<String, ApiKeyVerifyResult> cache;
     /** userId → 该用户所有缓存过的 keyHash，用于按用户批量失效 */
     private final ConcurrentHashMap<String, Set<String>> userIndex = new ConcurrentHashMap<>();
@@ -103,6 +105,29 @@ public class ApiKeyVerifierService {
                 Thread.currentThread().interrupt();
             }
         }
+    }
+
+    /**
+     * R32 hotfix v3: 暴露 cache fast path 给 {@link ApiKeyAuthFilter}。
+     * 命中返回结果，未命中返回 null。Filter 用它决定走同步快路径还是 Uni 慢路径。
+     * 不触发任何 IO，纯 in-memory Caffeine 查询。
+     */
+    public ApiKeyVerifyResult tryCacheLookup(String plaintextKey) {
+        if (plaintextKey == null || plaintextKey.isBlank()
+                || !plaintextKey.startsWith("ak_")) {
+            return null;
+        }
+        if (cache == null) return null;
+        return cache.getIfPresent(sha256Hex(plaintextKey));
+    }
+
+    /**
+     * R32 hotfix v3: 暴露 verify 专用 worker pool 给 {@link ApiKeyAuthFilter}
+     * 的 {@code Uni.runSubscriptionOn} 使用。这样 cache-miss verify 走 Uni 异步路径，
+     * RESTEasy event-loop 让出线程而不是等 future.get。
+     */
+    public java.util.concurrent.ExecutorService verifyExecutor() {
+        return verifyPool;
     }
 
     /**
@@ -224,12 +249,9 @@ public class ApiKeyVerifierService {
             .orElse("");
 
         String bodyJson = new JsonObject().put("keyHash", keyHash).encode();
-        Duration timeout = config.requestTimeout();
-
-        HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
-            .version(HttpClient.Version.HTTP_1_1)
-            .build();
+        // R32 hotfix v3: verify timeout 收紧到 2s — cf 正常 ~200ms，2s 已留足缓冲。
+        // 共用 SharedHttpClient 实例保持 keep-alive + TLS 会话复用，hot path 实测 <50ms。
+        Duration timeout = Duration.ofSeconds(2);
 
         HttpRequest request = HttpRequest.newBuilder()
             .uri(fullUri)
@@ -240,7 +262,8 @@ public class ApiKeyVerifierService {
             .POST(HttpRequest.BodyPublishers.ofString(bodyJson, StandardCharsets.UTF_8))
             .build();
 
-        HttpResponse<String> resp = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> resp = sharedHttpClient.client()
+            .send(request, HttpResponse.BodyHandlers.ofString());
         if (resp.statusCode() != 200) {
             throw new RuntimeException("verify HTTP " + resp.statusCode() + " body=" + truncate(resp.body(), 200));
         }

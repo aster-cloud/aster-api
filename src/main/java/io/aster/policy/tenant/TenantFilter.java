@@ -1,5 +1,6 @@
 package io.aster.policy.tenant;
 
+import io.aster.policy.security.TrialBypassPredicate;
 import io.aster.policy.security.TrialEndpointGuard;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.container.ContainerRequestContext;
@@ -50,6 +51,20 @@ public class TenantFilter implements ContainerRequestFilter {
      */
     private static final Pattern TENANT_ID_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]{1,64}$");
 
+    /**
+     * R30 reserved-tenant denylist：这些租户名仅供本服务内部 sentinel 使用，
+     * 不能通过 {@code X-Tenant-Id} header 由外部客户端设置。
+     *
+     * <p>当前唯一保留字是 {@code "trial"}，由 {@link TrialEndpointGuard} 在
+     * 通过 Origin/IP/body 三重校验后通过 {@code TRIAL_GUARD_PASSED_PROP}
+     * 凭证 + path 双重条件由本 filter 设置。外部直接传 {@code X-Tenant-Id: trial}
+     * 会污染审计 identity、PlanGate 计费维度，并在历史上曾让 enforceApiQuota 误旁路。
+     *
+     * <p>用 {@code Set.of} 而非 ConfigProperty 是有意为之 —— sentinel 应当
+     * 跟代码一起评审，而不是给 operator 用 ConfigMap 误关掉。
+     */
+    private static final java.util.Set<String> RESERVED_TENANTS = java.util.Set.of("trial");
+
     @Inject
     TenantContext tenantContext;
 
@@ -80,18 +95,11 @@ public class TenantFilter implements ContainerRequestFilter {
 
         String path = requestContext.getUriInfo().getPath();
 
-        // R28 端到端测试发现：trial 流（匿名访客）不可能持有 X-Tenant-Id。
-        // TrialEndpointGuard 已经在 AUTHENTICATION-100 完成三重校验并设置
-        // TRIAL_GUARD_PASSED_PROP；这里识别该凭证后用 "trial" 作为伪租户，
-        // 与 RoleEnforcementFilter 和 InternalCallerFilter 的 trial 处理对齐。
-        //
-        // R29 Codex audit：必须复查路径以与 RBAC bypass 保持同一边界。
-        // property 单独不足以构成 bypass —— 路径必须正好是 TRIAL_PATH，
-        // 防止其它路径误用 property 拿到伪租户。
-        if (Boolean.TRUE.equals(
-                requestContext.getProperty(TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP))
-            && TrialEndpointGuard.TRIAL_PATH.equals(
-                io.aster.security.PathNormalizer.normalize(path))) {
+        // R28→R30 trial 旁路：匿名 trial 访客没有 X-Tenant-Id；
+        // TrialEndpointGuard 已经在更早的 filter 链中三重校验通过。
+        // 用统一的 TrialBypassPredicate 判定，与 RBAC / RateLimit /
+        // InternalCaller / enforceApiQuota 共享同一边界，避免漂移。
+        if (TrialBypassPredicate.isGuardedTrialRequest(requestContext)) {
             tenantContext.setCurrentTenant("trial");
             LOG.debugf("Tenant set to 'trial' for guarded trial request (path=%s)", path);
             return;
@@ -129,6 +137,22 @@ public class TenantFilter implements ContainerRequestFilter {
 
         // 去除首尾空白
         tenantId = tenantId.trim();
+
+        // R30 reserved-tenant denylist：外部不允许使用 sentinel 租户名。
+        // 注意：trial 路径在更早的分支（TRIAL_GUARD_PASSED_PROP + TRIAL_PATH）
+        // 已经 return；走到这里的请求一定不是 guard 签发的 trial，所以
+        // X-Tenant-Id: trial 必然来自外部伪造，直接拒绝。
+        if (RESERVED_TENANTS.contains(tenantId.toLowerCase(java.util.Locale.ROOT))) {
+            LOG.warnf("Rejected reserved tenant id '%s' from external client (path=%s). "
+                + "Reserved tenants are internal sentinels installed by guarded paths only.",
+                sanitizeForLog(tenantId), path);
+            requestContext.abortWith(
+                Response.status(Response.Status.BAD_REQUEST)
+                    .entity("Reserved tenant identifier is not allowed in X-Tenant-Id header.")
+                    .build()
+            );
+            return;
+        }
 
         // 验证租户 ID 格式（防止注入攻击）
         if (strictFormat && !TENANT_ID_PATTERN.matcher(tenantId).matches()) {

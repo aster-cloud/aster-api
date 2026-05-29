@@ -927,26 +927,21 @@ public class PolicyEvaluationResource {
         String tenantId = tenantId();
         String userId = performedBy();
 
-        // R29++ Codex 复审：quota bypass 不能只看 tenant 字符串。如果某条
-        // 非 trial 请求让 TenantContext.currentTenant 变成 "trial"（白名单
-        // 默认关闭、没有 reserved tenant 拦截），/evaluate、/evaluate-json、
-        // /evaluate/batch 也会跳过 PlanGate。
+        // R29++→R30 quota bypass 三重校验：
+        //   path == TRIAL_PATH && guard 凭证 == true && tenantId == "trial"
+        // path + property 通过共享的 TrialBypassPredicate 完成；tenantId 单独
+        // 校验，确认 resource 层身份与 guard 链路真的同源。三者同时满足才
+        // 跳过 PlanGate；任何一项不满足 → 走原路径。
         //
-        // 改为三重校验，与下游 filter 的 BYPASS_TRIAL 分支保持同一安全边界：
-        //   1) endpointPath 必须是 TrialEndpointGuard.TRIAL_PATH
-        //   2) JAX-RS 请求属性 TRIAL_GUARD_PASSED_PROP 必须为 true
-        //   3) TenantContext 必须为 "trial"
-        // 三者同时满足 → 跳过 PlanGate；任何一项不满足 → 走原路径。
-        //
-        // TrialEndpointGuard 已经做了成本控制（Origin allowlist + body cap +
-        // per-IP minute/hour 限流 + concurrent semaphore），叠加 PlanGate 既
-        // 无意义又会把 "trial" 当成未签约租户 403。
-        boolean isTrialPath = io.aster.policy.security.TrialEndpointGuard.TRIAL_PATH
-            .equals(endpointPath);
-        boolean guardPassed = jaxrsCtx != null
-            && Boolean.TRUE.equals(jaxrsCtx.getProperty(
-                io.aster.policy.security.TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP));
-        if (isTrialPath && guardPassed && "trial".equals(tenantId)) {
+        // TrialEndpointGuard 已经做了成本控制（Origin + body cap + per-IP
+        // limiter + concurrent semaphore），叠加 PlanGate 会把 "trial" 当成
+        // 未签约租户 403。
+        boolean guardedTrial = io.aster.policy.security.TrialBypassPredicate
+            .isGuardedTrialPath(
+                endpointPath,
+                jaxrsCtx == null ? null : (Boolean) jaxrsCtx.getProperty(
+                    io.aster.policy.security.TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP));
+        if (guardedTrial && "trial".equals(tenantId)) {
             return new ApiQuotaGuard.GuardResult(
                 ApiQuotaGuard.Verdict.ALLOW, -1L, 0L, 0, null);
         }

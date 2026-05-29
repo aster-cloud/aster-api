@@ -188,12 +188,11 @@ public class InternalCallerFilter {
         }
         if (cls == Classification.BYPASS_TRIAL) {
             // TrialEndpointGuard 优先级早于本 filter，已经做过 Origin/body/IP 限流。
-            // 但 `aster.security.evaluate-source.trial.enabled=true` 是必要而非充分条件：
-            // 必须 **同时** 看到 guard 颁发的 TRIAL_GUARD_PASSED_PROP 凭证，才能放行。
-            // 这一双重校验避免 "trial flag 单开 = 完全无验证匿名端点" 的灰色地带。
-            if (!Boolean.TRUE.equals(ctx.getProperty(
-                    io.aster.policy.security.TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP))) {
-                LOG.warnf("trial bypass denied: guard property missing (path=%s)", p);
+            // `evaluate-source.trial.enabled=true` 是必要不充分条件：必须看到
+            // guard 颁发的凭证 + 路径精确匹配 TRIAL_PATH，才能放行。
+            // R30 改成调 TrialBypassPredicate 与其它 5 个 bypass 点共用同一判定。
+            if (!io.aster.policy.security.TrialBypassPredicate.isGuardedTrialRequest(ctx)) {
+                LOG.warnf("trial bypass denied: guard property/path missing (path=%s)", p);
                 throw forbidden("trial_guard_not_satisfied", p);
             }
             LOG.debugf("evaluate-source served via marketing-tier trial bypass (path=%s)", p);

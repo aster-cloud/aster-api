@@ -161,4 +161,44 @@ class TenantFilterTrialBypassTest {
         Assertions.assertEquals(400, resp.getValue().getStatus(),
             "guard property 不应该让 trial 路径外的请求拿到伪租户");
     }
+
+    @Test
+    @DisplayName("R30: 外部传 X-Tenant-Id: trial → 400 reserved tenant (case-insensitive)")
+    void externalReservedTenantIsRejected() throws Exception {
+        // 外部客户端不允许直接使用 sentinel 租户名。trial 路径走的是更早的
+        // TRIAL_GUARD_PASSED_PROP 分支，不会触达这里 —— 所以走到 reserved
+        // 检查的 X-Tenant-Id: trial 一定来自外部伪造。
+        TenantFilter filter = newFilter();
+
+        for (String reserved : new String[]{"trial", "Trial", "TRIAL"}) {
+            ContainerRequestContext ctx = newCtx(
+                "POST",
+                "/api/v1/policies/evaluate",  // 任意普通端点
+                Map.of("X-Tenant-Id", reserved),
+                Map.of()                       // 无 guard 凭证
+            );
+            filter.filter(ctx);
+            ArgumentCaptor<Response> resp = ArgumentCaptor.forClass(Response.class);
+            verify(ctx).abortWith(resp.capture());
+            Assertions.assertEquals(400, resp.getValue().getStatus(),
+                "X-Tenant-Id='" + reserved + "' 必须被拒绝（reserved sentinel）");
+        }
+    }
+
+    @Test
+    @DisplayName("R30: 包含 trial 的合法租户名（acme-trial-corp）不被误伤")
+    void substringTrialTenantIsAllowed() throws Exception {
+        // 验证 reserved-tenant 检查用的是精确匹配而非 substring
+        TenantFilter filter = newFilter();
+        ContainerRequestContext ctx = newCtx(
+            "POST",
+            "/api/v1/policies/evaluate",
+            Map.of("X-Tenant-Id", "acme-trial-corp"),
+            Map.of()
+        );
+
+        filter.filter(ctx);
+
+        verify(ctx, never()).abortWith(any());
+    }
 }

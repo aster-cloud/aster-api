@@ -5,7 +5,6 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import io.aster.billing.PlanGateConfig;
 import io.quarkus.runtime.StartupEvent;
 import io.vertx.core.json.JsonObject;
-import io.vertx.ext.web.client.WebClient;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
@@ -14,12 +13,14 @@ import org.jboss.logging.Logger;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -47,11 +48,7 @@ public class ApiKeyVerifierService {
     PlanGateConfig config;
 
     @Inject
-    io.aster.common.http.SharedWebClient sharedWebClient;
-
-    @Inject
     io.aster.billing.snapshot.LocalQuotaSnapshotService localSnapshot;
-    // P0-R19: WebClient DCL consolidated into SharedWebClient
     private Cache<String, ApiKeyVerifyResult> cache;
     /** userId → 该用户所有缓存过的 keyHash，用于按用户批量失效 */
     private final ConcurrentHashMap<String, Set<String>> userIndex = new ConcurrentHashMap<>();
@@ -204,59 +201,66 @@ public class ApiKeyVerifierService {
         return n;
     }
 
+    /**
+     * R32 hotfix v2: 用 java.net.http.HttpClient（同步阻塞 send）取代
+     * Vert.x WebClient。原因：WebClient 的 onSuccess/onFailure 回调
+     * 在 Vert.x 上下文（event loop）上排队，即使我们在 worker pool 上
+     * future.get(timeout) 等待，回调本身仍要等 event-loop 调度，繁忙
+     * 时会超过 timeout 触发 TimeoutException(null msg) —— 即使 cf 边缘
+     * 实际 ~200ms 回包。
+     *
+     * 改成 java.net.http.HttpClient.send() 同步阻塞 IO：调用线程是
+     * verifyPool worker，整个 HTTPS 握手 + 响应在该线程上完成，不
+     * 依赖任何 event-loop 调度。
+     */
     private ApiKeyVerifyResult fetchFromCloud(String keyHash) throws Exception {
         URI baseUri = URI.create(config.cloudInternalUrl());
-        int port = baseUri.getPort() == -1
-            ? ("https".equals(baseUri.getScheme()) ? 443 : 80)
-            : baseUri.getPort();
-        boolean ssl = "https".equals(baseUri.getScheme());
         String path = "/api/internal/apikey/verify";
+        URI fullUri = baseUri.resolve(path);
 
         long timestamp = System.currentTimeMillis() / 1000;
         String signature = config.hmacKey()
             .map(k -> sign(k, "POST\n" + path + "\n" + timestamp))
             .orElse("");
 
-        JsonObject body = new JsonObject().put("keyHash", keyHash);
-        CompletableFuture<ApiKeyVerifyResult> future = new CompletableFuture<>();
-        getClient()
-            .post(port, baseUri.getHost(), path)
-            .ssl(ssl)
-            .timeout(config.requestTimeout().toMillis())
-            .putHeader("X-Aster-Timestamp", String.valueOf(timestamp))
-            .putHeader("X-Aster-Signature", signature)
-            .putHeader("Content-Type", "application/json")
-            .sendBuffer(body.toBuffer())
-            .onSuccess(resp -> {
-                if (resp.statusCode() != 200) {
-                    future.completeExceptionally(new RuntimeException("verify HTTP " + resp.statusCode()));
-                    return;
-                }
-                try {
-                    JsonObject json = resp.bodyAsJsonObject();
-                    boolean valid = json.getBoolean("valid", false);
-                    if (!valid) {
-                        future.complete(ApiKeyVerifyResult.invalid(json.getString("reason", "invalid")));
-                    } else {
-                        future.complete(ApiKeyVerifyResult.valid(
-                            json.getString("apiKeyId"),
-                            json.getString("userId"),
-                            json.getString("tenantId"),
-                            json.getString("plan"),
-                            json.getString("subscriptionStatus")
-                        ));
-                    }
-                } catch (Exception ex) {
-                    future.completeExceptionally(ex);
-                }
-            })
-            .onFailure(future::completeExceptionally);
+        String bodyJson = new JsonObject().put("keyHash", keyHash).encode();
+        Duration timeout = config.requestTimeout();
 
-        return future.get(config.requestTimeout().toMillis() + 500, TimeUnit.MILLISECONDS);
+        HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .version(HttpClient.Version.HTTP_1_1)
+            .build();
+
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(fullUri)
+            .timeout(timeout)
+            .header("X-Aster-Timestamp", String.valueOf(timestamp))
+            .header("X-Aster-Signature", signature)
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(bodyJson, StandardCharsets.UTF_8))
+            .build();
+
+        HttpResponse<String> resp = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() != 200) {
+            throw new RuntimeException("verify HTTP " + resp.statusCode() + " body=" + truncate(resp.body(), 200));
+        }
+        JsonObject json = new JsonObject(resp.body());
+        boolean valid = json.getBoolean("valid", false);
+        if (!valid) {
+            return ApiKeyVerifyResult.invalid(json.getString("reason", "invalid"));
+        }
+        return ApiKeyVerifyResult.valid(
+            json.getString("apiKeyId"),
+            json.getString("userId"),
+            json.getString("tenantId"),
+            json.getString("plan"),
+            json.getString("subscriptionStatus")
+        );
     }
 
-    private WebClient getClient() {
-        return sharedWebClient.client();
+    private static String truncate(String s, int max) {
+        if (s == null) return "null";
+        return s.length() <= max ? s : s.substring(0, max) + "...";
     }
 
     private static String sign(String key, String message) {

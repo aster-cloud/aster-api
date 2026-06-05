@@ -170,6 +170,10 @@ public class PolicyEvaluationResource {
         enforceApiQuota("/api/v1/policies/evaluate");
         String tenantId = tenantId();
         String performedBy = performedBy();
+        // 跨线程预捕获：评估在 worker pool 上完成，回调里 routingContext/
+        // RequestScoped 已失效，必须在进入 Uni 前抓好 apiKeyId，否则 quota/
+        // 计费计数在异步回调里静默丢失（recordApiCall 3-arg 版会读到 null）。
+        String apiKeyId = apiKeyIdFromContext();
         long startTime = System.currentTimeMillis();
         Timer.Sample sample = businessMetrics.startPolicyEvaluation();
         Map<String, Object> metadata = buildEvaluationMetadata(request);
@@ -206,7 +210,7 @@ public class PolicyEvaluationResource {
             );
 
             LOG.infof("Policy evaluation completed in %dms: %s.%s", executionTime, request.policyModule(), request.policyFunction());
-            recordApiCall("/api/v1/policies/evaluate", "success", executionTime);
+            recordApiCall("/api/v1/policies/evaluate", "success", executionTime, tenantId, performedBy, apiKeyId);
             return EvaluationResponse.success(result.getResult(), executionTime);
         })
         .onFailure().recoverWithItem(throwable -> {
@@ -227,7 +231,7 @@ public class PolicyEvaluationResource {
             );
 
             LOG.errorf(throwable, "Policy evaluation failed after %dms: %s.%s", executionTime, request.policyModule(), request.policyFunction());
-            recordApiCall("/api/v1/policies/evaluate", "api_error", executionTime);
+            recordApiCall("/api/v1/policies/evaluate", "api_error", executionTime, tenantId, performedBy, apiKeyId);
             return EvaluationResponse.error(throwable.getMessage());
         });
     }
@@ -245,6 +249,8 @@ public class PolicyEvaluationResource {
         enforceApiQuota("/api/v1/policies/evaluate-json");
         String tenantId = tenantId();
         String performedBy = performedBy();
+        // 跨线程预捕获 apiKeyId（评估在 worker 上完成，回调里 context 已失效）。
+        String apiKeyId = apiKeyIdFromContext();
         long startTime = System.currentTimeMillis();
         Timer.Sample sample = businessMetrics.startPolicyEvaluation();
 
@@ -311,7 +317,7 @@ public class PolicyEvaluationResource {
                 );
 
                 LOG.infof("JSON policy evaluation completed in %dms: %s.%s", executionTime, policyModule, policyFunction);
-                recordApiCall("/api/v1/policies/evaluate-json", "success", executionTime);
+                recordApiCall("/api/v1/policies/evaluate-json", "success", executionTime, tenantId, performedBy, apiKeyId);
                 return EvaluationResponse.success(result.getResult(), executionTime);
             })
             .onFailure().recoverWithItem(throwable -> {
@@ -335,7 +341,7 @@ public class PolicyEvaluationResource {
                 );
 
                 LOG.errorf(throwable, "JSON policy evaluation failed after %dms: %s.%s", executionTime, policyModule, policyFunction);
-                recordApiCall("/api/v1/policies/evaluate-json", "api_error", executionTime);
+                recordApiCall("/api/v1/policies/evaluate-json", "api_error", executionTime, tenantId, performedBy, apiKeyId);
                 return EvaluationResponse.error(throwable.getMessage());
             });
         } catch (Exception e) {
@@ -343,7 +349,7 @@ public class PolicyEvaluationResource {
             businessMetrics.endPolicyEvaluation(sample);
 
             LOG.errorf(e, "Failed to process JSON policy: %s", e.getMessage());
-            recordApiCall("/api/v1/policies/evaluate-json", "api_error", executionTime);
+            recordApiCall("/api/v1/policies/evaluate-json", "api_error", executionTime, tenantId, performedBy, apiKeyId);
             return Uni.createFrom().item(EvaluationResponse.error("JSON 策略解析失败: " + e.getMessage()));
         }
     }
@@ -592,6 +598,9 @@ public class PolicyEvaluationResource {
         // batch 按"批中每条都算一次调用"扣配额：在 quota 检查之外，结果落地时按条 recordApiCall
         enforceApiQuota("/api/v1/policies/evaluate/batch");
         String tenantId = tenantId();
+        // 跨线程预捕获：批量评估在 worker 上完成，.map 回调里 context 已失效。
+        String performedBy = performedBy();
+        String apiKeyId = apiKeyIdFromContext();
         long startTime = System.currentTimeMillis();
 
         LOG.infof("Batch evaluating %d policies for tenant %s", request.requests().size(), tenantId);
@@ -635,7 +644,7 @@ public class PolicyEvaluationResource {
                         attempt.getResult().getResult(),
                         execTime
                     ));
-                    recordApiCall("/api/v1/policies/evaluate/batch", "success", execTime);
+                    recordApiCall("/api/v1/policies/evaluate/batch", "success", execTime, tenantId, performedBy, apiKeyId);
                 }
 
                 // 添加失败的结果
@@ -651,7 +660,7 @@ public class PolicyEvaluationResource {
                     );
 
                     responses.add(EvaluationResponse.error(attempt.getError()));
-                    recordApiCall("/api/v1/policies/evaluate/batch", "api_error", execTime);
+                    recordApiCall("/api/v1/policies/evaluate/batch", "api_error", execTime, tenantId, performedBy, apiKeyId);
                 }
 
                 LOG.infof("Batch evaluation completed in %dms: %d success, %d failures",

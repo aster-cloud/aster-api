@@ -13,11 +13,12 @@ public record ApiKeySnapshot(
     String reason,           // 仅 invalid 时有意义
     String apiKeyId,
     String userId,
+    String tenantId,         // key 所属租户；旧 snapshot 可能为 null
     String plan,
     Long revokedAtEpochMs    // null = 未撤销
 ) {
     public static ApiKeySnapshot invalid(String reason) {
-        return new ApiKeySnapshot(false, reason, null, null, null, null);
+        return new ApiKeySnapshot(false, reason, null, null, null, null, null);
     }
 
     public boolean revoked() {

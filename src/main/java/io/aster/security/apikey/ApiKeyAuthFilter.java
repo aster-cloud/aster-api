@@ -4,7 +4,6 @@ import io.aster.security.apikey.ApiKeyVerifyResult;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Priorities;
-import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -96,18 +95,39 @@ public class ApiKeyAuthFilter {
                          : io.smallrye.mutiny.Uni.createFrom().item(r);
     }
 
-    /** 返回 null = 验证通过继续；非 null = 401 短路。 */
+    /** 返回 null = 验证通过继续；非 null = 401/403 短路。 */
     private Response applyResultSync(ContainerRequestContext ctx,
                                      ApiKeyVerifyResult result, String path) {
         if (!result.valid()) {
             LOG.infof("apikey verify rejected: path=%s reason=%s", path, result.reason());
             return unauthorizedResponse(result.reason() != null ? result.reason() : "invalid_key");
         }
+
+        // 租户隔离铁律：API key 绑定唯一租户。若调用方自带 X-Tenant-Id，
+        // 必须与 key 所属租户精确匹配，否则拒绝。
+        //
+        // 历史漏洞：此前缺失该校验时，TenantFilter 会把客户端 header 写进
+        // TenantContext，而 PolicyEvaluationResource.tenantId() 优先读
+        // TenantContext —— 于是持有任意有效 key 的调用方带 X-Tenant-Id: victim
+        // 即可对 victim 租户执行策略 / 清缓存 / 回滚 / 查版本（跨租户越权）。
+        // 在认证点 fail-closed 是唯一可靠的拦截位置：这里同时握有"已验证租户"
+        // 和"请求 header"，且早于 TenantFilter 填充 TenantContext。
+        String verifiedTenant = result.tenantId();
+        String headerTenant = ctx.getHeaderString("X-Tenant-Id");
+        if (isTenantMismatch(verifiedTenant, headerTenant)) {
+            LOG.warnf("apikey tenant mismatch: path=%s key_tenant=%s header_tenant=%s — denying",
+                path, verifiedTenant, sanitize(headerTenant));
+            return forbiddenResponse("tenant_mismatch");
+        }
+
         ctx.setProperty("aster.apikey.userId", result.userId());
         ctx.setProperty("aster.apikey.tenantId", result.tenantId());
         ctx.setProperty("aster.apikey.apiKeyId", result.apiKeyId());
-        if (ctx.getHeaderString("X-Tenant-Id") == null) {
-            ctx.getHeaders().putSingle("X-Tenant-Id", result.tenantId());
+        // 无条件以已验证租户覆盖 header：上面已确保 header 要么缺失、要么与
+        // 验证结果一致，覆盖后下游（TenantFilter / TenantContext）只会看到
+        // 权威值，杜绝任何 header 旁路。
+        if (verifiedTenant != null && !verifiedTenant.isBlank()) {
+            ctx.getHeaders().putSingle("X-Tenant-Id", verifiedTenant);
         }
         if (ctx.getHeaderString("X-User-Id") == null) {
             ctx.getHeaders().putSingle("X-User-Id", result.userId());
@@ -161,8 +181,20 @@ public class ApiKeyAuthFilter {
         return false;
     }
 
-    private static WebApplicationException unauthorized(String reason) {
-        return new WebApplicationException(unauthorizedResponse(reason));
+    /**
+     * 租户匹配判定（纯函数，便于单测）。
+     *
+     * <p>规则：调用方未带 {@code X-Tenant-Id}（null/空白）时视为"无主张"，
+     * 不算 mismatch（下游会以已验证租户填充）。带了就必须 trim 后与已验证
+     * 租户精确相等，否则 mismatch → 拒绝。
+     *
+     * @return true 表示存在冲突，必须拒绝
+     */
+    static boolean isTenantMismatch(String verifiedTenant, String headerTenant) {
+        if (headerTenant == null || headerTenant.isBlank()) {
+            return false;
+        }
+        return !headerTenant.trim().equals(verifiedTenant);
     }
 
     private static Response unauthorizedResponse(String reason) {
@@ -174,5 +206,23 @@ public class ApiKeyAuthFilter {
             ))
             .type(MediaType.APPLICATION_JSON)
             .build();
+    }
+
+    private static Response forbiddenResponse(String reason) {
+        return Response.status(403)
+            .entity(Map.of(
+                "error", "forbidden",
+                "reason", reason,
+                "message", "The X-Tenant-Id header does not match the tenant bound to this API key."
+            ))
+            .type(MediaType.APPLICATION_JSON)
+            .build();
+    }
+
+    /** 日志注入防护：截断 + 去除控制字符（header 值来自不可信客户端）。 */
+    private static String sanitize(String input) {
+        if (input == null) return "null";
+        String s = input.length() > 64 ? input.substring(0, 64) + "..." : input;
+        return s.replaceAll("[\\r\\n\\t]", "_");
     }
 }

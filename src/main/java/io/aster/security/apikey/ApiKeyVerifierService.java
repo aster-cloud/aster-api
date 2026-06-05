@@ -180,14 +180,31 @@ public class ApiKeyVerifierService {
         java.util.Optional<io.aster.billing.snapshot.ApiKeySnapshot> redisHit = localSnapshot.getApiKey(keyHash);
         if (redisHit.isPresent()) {
             io.aster.billing.snapshot.ApiKeySnapshot s = redisHit.get();
-            ApiKeyVerifyResult fromRedis = s.valid()
-                ? ApiKeyVerifyResult.valid(s.apiKeyId(), s.userId(), s.userId(), s.plan(), null)
-                : ApiKeyVerifyResult.invalid(s.reason() != null ? s.reason() : "invalid");
-            cache.put(keyHash, fromRedis);
-            if (fromRedis.valid() && fromRedis.userId() != null) {
-                userIndex.computeIfAbsent(fromRedis.userId(), k -> ConcurrentHashMap.newKeySet()).add(keyHash);
+            // 租户隔离：snapshot 命中也必须带权威 tenantId。历史上这里把
+            // s.userId() 当 tenantId 传，导致认证上下文租户 = 用户ID（跨租户
+            // 隔离 / 计费 / 审计全错）。现在：
+            //   - invalid snapshot → 直接 invalid
+            //   - valid 但缺 tenantId（旧 snapshot 尚未回填）→ 不能瞎猜，
+            //     fall through 到 cloud verify（权威，返回正确 tenantId），
+            //     fail-closed 而非 fail-wrong。
+            if (!s.valid()) {
+                ApiKeyVerifyResult fromRedis = ApiKeyVerifyResult.invalid(
+                    s.reason() != null ? s.reason() : "invalid");
+                cache.put(keyHash, fromRedis);
+                return fromRedis;
             }
-            return fromRedis;
+            if (s.tenantId() != null && !s.tenantId().isBlank()) {
+                ApiKeyVerifyResult fromRedis = ApiKeyVerifyResult.valid(
+                    s.apiKeyId(), s.userId(), s.tenantId(), s.plan(), null);
+                cache.put(keyHash, fromRedis);
+                if (fromRedis.userId() != null) {
+                    userIndex.computeIfAbsent(fromRedis.userId(), k -> ConcurrentHashMap.newKeySet()).add(keyHash);
+                }
+                return fromRedis;
+            }
+            LOG.debugf("apikey snapshot hit but tenantId missing (stale snapshot); "
+                + "falling through to cloud verify for authoritative tenant");
+            // 不缓存、不 return —— 继续走下面的 cloud verify。
         }
 
         ApiKeyVerifyResult fresh;

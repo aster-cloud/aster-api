@@ -116,6 +116,13 @@ public class PlanGateService {
         String threadName = Thread.currentThread().getName();
         if (threadName != null && threadName.startsWith("vert.x-eventloop")) {
             triggerAsyncLookup(tenantId);
+            // 配置一致性：若运维显式设了 failOpen=false（要求 fail-closed），
+            // event-loop 分支也必须遵守，否则首次请求 / 缓存失效窗口会无视该
+            // 配置静默放行 —— 与下方 worker 同步路径的 fail-closed 语义产生分歧。
+            // 默认 failOpen=true 时维持原有 0-RTT fail-open 热路径，行为不变。
+            if (!config.failOpen()) {
+                throw new PlanLimitException("plan_lookup_unavailable");
+            }
             return PlanInfo.failOpen();
         }
 

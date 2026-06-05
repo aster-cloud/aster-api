@@ -167,6 +167,7 @@ public class SnapshotWarmupService {
                 ApiKeySnapshot s = k.getBoolean("valid", false)
                     ? new ApiKeySnapshot(true, null,
                         k.getString("apiKeyId"), k.getString("userId"),
+                        k.getString("tenantId"),
                         k.getString("plan"), k.getLong("revokedAtEpochMs"))
                     : ApiKeySnapshot.invalid("revoked");
                 snapshot.setApiKey(keyHash, s);

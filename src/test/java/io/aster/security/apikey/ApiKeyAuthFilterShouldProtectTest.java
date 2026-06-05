@@ -158,4 +158,34 @@ class ApiKeyAuthFilterShouldProtectTest {
         assertTrue(call("/api/v1/policies;a=1/foo;b=2/rollback"));
         assertTrue(call("/api/v1/policies;a=1/foo;b=2/rollback;c=3"));
     }
+
+    // ============================================================
+    // 跨租户隔离：X-Tenant-Id 必须匹配 API key 所属租户
+    // 历史漏洞：缺失该校验时，持有任意有效 key 的调用方带 X-Tenant-Id: victim
+    // 即可对 victim 租户执行突变操作（跨租户越权）。
+    // ============================================================
+
+    @Test
+    void noHeaderTenantIsNotMismatch() {
+        // 调用方未主张租户 → 不算冲突（下游以已验证租户填充）
+        assertFalse(ApiKeyAuthFilter.isTenantMismatch("tenant-a", null));
+        assertFalse(ApiKeyAuthFilter.isTenantMismatch("tenant-a", ""));
+        assertFalse(ApiKeyAuthFilter.isTenantMismatch("tenant-a", "   "));
+    }
+
+    @Test
+    void matchingHeaderTenantIsAllowed() {
+        assertFalse(ApiKeyAuthFilter.isTenantMismatch("tenant-a", "tenant-a"));
+        // 前后空白应被 trim 后比较
+        assertFalse(ApiKeyAuthFilter.isTenantMismatch("tenant-a", "  tenant-a  "));
+    }
+
+    @Test
+    void differentHeaderTenantIsRejected() {
+        // 核心安全断言：header 租户 != key 租户 → 必须拒绝
+        assertTrue(ApiKeyAuthFilter.isTenantMismatch("tenant-a", "tenant-b"));
+        assertTrue(ApiKeyAuthFilter.isTenantMismatch("tenant-a", "victim"));
+        // 大小写敏感：租户 ID 精确匹配，TENANT-A != tenant-a
+        assertTrue(ApiKeyAuthFilter.isTenantMismatch("tenant-a", "TENANT-A"));
+    }
 }

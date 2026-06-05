@@ -164,6 +164,15 @@ public class ApiQuotaGuard {
             limit = s.apiCallsLimit();
             apiAccessAllowed = s.apiAccessAllowed();
             unlimited = s.unlimitedApi();
+            // used 取本地 Redis 计数器。已知风险（经评审接受）：Redis 冷启动 /
+            // counter 丢失 / 迁移后，本地计数器从 0 重新累积，而 cloud 可能已记录
+            // 历史用量（如 150%）。此窗口内 ">=200% hard reject" 会失效，直到本地
+            // 计数追上。判定为可接受：(1) counter 是用量"计量"而非访问"鉴权"——
+            // 真正的访问控制（撤销 / 过期 / plan 禁用）由 ApiKeyVerifierService 的
+            // cloud verify 持有；(2) 影响有界（单个重新累积窗口）；(3) 用 cloud
+            // monthlyUsed 给本地 counter 播种的修法会引入 double-count 风险，
+            // 需更大改动，不在本次范围。如需收紧：UserSnapshot 携带 baseline
+            // monthlyUsed，此处取 max(localCounter, baseline)。
             used = snapshot.getCounter(userId);
         } else {
             // R32 hotfix v3: 先查进程内 Caffeine（5min TTL），命中即 0 RTT。
@@ -246,7 +255,22 @@ public class ApiQuotaGuard {
         try {
             String threadName = Thread.currentThread().getName();
             if (threadName != null && threadName.startsWith("vert.x-eventloop") && precheckPool != null) {
-                return precheckPool.submit(() -> checkRateSync(apiKeyId, plan)).get();
+                // 关键：offload 后必须带超时 get()，否则 event-loop 线程会卡在
+                // 队列等待上 —— precheckPool 只有 4 线程且与 precheck warmup 共享，
+                // 高并发 cache-miss / cloud 抖动时任务可能排队，无超时 get() 会把
+                // 阻塞从"单个慢请求"放大成"整个 event-loop 停摆"，延迟扩散到
+                // 不相关请求。HTTP 自身超时 700ms，这里给 1s 上限（含排队 + 调度
+                // 余量），超时按 fail-open 处理（rate-check 是软控制，真正的访问
+                // 鉴权在 ApiKeyVerifierService）。
+                java.util.concurrent.Future<RateCheck> f =
+                    precheckPool.submit(() -> checkRateSync(apiKeyId, plan));
+                try {
+                    return f.get(1, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (java.util.concurrent.TimeoutException te) {
+                    f.cancel(true);
+                    LOG.debugf("checkRate offload 超时(>1s)，按 fail-open 放行 apiKeyId=%.8s", apiKeyId);
+                    return new RateCheck(true, 0, 0);
+                }
             }
             return checkRateSync(apiKeyId, plan);
         } catch (Exception e) {

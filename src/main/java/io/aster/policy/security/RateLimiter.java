@@ -183,7 +183,12 @@ public class RateLimiter {
         if (maxBoundedEntries <= 0 || connectionCounters.size() <= maxBoundedEntries) return;
         if (!eagerEvictConnInFlight.compareAndSet(false, true)) return;
         try {
-            connectionCounters.entrySet().removeIf(e -> e.getValue().get() == 0);
+            // 与 evictIdleEntries 同：走 compute() 而非裸 removeIf，避免与
+            // acquire 的判定-删除竞争窗口。
+            for (String key : connectionCounters.keySet()) {
+                connectionCounters.compute(key, (k, counter) ->
+                    (counter == null || counter.get() == 0) ? null : counter);
+            }
             LOG.warnf("限流器触发 connectionCounters eager evict：达上限 %d", maxBoundedEntries);
         } finally {
             eagerEvictConnInFlight.set(false);
@@ -259,19 +264,29 @@ public class RateLimiter {
         // 一个常数上。
         maybeEagerEvictConnections();
 
-        AtomicInteger counter = connectionCounters.computeIfAbsent(identifier, k -> new AtomicInteger(0));
-
-        // CAS 循环确保线程安全
-        while (true) {
+        // R-audit：check+increment 必须与 evictIdleEntries 的 remove 在同一把
+        // per-bucket 锁内串行，否则存在与 windows 同类的游离-counter race：
+        //   computeIfAbsent 拿到 AtomicInteger（此刻 count==0）
+        //   → 清理线程 removeIf(count==0) 把 entry 从 map 删除
+        //   → 这里对已游离的 AtomicInteger 自增成功，但下一次 acquire 会
+        //     computeIfAbsent 建一个全新 counter → 并发上限被悄悄重置。
+        // 用 connectionCounters.compute() 把"读 + 判满 + 自增"全放进 bucket 锁；
+        // 清理改用同样走 compute 语义的 remove(key, zeroValue)（见 evictIdleEntries），
+        // 两条路径互斥，消除游离窗口。
+        final boolean[] granted = { false };
+        connectionCounters.compute(identifier, (k, existing) -> {
+            AtomicInteger counter = existing != null ? existing : new AtomicInteger(0);
             int current = counter.get();
             if (current >= maxConnections) {
-                LOG.debugf("连接限流拒绝: identifier=%s, current=%d, max=%d", identifier, current, maxConnections);
-                return false;
+                LOG.debugf("连接限流拒绝: identifier=%s, current=%d, max=%d", k, current, maxConnections);
+                granted[0] = false;
+            } else {
+                counter.set(current + 1);
+                granted[0] = true;
             }
-            if (counter.compareAndSet(current, current + 1)) {
-                return true;
-            }
-        }
+            return counter;
+        });
+        return granted[0];
     }
 
     /**
@@ -280,10 +295,20 @@ public class RateLimiter {
      * @param identifier 连接标识
      */
     public void releaseConnection(String identifier) {
-        AtomicInteger counter = connectionCounters.get(identifier);
-        if (counter != null) {
-            counter.updateAndGet(v -> Math.max(0, v - 1));
-        }
+        // 与 tryAcquireConnection / evictIdleEntries 共享 bucket 锁：在 compute
+        // 内自减，归零即把 entry 从 map 移除（return null），避免空 counter 堆积，
+        // 也消除"自减后被另一线程读到游离 counter"的窗口。
+        connectionCounters.compute(identifier, (k, counter) -> {
+            if (counter == null) {
+                return null;
+            }
+            int next = Math.max(0, counter.get() - 1);
+            if (next == 0) {
+                return null;
+            }
+            counter.set(next);
+            return counter;
+        });
     }
 
     /**
@@ -332,7 +357,14 @@ public class RateLimiter {
                 return q.isEmpty() ? null : q;
             });
         }
-        connectionCounters.entrySet().removeIf(entry -> entry.getValue().get() == 0);
+        // 连接计数清理也走 compute()，与 acquire/release 共享 bucket 锁：只在
+        // count 确实为 0 时移除。裸 removeIf 在判定与删除之间存在与 acquire 的
+        // 竞争窗口（acquire 刚自增、removeIf 读到旧值误删）；compute 内读到的
+        // 一定是最新值，且整段操作原子。
+        for (String key : connectionCounters.keySet()) {
+            connectionCounters.compute(key, (k, counter) ->
+                (counter == null || counter.get() == 0) ? null : counter);
+        }
         LOG.debugf("限流器空闲清理完成: windows=%d, connections=%d",
             windows.size(), connectionCounters.size());
     }

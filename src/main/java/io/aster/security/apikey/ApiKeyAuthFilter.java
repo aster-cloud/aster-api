@@ -113,10 +113,17 @@ public class ApiKeyAuthFilter {
         // 在认证点 fail-closed 是唯一可靠的拦截位置：这里同时握有"已验证租户"
         // 和"请求 header"，且早于 TenantFilter 填充 TenantContext。
         String verifiedTenant = result.tenantId();
+        // 自洽 invariant：valid 的验证结果必须携带租户。缺失说明 verify 上游
+        // （cloud / snapshot）数据不完整——此时 fail-closed，而不是放行后依赖
+        // 下游 TenantFilter 兜底（语义不稳，且可能落到 "default" 租户）。
+        if (verifiedTenant == null || verifiedTenant.isBlank()) {
+            LOG.warnf("apikey valid but tenant binding missing: path=%s — denying", path);
+            return forbiddenResponse("invalid_tenant_binding");
+        }
         String headerTenant = ctx.getHeaderString("X-Tenant-Id");
         if (isTenantMismatch(verifiedTenant, headerTenant)) {
             LOG.warnf("apikey tenant mismatch: path=%s key_tenant=%s header_tenant=%s — denying",
-                path, verifiedTenant, sanitize(headerTenant));
+                path, sanitize(verifiedTenant), sanitize(headerTenant));
             return forbiddenResponse("tenant_mismatch");
         }
 

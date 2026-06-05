@@ -26,12 +26,7 @@ ALTER TABLE IF EXISTS policy_versions
 ALTER TABLE IF EXISTS used_nonce
     ALTER COLUMN request_hash TYPE varchar(64);
 
--- failure_reason 实体声明为 varchar(10000)，迁移建为 TEXT。加 10000 长度约束
--- 前先把任何历史超长值截断到 10000，避免 ALTER ... TYPE varchar(10000) 因
--- 个别超长行失败（防御性：正常 failure reason 远短于此，命中概率极低）。
-UPDATE workflow_events
-    SET failure_reason = left(failure_reason, 10000)
-    WHERE failure_reason IS NOT NULL AND char_length(failure_reason) > 10000;
-
-ALTER TABLE IF EXISTS workflow_events
-    ALTER COLUMN failure_reason TYPE varchar(10000);
+-- 注意：workflow_events.failure_reason 的类型漂移（TEXT vs 实体的
+-- varchar(10000)）**不**在此处通过 DDL 收敛——那会给审计/回放数据加上
+-- 长度约束并可能截断历史超长堆栈。改为把实体映射对齐成 TEXT
+-- （WorkflowEventEntity.failureReason columnDefinition="text"），零数据风险。

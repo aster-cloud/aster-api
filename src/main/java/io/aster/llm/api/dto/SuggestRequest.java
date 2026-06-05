@@ -19,6 +19,9 @@ public record SuggestRequest(
 
     String locale,
 
+    // focus 是短关注点提示（performance / readability / …），会原样拼入 prompt。
+    // 设小上限防止它成为绕过 source 上限的超大 prompt 注入面。
+    @Size(max = 512, message = "focus 长度超过上限（最多 512 字符）")
     String focus,
 
     String model

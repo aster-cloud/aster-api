@@ -60,9 +60,12 @@ public class WorkflowEventEntity extends PanacheEntityBase {
     public Long backoffDelayMs;
 
     /**
-     * 失败原因，扩大长度以兼容堆栈信息
+     * 失败原因（可含堆栈信息）。映射为 TEXT 而非定长 varchar：
+     * 迁移历史中该列就是 TEXT，工作流事件是审计/回放/排障数据，绝不能为了
+     * 凑 Hibernate 校验而对历史值做有损截断。用 columnDefinition="text" 让
+     * 实体与既有列一致，消除 schema 校验告警且零数据风险。
      */
-    @Column(name = "failure_reason", length = 10000)
+    @Column(name = "failure_reason", columnDefinition = "text")
     public String failureReason;
 
     /**

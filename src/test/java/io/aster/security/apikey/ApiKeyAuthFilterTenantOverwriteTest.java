@@ -71,6 +71,18 @@ class ApiKeyAuthFilterTenantOverwriteTest {
             "验证结果应写入 ctx property 供下游读取");
     }
 
+    @Test
+    void validResultWithMissingTenantBindingIsRejected() throws Exception {
+        // 自洽 invariant：valid 但租户缺失 → fail-closed（403 invalid_tenant_binding），
+        // 不能放行后依赖下游兜底（可能落到 "default" 租户）。
+        FakeCtx ctx = new FakeCtx(Map.of());
+        ApiKeyVerifyResult result = ApiKeyVerifyResult.valid("ak1", "u1", null, "pro", "active");
+
+        Response resp = invokeApply(ctx, result);
+
+        assertEquals(403, resp.getStatus(), "valid 但 tenant 缺失必须 403 拒绝");
+    }
+
     /**
      * 最小手写 ContainerRequestContext 假实现：只实现 filter 用到的
      * getHeaderString / getHeaders().putSingle / get/setProperty，其余抛

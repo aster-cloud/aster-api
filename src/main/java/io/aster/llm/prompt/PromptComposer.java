@@ -193,13 +193,27 @@ public class PromptComposer {
         return "\"\"\"\n" + escaped + "\n\"\"\"";
     }
 
+    /**
+     * traceData / schema 等结构化字段拼入 prompt 前的序列化上限。source 已被
+     * DTO @Size 限制，但 traceData 是无界 Object——不设上限就能绕过 source 上限
+     * 制造超大 prompt（内存 + 序列化 + LLM 调用成本放大）。这里硬截断序列化
+     * 结果，超长即截并标注，保证单字段对 prompt 体积的贡献有界。
+     */
+    static final int MAX_SERIALIZED_TRACE_CHARS = 16_384;
+
     private String serializeSchema(Object schema) {
         if (schema == null) return "";
+        String out;
         try {
-            return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(schema);
+            out = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(schema);
         } catch (Exception e) {
-            return String.valueOf(schema);
+            out = String.valueOf(schema);
         }
+        if (out != null && out.length() > MAX_SERIALIZED_TRACE_CHARS) {
+            return out.substring(0, MAX_SERIALIZED_TRACE_CHARS)
+                + "\n…[truncated: trace data exceeded " + MAX_SERIALIZED_TRACE_CHARS + " chars]";
+        }
+        return out;
     }
 
     private String localeToLanguageName(String locale) {

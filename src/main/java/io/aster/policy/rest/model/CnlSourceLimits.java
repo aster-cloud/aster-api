@@ -16,6 +16,19 @@ public final class CnlSourceLimits {
     /** 单次请求允许的最大 CNL 源码字符数（64 KiB）。 */
     public static final int MAX_SOURCE_LENGTH = 65_536;
 
+    /**
+     * JSON 策略定义（Core IR JSON）最大字符数（256 KiB）。比 CNL source 宽，
+     * 因为序列化后的 Core IR 比源码冗长，但仍远高于任何真实策略。
+     */
+    public static final int MAX_JSON_POLICY_LENGTH = 262_144;
+
+    /**
+     * 单次评估请求 context 数组的最大元素数。评估是按位置传参，真实函数参数
+     * 个数很小（个位数）；上限设 256 足以覆盖任何合法用例，同时防止超大数组
+     * 在序列化/求值时放大成本。
+     */
+    public static final int MAX_CONTEXT_ELEMENTS = 256;
+
     private CnlSourceLimits() {
     }
 }

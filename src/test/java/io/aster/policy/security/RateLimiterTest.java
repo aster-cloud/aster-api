@@ -142,6 +142,30 @@ class RateLimiterTest {
     }
 
     @Test
+    void connectionMap_达硬上限时拒绝新identifier_但已在册可继续() throws Exception {
+        // 设小的 maxBoundedEntries，模拟 high-cardinality 活跃连接攻击：
+        // 零计数清理无法降容（全是活跃连接），map 越界后必须拒绝新 identifier，
+        // 但已在册的 identifier 仍可在自己额度内继续获取。
+        var f = RateLimiter.class.getDeclaredField("maxBoundedEntries");
+        f.setAccessible(true);
+        f.setInt(rateLimiter, 3);
+
+        int maxConn = 5;
+        // 先用 3 个不同 identifier 各占 1 个活跃连接 → map 填到上限。
+        assertTrue(rateLimiter.tryAcquireConnection("ip-a", maxConn));
+        assertTrue(rateLimiter.tryAcquireConnection("ip-b", maxConn));
+        assertTrue(rateLimiter.tryAcquireConnection("ip-c", maxConn));
+
+        // 第 4 个**新** identifier：map 已达硬上限且无零计数可清 → 拒绝。
+        assertFalse(rateLimiter.tryAcquireConnection("ip-d-new", maxConn),
+            "map 达硬上限后，新 identifier 必须被拒绝（连接 map 不可无界增长）");
+
+        // 已在册的 identifier 不受影响，仍可在额度内继续。
+        assertTrue(rateLimiter.tryAcquireConnection("ip-a", maxConn),
+            "已在册 identifier 不应被硬上限误伤");
+    }
+
+    @Test
     void activeConnections_返回正确计数() {
         assertEquals(0, rateLimiter.activeConnections("ip-count"));
 

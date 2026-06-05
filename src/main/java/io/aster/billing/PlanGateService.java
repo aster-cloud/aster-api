@@ -5,7 +5,6 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import io.vertx.core.json.JsonObject;
-import io.vertx.ext.web.client.WebClient;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
@@ -19,12 +18,10 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HexFormat;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * 跨服务 plan 查询服务
@@ -45,13 +42,9 @@ public class PlanGateService {
     PlanGateConfig config;
 
     @Inject
-    io.aster.common.http.SharedWebClient sharedWebClient;
-
-    @Inject
     io.aster.common.http.SharedHttpClient sharedHttpClient;
 
     private Cache<String, PlanInfo> cache;
-    // P0-R19: WebClient DCL consolidated into SharedWebClient
 
     /**
      * R32 hotfix v3: 同 ApiQuotaGuard，hot path 不能阻塞 event-loop 等 cf 回包。
@@ -128,9 +121,12 @@ public class PlanGateService {
             return PlanInfo.failOpen();
         }
 
-        // Caller 在 worker 上时直接 fetch（同步路径，e.g. CDI 内部调用 / 后台任务）
+        // Caller 在 worker 上时直接 fetch（同步路径，e.g. CDI 内部调用 / 后台任务）。
+        // 统一走 java.net.http.HttpClient（同步 send），与 event-loop warmup 路径
+        // 一致；不再用 Vert.x WebClient——后者的 onSuccess/onFailure 回调要等
+        // event-loop 调度，繁忙时即使在 worker 上 future.get 也会假超时（R32 根因）。
         try {
-            PlanInfo fetched = fetchFromCloud(tenantId);
+            PlanInfo fetched = fetchFromCloudHttpClient(tenantId);
             cache.put(tenantId, fetched);
             return fetched;
         } catch (Exception e) {
@@ -211,49 +207,6 @@ public class PlanGateService {
         }
     }
 
-    private PlanInfo fetchFromCloud(String tenantId) throws Exception {
-        URI baseUri = URI.create(config.cloudInternalUrl());
-        int port = baseUri.getPort() == -1
-            ? ("https".equals(baseUri.getScheme()) ? 443 : 80)
-            : baseUri.getPort();
-        boolean ssl = "https".equals(baseUri.getScheme());
-        String path = "/api/internal/tenant/" + tenantId + "/plan";
-
-        long timestamp = System.currentTimeMillis() / 1000;
-        String signature = config.hmacKey()
-            .map(key -> sign(key, "GET\n" + path + "\n" + timestamp))
-            .orElse("");
-
-        CompletableFuture<PlanInfo> future = new CompletableFuture<>();
-        getClient()
-            .get(port, baseUri.getHost(), path)
-            .ssl(ssl)
-            .timeout(config.requestTimeout().toMillis())
-            .putHeader("X-Aster-Timestamp", String.valueOf(timestamp))
-            .putHeader("X-Aster-Signature", signature)
-            .send()
-            .onSuccess(resp -> {
-                if (resp.statusCode() != 200) {
-                    future.completeExceptionally(new RuntimeException(
-                        "cloud /internal/tenant/" + tenantId + "/plan 返回 " + resp.statusCode()));
-                    return;
-                }
-                try {
-                    JsonObject json = resp.bodyAsJsonObject();
-                    future.complete(toPlanInfo(json));
-                } catch (Exception e) {
-                    future.completeExceptionally(e);
-                }
-            })
-            .onFailure(future::completeExceptionally);
-
-        try {
-            return future.get(config.requestTimeout().toMillis() + 500, TimeUnit.MILLISECONDS);
-        } catch (TimeoutException e) {
-            throw new RuntimeException("plan-gate 调用超时", e);
-        }
-    }
-
     private static PlanInfo toPlanInfo(JsonObject json) {
         return new PlanInfo(
             json.getString("plan", "free"),
@@ -273,9 +226,5 @@ public class PlanGateService {
         } catch (Exception e) {
             throw new RuntimeException("HMAC 签名失败", e);
         }
-    }
-
-    private WebClient getClient() {
-        return sharedWebClient.client();
     }
 }

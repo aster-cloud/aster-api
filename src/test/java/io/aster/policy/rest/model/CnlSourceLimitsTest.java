@@ -77,4 +77,32 @@ class CnlSourceLimitsTest {
         assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("source")),
             "违规应落在 source 字段上");
     }
+
+    @Test
+    void evaluationRequestRejectsTooManyContextElements() {
+        Object[] tooMany = new Object[CnlSourceLimits.MAX_CONTEXT_ELEMENTS + 1];
+        java.util.Arrays.fill(tooMany, 1);
+        EvaluationRequest req = new EvaluationRequest("m", "f", tooMany);
+        var violations = validator.validate(req);
+        assertFalse(violations.isEmpty(), "超量 context 必须触发约束违规");
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("context")),
+            "违规应落在 context 字段上");
+    }
+
+    @Test
+    void evaluationRequestAcceptsNormalContext() {
+        EvaluationRequest req = new EvaluationRequest("m", "f", new Object[] { 1, "x", true });
+        assertTrue(validator.validate(req).isEmpty(), "正常 context 应通过校验");
+    }
+
+    @Test
+    void jsonPolicyRequestRejectsOversizedPolicy() {
+        StringBuilder sb = new StringBuilder(CnlSourceLimits.MAX_JSON_POLICY_LENGTH + 2);
+        while (sb.length() <= CnlSourceLimits.MAX_JSON_POLICY_LENGTH) sb.append('x');
+        JsonPolicyRequest req = new JsonPolicyRequest(sb.toString(), java.util.Map.of());
+        var violations = validator.validate(req);
+        assertFalse(violations.isEmpty(), "超长 policy 必须触发约束违规");
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("policy")),
+            "违规应落在 policy 字段上");
+    }
 }

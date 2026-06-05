@@ -117,6 +117,24 @@ public class PolicyEvaluationResource {
         new Semaphore(EVAL_SOURCE_PERMITS_COUNT, true);
     private static final long EVAL_SOURCE_ACQUIRE_TIMEOUT_MS = 250;
 
+    /**
+     * Bounded concurrency for the ANONYMOUS CNL-parsing endpoints
+     * (/schema, /validate). These are not API-key protected (metadata, no
+     * side effects) but they DO run the lexer/canonicalizer, which is
+     * super-linear in input length — a burst of near-64KB-cap requests
+     * could otherwise pin every worker thread for seconds. The work here is
+     * parse-only (no Polyglot Context, far lighter than evaluate-source), so
+     * a plain CPU-bound cap (2× cores) suffices; on saturation we shed with
+     * 503 + Retry-After rather than letting the worker pool starve. Per-IP
+     * rate limiting (RateLimitFilter) + the 64KB @Size cap + the global body
+     * limit are the other layers; this is the concurrency backstop.
+     */
+    private static final int ANON_PARSE_PERMITS_COUNT =
+        Math.max(2, 2 * Runtime.getRuntime().availableProcessors());
+    private static final Semaphore ANON_PARSE_PERMITS =
+        new Semaphore(ANON_PARSE_PERMITS_COUNT, true);
+    private static final long ANON_PARSE_ACQUIRE_TIMEOUT_MS = 200;
+
     @Inject
     PolicyEvaluationService evaluationService;
 
@@ -547,6 +565,11 @@ public class PolicyEvaluationResource {
             request.getLocaleOrDefault(), request.getFunctionNameOrDefault());
 
         return Uni.createFrom().item(() -> {
+            // 并发闸：解析是 CPU 密集且对长输入超线性，匿名端点必须限并发，
+            // 防止突发请求拖垮 worker 池。占满则快速 503 让调用方重试。
+            if (!tryAcquireAnonParse()) {
+                throw new jakarta.ws.rs.ServiceUnavailableException("schema service busy");
+            }
             try {
                 ParameterSchemaExtractor.SchemaResult result = ParameterSchemaExtractor.extractSchema(
                     request.source(),
@@ -566,8 +589,24 @@ public class PolicyEvaluationResource {
             } catch (Exception e) {
                 LOG.errorf(e, "Failed to extract schema: %s", e.getMessage());
                 return SchemaResponse.error("模式提取失败: " + e.getMessage());
+            } finally {
+                ANON_PARSE_PERMITS.release();
             }
         }).runSubscriptionOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool());
+    }
+
+    /**
+     * 尝试在 {@link #ANON_PARSE_ACQUIRE_TIMEOUT_MS} 窗口内获取匿名解析许可。
+     * 返回 false 表示占满——调用方应以 503 + Retry-After 拒绝。
+     */
+    private static boolean tryAcquireAnonParse() {
+        try {
+            return ANON_PARSE_PERMITS.tryAcquire(
+                ANON_PARSE_ACQUIRE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
     }
 
     /**

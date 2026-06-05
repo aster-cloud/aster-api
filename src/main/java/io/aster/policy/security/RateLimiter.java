@@ -264,6 +264,19 @@ public class RateLimiter {
         // 一个常数上。
         maybeEagerEvictConnections();
 
+        // 硬上限兜底：若清理零计数 entry 后 map 仍越界（说明都是活跃的
+        // high-cardinality identifier，如轮换 IP 的长连接攻击），则拒绝**新**
+        // identifier，对连接上限 fail-closed。已在册的 identifier 不受影响，
+        // 不误伤正常活跃连接。这把连接计数 map 钉在 ~maxBoundedEntries，杜绝
+        // 攻击期无界增长。
+        if (maxBoundedEntries > 0
+                && connectionCounters.size() >= maxBoundedEntries
+                && !connectionCounters.containsKey(identifier)) {
+            LOG.warnf("连接限流拒绝（map 达硬上限 %d，拒绝新 identifier）: %s",
+                maxBoundedEntries, identifier);
+            return false;
+        }
+
         // R-audit：check+increment 必须与 evictIdleEntries 的 remove 在同一把
         // per-bucket 锁内串行，否则存在与 windows 同类的游离-counter race：
         //   computeIfAbsent 拿到 AtomicInteger（此刻 count==0）

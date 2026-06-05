@@ -3,6 +3,7 @@ package io.aster.policy.rest.model;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 /**
  * REST API请求：策略评估
@@ -18,7 +19,11 @@ public record EvaluationRequest(
     @JsonProperty("policyFunction")
     String policyFunction,
 
+    // context 元素数上限：真实函数参数个数很小，限制数组长度防止超大数组在
+    // 序列化/求值时放大成本（见 CnlSourceLimits.MAX_CONTEXT_ELEMENTS）。
     @NotNull(message = "context不能为null")
+    @Size(max = CnlSourceLimits.MAX_CONTEXT_ELEMENTS,
+          message = "context 参数过多（最多 " + CnlSourceLimits.MAX_CONTEXT_ELEMENTS + " 个）")
     @JsonProperty("context")
     Object[] context
 ) {

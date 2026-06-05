@@ -173,6 +173,18 @@ public class ApiKeyAuthFilter {
         // 路由层一致。
         String p = io.aster.security.PathNormalizer.normalize(path);
 
+        // 管理类只读端点：审计日志 / 分析 / 版本使用 / WAADR 指标。文档明确要求
+        // Authorization: Bearer + ADMIN 角色，但历史上它们既不在本 filter 覆盖、
+        // 也不在 InternalCallerFilter 的 HMAC 范围（HMAC 只守 /ai/* 与
+        // /evaluate-source）。生产签名关闭时，bearer token 形同虚设，仅剩可伪造的
+        // X-User-Role + 一个无法在代码中验证的 ingress 剥离假设。这里把它们纳入
+        // API key 鉴权，让 token 被真实验证、并强制已验证租户（跨租户隔离），与
+        // 文档契约一致；@RequireRole(ADMIN) 在可信层之上继续生效。
+        // （这些端点没有 BFF/内部调用方，纳入鉴权不破坏任何现有调用契约。）
+        if (p.startsWith("/api/v1/audit/") || p.equals("/api/v1/audit")) return true;
+        // 用 equals + "/" 前缀，避免 startsWith 误伤兄弟路径（/api/v1/metrics/waadrXYZ）。
+        if (p.equals("/api/v1/metrics/waadr") || p.startsWith("/api/v1/metrics/waadr/")) return true;
+
         if (!p.startsWith("/api/v1/policies/")) return false;
         // 公开 evaluate 端点（按调用量计费）
         // 显式排除 evaluate-source（由 InternalCallerFilter 守护）

@@ -78,8 +78,40 @@ class ApiKeyAuthFilterShouldProtectTest {
     void endpointsThatLookSimilarButAreNotPoliciesAreUnprotected() throws Exception {
         // 防御 endsWith("/rollback") 误伤兄弟路径
         assertFalse(call("/api/v1/admin/lexicons/rollback"));
-        // versions 同样防误伤
-        assertFalse(call("/api/v1/audit/versions"));
+    }
+
+    // ============================================================
+    // 审计/分析/指标端点：文档约定 Bearer + ADMIN，必须经 API key 鉴权
+    // （历史上既不在本 filter 也不在 InternalCaller HMAC 范围，签名关闭时
+    // bearer 形同虚设）。
+    // ============================================================
+
+    @Test
+    void auditEndpointsRequireApiKey() throws Exception {
+        assertTrue(call("/api/v1/audit/range"));
+        assertTrue(call("/api/v1/audit/verify-chain"));
+        assertTrue(call("/api/v1/audit/type/POLICY_EVALUATION"));
+        assertTrue(call("/api/v1/audit/policy-versions/5/usage"));
+        assertTrue(call("/api/v1/audit/anomalies"));
+        assertTrue(call("/api/v1/audit/stats/version-usage"));
+        // 无前导斜杠 + matrix-param 也要保护
+        assertTrue(call("api/v1/audit/range"));
+        assertTrue(call("/api/v1/audit/range;jsessionid=abc"));
+    }
+
+    @Test
+    void waadrMetricsRequireApiKey() throws Exception {
+        assertTrue(call("/api/v1/metrics/waadr"));
+        assertTrue(call("/api/v1/metrics/waadr/weekly"));
+    }
+
+    @Test
+    void auditAndWaadrSiblingPathsAreNotOverMatched() throws Exception {
+        // 前缀边界防误伤：兄弟路径不应被审计/指标规则吞掉。
+        assertFalse(call("/api/v1/auditXYZ"));
+        assertFalse(call("/api/v1/audit-export"));
+        assertFalse(call("/api/v1/metrics/waadrXYZ"));
+        assertFalse(call("/api/v1/metrics/other"));
     }
 
     // ============================================================

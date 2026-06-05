@@ -86,6 +86,39 @@ class ApiKeyTenantIsolationIT {
     }
 
     @Test
+    void auditEndpoint_withoutApiKey_returns401() {
+        // 审计端点文档约定 Bearer 必填；无 key 必须 401（此前签名关闭时它
+        // 不在鉴权覆盖内、bearer 形同虚设——现已纳入 ApiKeyAuthFilter）。
+        given()
+            .header("X-Tenant-Id", TENANT_A)
+            .header("X-User-Role", "ADMIN")
+            .queryParam("from", "2024-01-01T00:00:00Z")
+            .queryParam("to", "2024-01-31T23:59:59Z")
+        .when()
+            .get("/api/v1/audit/range")
+        .then()
+            .statusCode(401)
+            .body(containsString("missing_authorization"));
+    }
+
+    @Test
+    void auditEndpoint_mismatchedTenant_returns403() {
+        // 跨租户隔离同样覆盖审计端点：持 tenant-a 的有效 key 带 victim 租户
+        // 读审计 → 403 tenant_mismatch。
+        given()
+            .header("Authorization", "Bearer " + VALID_KEY)
+            .header("X-Tenant-Id", "victim-tenant")
+            .header("X-User-Role", "ADMIN")
+            .queryParam("from", "2024-01-01T00:00:00Z")
+            .queryParam("to", "2024-01-31T23:59:59Z")
+        .when()
+            .get("/api/v1/audit/range")
+        .then()
+            .statusCode(403)
+            .body(containsString("tenant_mismatch"));
+    }
+
+    @Test
     void validKey_matchingTenantHeader_passesAuthLayer() {
         // header 租户与 key 租户一致 → 过认证层（之后可能因 module 不存在等
         // 返回业务错误，但绝不是 401/403 鉴权错误）。

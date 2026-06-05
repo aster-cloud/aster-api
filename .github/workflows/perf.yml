@@ -47,7 +47,7 @@ jobs:
 
       # 共享版本目录（aster-lang-platform，ADR 0012）—— settings.gradle 依赖它。
       - uses: actions/checkout@v6
-        with: { repository: aster-cloud/aster-lang-platform, path: aster-lang-platform, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+        with: { repository: aster-cloud/aster-lang-platform, path: aster-lang-platform, token: '${{ secrets.CROSS_REPO_TOKEN || github.token }}' }
 
       # 子模块仓库（与 nightly.yml 一致）
       - uses: actions/checkout@v6

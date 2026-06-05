@@ -20,7 +20,7 @@ jobs:
 
       # 共享版本目录（aster-lang-platform，ADR 0012）—— settings.gradle 依赖它。
       - uses: actions/checkout@v6
-        with: { repository: aster-cloud/aster-lang-platform, path: aster-lang-platform, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+        with: { repository: aster-cloud/aster-lang-platform, path: aster-lang-platform, token: '${{ secrets.CROSS_REPO_TOKEN || github.token }}' }
 
       # 同 ci.yml 一致：fresh-container 跑也需要这些子模块
       - uses: actions/checkout@v6
@@ -102,7 +102,7 @@ jobs:
 
       # 共享版本目录（aster-lang-platform，ADR 0012）—— settings.gradle 依赖它。
       - uses: actions/checkout@v6
-        with: { repository: aster-cloud/aster-lang-platform, path: aster-lang-platform, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+        with: { repository: aster-cloud/aster-lang-platform, path: aster-lang-platform, token: '${{ secrets.CROSS_REPO_TOKEN || github.token }}' }
 
       - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-core, path: aster-lang-core, token: '${{ secrets.CROSS_REPO_TOKEN }}' }

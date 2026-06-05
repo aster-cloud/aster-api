@@ -119,9 +119,12 @@ class ApiKeyTenantIsolationIT {
     }
 
     @Test
-    void validKey_oversizedSource_rejectedBeforeExpensiveWork() {
-        // CNL source 长度上限（算法复杂度 DoS 防护）走真实 bean validation：
-        // 超过 64KB 的 source 必须快速 400，而不是进入超线性解析。
+    void oversizedSource_rejectedByBeanValidationBeforeExpensiveWork() {
+        // CNL source 长度上限（算法复杂度 DoS 防护）走真实 bean validation。
+        // 注意：/schema 是匿名元数据端点（不在 ApiKeyAuthFilter.shouldProtect
+        // 内），故此处不带 Authorization——本用例验证的是 @Size 上限在真实
+        // 请求链路上把 >64KB 的 source 快速 400，而非进入超线性解析；API key
+        // 鉴权由上面的 evaluate 用例覆盖。
         StringBuilder big = new StringBuilder(70_000);
         big.append("Module m.\\n\\nRule r given x as Number, produce:\\n  Return x. ");
         while (big.length() < 70_000) big.append('x');

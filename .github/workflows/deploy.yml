@@ -20,6 +20,13 @@ jobs:
         with:
           path: aster-api
 
+      # 共享版本目录（aster-lang-platform，ADR 0012）—— settings.gradle 依赖它。
+      - uses: actions/checkout@v6
+        with:
+          repository: aster-cloud/aster-lang-platform
+          path: aster-lang-platform
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+
       - uses: actions/checkout@v6
         with:
           repository: aster-cloud/aster-lang-core
@@ -67,6 +74,10 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
           cache: 'gradle'
+
+      - name: Publish version catalog to Maven Local
+        working-directory: aster-lang-platform
+        run: ./gradlew publishToMavenLocal
 
       - name: Build & Test
         working-directory: aster-api

@@ -1,5 +1,20 @@
 rootProject.name = 'aster-api'
 
+// 共享版本目录（aster-lang-platform，ADR 0012）：aster-lang 生态依赖版本
+// 的单一来源。catalog 本身需从仓库解析，故声明仓库；RepositoriesMode
+// 保持默认 PREFER_PROJECT，build.gradle 里现有的 repositories {} 仍生效。
+dependencyResolutionManagement {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+    }
+    versionCatalogs {
+        create('asterLibs') {
+            from('cloud.aster-lang:aster-lang-platform:0.1.0')
+        }
+    }
+}
+
 // Composite Build: 引用独立的 aster-lang 子项目
 // 这些项目已从 aster-lang 多模块项目拆分为独立项目
 

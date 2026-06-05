@@ -18,6 +18,10 @@ jobs:
         with:
           path: aster-api
 
+      # 共享版本目录（aster-lang-platform，ADR 0012）—— settings.gradle 依赖它。
+      - uses: actions/checkout@v6
+        with: { repository: aster-cloud/aster-lang-platform, path: aster-lang-platform, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+
       # 同 ci.yml 一致：fresh-container 跑也需要这些子模块
       - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-core, path: aster-lang-core, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
@@ -39,6 +43,10 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
           cache: 'gradle'
+
+      - name: Publish version catalog to Maven Local
+        working-directory: aster-lang-platform
+        run: ./gradlew publishToMavenLocal
 
       # 显式禁用 reuse，确保每次起新容器
       - name: Configure Testcontainers (no reuse)
@@ -92,6 +100,10 @@ jobs:
         with:
           path: aster-api
 
+      # 共享版本目录（aster-lang-platform，ADR 0012）—— settings.gradle 依赖它。
+      - uses: actions/checkout@v6
+        with: { repository: aster-cloud/aster-lang-platform, path: aster-lang-platform, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+
       - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-core, path: aster-lang-core, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
       - uses: actions/checkout@v6
@@ -112,6 +124,10 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
           cache: 'gradle'
+
+      - name: Publish version catalog to Maven Local
+        working-directory: aster-lang-platform
+        run: ./gradlew publishToMavenLocal
 
       - name: Pre-pull test images
         run: |

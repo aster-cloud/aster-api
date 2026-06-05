@@ -22,6 +22,15 @@ jobs:
         with:
           path: aster-api
 
+      # 共享版本目录（aster-lang-platform，ADR 0012）。settings.gradle 导入它，
+      # 且 catalog 无法通过 composite includeBuild 替换（在 settings 评估阶段解析），
+      # 故必须先发布到 Maven Local。
+      - uses: actions/checkout@v6
+        with:
+          repository: aster-cloud/aster-lang-platform
+          path: aster-lang-platform
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+
       - uses: actions/checkout@v6
         with:
           repository: aster-cloud/aster-lang-core
@@ -69,6 +78,11 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
           cache: 'gradle'
+
+      # 发布共享版本目录到 Maven Local（aster-api settings 依赖它）。
+      - name: Publish version catalog to Maven Local
+        working-directory: aster-lang-platform
+        run: ./gradlew publishToMavenLocal
 
       # Testcontainers 复用：CI 内单 job 多 test class 重用容器，加速集成测试
       # 安全：CI 容器在 job 结束自动销毁，reuse 仅限 job 生命周期内

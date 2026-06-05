@@ -79,18 +79,18 @@ dependencies {
     // Scheduler - for workflow cleanup tasks
     implementation 'io.quarkus:quarkus-scheduler'
 
-    // Aster 核心模块 - 使用独立项目 (cloud.aster-lang 命名空间)
-    implementation 'cloud.aster-lang:aster-lang-core:0.0.1'
-    implementation 'cloud.aster-lang:aster-lang-runtime:0.0.1'
-    implementation 'cloud.aster-lang:aster-lang-truffle:0.0.1'
+    // Aster 核心模块 - 版本来自共享 catalog (aster-lang-platform, ADR 0012)
+    implementation asterLibs.core
+    implementation asterLibs.runtime
+    implementation asterLibs.truffle
 
     // 语言包（通过 SPI 自动发现并注册到 LexiconRegistry）
-    runtimeOnly 'cloud.aster-lang:aster-lang-en:0.0.1'
-    runtimeOnly 'cloud.aster-lang:aster-lang-zh:0.0.1'
-    runtimeOnly 'cloud.aster-lang:aster-lang-de:0.0.1'
+    runtimeOnly asterLibs.en
+    runtimeOnly asterLibs.zh
+    runtimeOnly asterLibs.de
 
     // Aster 验证模块 - 独立项目
-    implementation 'cloud.aster-lang:aster-lang-validation:0.0.1'
+    implementation asterLibs.validation
 
     // GraalVM Polyglot SDK (用于动态 CNL 执行)
     implementation 'org.graalvm.polyglot:polyglot:25.0.1'

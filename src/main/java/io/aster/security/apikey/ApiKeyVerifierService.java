@@ -244,6 +244,19 @@ public class ApiKeyVerifierService {
     }
 
     /**
+     * 测试支持：把一个明文 key 的验证结果预置进 Caffeine 缓存，使
+     * {@link ApiKeyAuthFilter} 的 cache fast-path 命中，无需真实 cloud verify。
+     *
+     * <p>仅供集成测试模拟"有效/已撤销 key"使用——生产代码路径永远不调用它
+     * （验证结果只能来自 {@link #verify} 的 cloud/snapshot 真实校验）。命名与
+     * 可见性刻意保留为公开但语义明确，以便 @QuarkusTest 注入后调用。
+     */
+    public void seedCacheForTest(String plaintextKey, ApiKeyVerifyResult result) {
+        if (plaintextKey == null || cache == null) return;
+        cache.put(sha256Hex(plaintextKey), result);
+    }
+
+    /**
      * R32 hotfix v2: 用 java.net.http.HttpClient（同步阻塞 send）取代
      * Vert.x WebClient。原因：WebClient 的 onSuccess/onFailure 回调
      * 在 Vert.x 上下文（event loop）上排队，即使我们在 worker pool 上

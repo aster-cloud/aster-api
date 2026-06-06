@@ -166,6 +166,32 @@ class RateLimiterTest {
     }
 
     @Test
+    void windowsMap_IP桶达硬上限时fail_closed_但租户桶不受限() throws Exception {
+        // high-cardinality IP 攻击：windows map 达上限后，新的 IP 桶（含 :ip:）
+        // 必须 fail-closed 拒绝；已认证租户桶（不含 :ip:）绝不被误伤。
+        var f = RateLimiter.class.getDeclaredField("maxBoundedEntries");
+        f.setAccessible(true);
+        f.setInt(rateLimiter, 2);
+
+        java.time.Duration w = java.time.Duration.ofMinutes(1);
+        // 用 2 个不同 IP 桶把 map 填到上限（各放 1 条窗口记录）。
+        assertTrue(rateLimiter.tryAcquire("rest:ip:1.1.1.1", 100, w));
+        assertTrue(rateLimiter.tryAcquire("rest:ip:2.2.2.2", 100, w));
+
+        // 第 3 个**新** IP 桶：map 达上限 → fail-closed 拒绝（即使额度没用完）。
+        assertFalse(rateLimiter.tryAcquire("rest:ip:3.3.3.3", 100, w),
+            "windows map 达硬上限后，新 IP 桶必须 fail-closed");
+
+        // 已在册 IP 桶仍可在额度内继续。
+        assertTrue(rateLimiter.tryAcquire("rest:ip:1.1.1.1", 100, w),
+            "已在册 IP 桶不应被硬上限误伤");
+
+        // 关键：已认证**租户**桶（不含 :ip:）即使 map 满也不受硬上限影响。
+        assertTrue(rateLimiter.tryAcquire("rest:tenant-legit", 100, w),
+            "租户桶绝不能因 IP 攻击撑满 map 而被 fail-closed 误伤");
+    }
+
+    @Test
     void activeConnections_返回正确计数() {
         assertEquals(0, rateLimiter.activeConnections("ip-count"));
 

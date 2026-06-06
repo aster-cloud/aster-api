@@ -453,6 +453,13 @@ public class TrialEndpointGuard {
                            RoutingContext routing,
                            boolean trustForwardedFor) {
         if (trustForwardedFor) {
+            // 最高优先级：Cloudflare 边缘写入的不可伪造单值头。本服务经 Cloudflare
+            // Tunnel 暴露，而 Cloudflare 对客户端自带的 X-Forwarded-For 是 append
+            // 而非覆盖（XFF 首段可被攻击者伪造），CF-Connecting-IP 则由边缘写入、
+            // 单值、不可伪造（Cloudflare 官方推荐用它还原访客 IP）。
+            String cf = ctx.getHeaderString("CF-Connecting-IP");
+            if (cf != null && !cf.isBlank()) return cf.trim();
+            // 次选：XFF 首段（仅当反代覆盖而非 append 时才完全可信）。
             String xff = ctx.getHeaderString("X-Forwarded-For");
             if (xff != null && !xff.isBlank()) {
                 String first = xff.split(",", 2)[0].trim();
@@ -461,7 +468,7 @@ public class TrialEndpointGuard {
             String real = ctx.getHeaderString("X-Real-IP");
             if (real != null && !real.isBlank()) return real.trim();
         }
-        // 默认：socket 源地址（防 XFF 伪造）。routing 在 filter 执行栈里总是
+        // 默认：socket 源地址（防伪造）。routing 在 filter 执行栈里总是
         // 有的；只有在测试场景下可能为 null，此时回退 "unknown"。
         if (routing != null && routing.request() != null
                 && routing.request().remoteAddress() != null) {

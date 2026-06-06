@@ -89,9 +89,24 @@ public class RateLimiter {
         // bucket 锁保护），不需要 volatile / 原子语义；写完 compute 返回后
         // 当前线程读 holder[0] 已发生在 lambda 写入之后（happens-before
         // 通过 ConcurrentHashMap 的内部同步保证），所以普通数组单元已经够用。
-        // R30+：DoS 防御 —— 写之前先检查 map 是否越过硬上限，越过就立即
-        // evict 一次。compute() 在持有 bucket 锁，全 map 扫描放在外面避免
-        // 与 evictIdleEntries 抢锁。
+        // 硬上限 fail-closed（仅 IP/匿名 bucket）必须在 maybeEagerEvict **之前**：
+        // 否则一个轮换的伪造新 IP 会先触发 active-drop 淘汰**真实用户**的活跃窗口，
+        // 才轮到拒绝这个新 IP——相当于攻击者用新 IP 重置了别人的限流窗口。
+        // 先在门口拒掉新 IP bucket，就既挡住了 high-cardinality 增长，又不动既有
+        // entry。已认证租户 bucket（不含 :ip:）与已在册 IP 不受此分支影响。
+        if (isIpBucket(identifier)
+                && maxBoundedEntries > 0
+                && windows.size() >= maxBoundedEntries
+                && !windows.containsKey(identifier)) {
+            LOG.warnf("限流拒绝（windows map 达硬上限 %d，拒绝新 IP/匿名 key）: %s",
+                maxBoundedEntries, identifier);
+            return false;
+        }
+
+        // DoS 防御 —— 写之前先检查 map 是否越过硬上限，越过就 evict 一次（先清
+        // 过期，再按需 active-drop 最旧的）。compute() 持 bucket 锁，全 map 扫描
+        // 放外面避免与 evictIdleEntries 抢锁。IP 洪泛已被上面 fail-closed 挡住，
+        // 这里主要服务于合法租户/IP churn 的内存回收。
         maybeEagerEvict(windowStart);
 
         final boolean[] granted = { false };
@@ -112,6 +127,15 @@ public class RateLimiter {
             return q;
         });
         return granted[0];
+    }
+
+    /**
+     * 是否为 IP/匿名限流桶（key 含 {@code :ip:}，如 rest:ip:、trial:ip:）。
+     * 这类桶来源（客户端 IP）高基数且在 trust-forwarded-headers=false 前可被
+     * 伪造，是硬上限 fail-closed 的对象；已认证租户桶（rest:&lt;tenant&gt;）不在内。
+     */
+    private static boolean isIpBucket(String identifier) {
+        return identifier != null && identifier.contains(":ip:");
     }
 
     /**

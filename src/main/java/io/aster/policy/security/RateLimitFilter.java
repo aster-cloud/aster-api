@@ -31,8 +31,23 @@ public class RateLimitFilter {
     @Inject
     TenantContext tenantContext;
 
+    /** 读取 socket 远端地址（trust-forwarded-headers=false 时的 IP 来源）。 */
+    @Inject
+    io.vertx.ext.web.RoutingContext routingContext;
+
     @ConfigProperty(name = "aster.ratelimit.enabled", defaultValue = "true")
     boolean enabled;
+
+    /**
+     * 是否信任 {@code X-Forwarded-For} / {@code X-Real-IP} 作为客户端真实 IP。
+     *
+     * <p>默认 false：用 socket 源地址，防止客户端轮换 XFF 绕过匿名限流、制造
+     * 高基数 key 撑爆限流 map。仅当 aster-api 前置了**会覆盖（而非追加）XFF 的
+     * 可信反代/ingress** 时才置 true。语义与 {@code aster.security.trial.
+     * trust-forwarded-for} 一致，复用 TrialEndpointGuard.clientIp 解析。
+     */
+    @ConfigProperty(name = "aster.ratelimit.trust-forwarded-headers", defaultValue = "false")
+    boolean trustForwardedHeaders;
 
     @ConfigProperty(name = "aster.ratelimit.rest.max-requests", defaultValue = "60")
     int maxRequests;
@@ -71,12 +86,17 @@ public class RateLimitFilter {
             return null;
         }
 
-        // 使用租户ID作为限流 key（TenantFilter 已在前置过滤器中校验并设置）
+        // 限流 key：优先租户，否则回退客户端 IP。
+        // 注意：本 filter 在 AUTHENTICATION+1 执行，**早于** TenantFilter，所以
+        // 绝大多数请求此刻 TenantContext 尚未初始化，会走 IP 分支——这正是
+        // trust-forwarded-headers 在生产必须正确配置的原因（见 application.
+        // properties 注释：反代后须置 true 且覆盖 XFF，否则全站折叠到入口 IP）。
+        // 已认证流量的精确按量计费由下游 ApiQuotaGuard（在 apikey 验证之后）承担；
+        // 本 filter 是粗粒度的入口防滥用闸。
         String identifier;
         if (tenantContext.isInitialized()) {
             identifier = "rest:" + tenantContext.getCurrentTenant();
         } else {
-            // 租户上下文未初始化（TenantFilter 尚未执行或路径被豁免），使用客户端 IP
             identifier = "rest:ip:" + getClientIp(ctx);
         }
 
@@ -107,19 +127,11 @@ public class RateLimitFilter {
     }
 
     /**
-     * 从请求头中提取客户端 IP（支持代理场景）
+     * 提取客户端 IP。复用 {@link TrialEndpointGuard#clientIp}：
+     * trust-forwarded-headers=false（默认）时返回 socket 源地址，忽略可伪造的
+     * XFF/X-Real-IP；=true 时优先 XFF 首段。两处限流共享同一信任边界。
      */
     private String getClientIp(ContainerRequestContext ctx) {
-        String forwarded = ctx.getHeaderString("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isEmpty()) {
-            return forwarded.split(",")[0].trim();
-        }
-
-        String realIp = ctx.getHeaderString("X-Real-IP");
-        if (realIp != null && !realIp.isEmpty()) {
-            return realIp;
-        }
-
-        return "unknown";
+        return TrialEndpointGuard.clientIp(ctx, routingContext, trustForwardedHeaders);
     }
 }

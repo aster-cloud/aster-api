@@ -573,6 +573,26 @@ class TrialEndpointGuardTest {
     }
 
     @Test
+    void cfConnectingIpTakesPriorityOverForgeableXff() {
+        // Cloudflare Tunnel 场景：客户端可在 XFF 首段塞伪造 IP（Cloudflare append
+        // 而非覆盖），但 CF-Connecting-IP 由边缘写入不可伪造 → 必须优先它。
+        TrialEndpointGuard g = guardWith(true, true);
+        setRouting(g, "10.0.0.1");
+        Map<String, Object> props = new HashMap<>();
+        ContainerRequestContext ctx = mockCtx(
+            "/api/v1/policies/evaluate-source", "POST",
+            Map.of("Origin", "https://aster-lang.dev",
+                "Content-Length", "100",
+                // 攻击者伪造的 XFF 首段 + Cloudflare 真实 CF-Connecting-IP
+                "X-Forwarded-For", "6.6.6.6, 203.0.113.9",
+                "CF-Connecting-IP", "203.0.113.9"),
+            props);
+        String ip = TrialEndpointGuard.clientIp(ctx, g.routingContext, true);
+        assertEquals("203.0.113.9", ip,
+            "CF-Connecting-IP（不可伪造）必须优先于可伪造的 XFF 首段");
+    }
+
+    @Test
     void xrealIpHonoredWhenTrustEnabledAndXffMissing() {
         TrialEndpointGuard g = guardWith(true, true);
         setRouting(g, "10.0.0.1");

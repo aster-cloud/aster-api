@@ -218,4 +218,30 @@ class ApiKeyTenantIsolationIT {
             .statusCode(200)
             .body(containsString("amount"));
     }
+
+    @Test
+    void schemaConcurrencySaturation_returns503WithRetryAfter() throws Exception {
+        // 反射抽干 /schema 并发许可，模拟饱和：必须返回 503 且带 Retry-After，
+        // 而不是放进解析把 worker 池拖垮。结束后释放，避免影响其它用例。
+        java.lang.reflect.Field f = io.aster.policy.rest.PolicyEvaluationResource.class
+            .getDeclaredField("ANON_PARSE_PERMITS");
+        f.setAccessible(true);
+        java.util.concurrent.Semaphore permits = (java.util.concurrent.Semaphore) f.get(null);
+        int drained = permits.drainPermits();
+        try {
+            String body = "{\"source\":\"Module m.\\n\\nRule r given x as Number, produce:\\n  Return x.\"}";
+            given()
+                .header("X-Tenant-Id", TENANT_A)
+                .header("X-User-Role", "MEMBER")
+                .contentType("application/json")
+                .body(body)
+            .when()
+                .post("/api/v1/policies/schema")
+            .then()
+                .statusCode(503)
+                .header("Retry-After", org.hamcrest.Matchers.notNullValue());
+        } finally {
+            permits.release(drained); // 还原许可
+        }
+    }
 }

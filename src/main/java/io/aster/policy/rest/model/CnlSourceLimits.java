@@ -29,6 +29,17 @@ public final class CnlSourceLimits {
      */
     public static final int MAX_CONTEXT_ELEMENTS = 256;
 
+    /**
+     * 模块名 / 函数名等标识符字段的最大长度。这类字段会进入 service / cache key
+     * / 日志，限长防止超长"路径式"名字污染。256 远超任何真实命名。
+     */
+    public static final int MAX_IDENTIFIER_LENGTH = 256;
+
+    /**
+     * 自由文本字段（reason / notes 等会写入审计/日志）的最大长度（2 KiB）。
+     */
+    public static final int MAX_FREETEXT_LENGTH = 2_048;
+
     private CnlSourceLimits() {
     }
 }

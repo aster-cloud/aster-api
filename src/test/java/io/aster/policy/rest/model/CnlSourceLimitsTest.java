@@ -105,4 +105,28 @@ class CnlSourceLimitsTest {
         assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("policy")),
             "违规应落在 policy 字段上");
     }
+
+    @Test
+    void validationRequestRejectsOversizedIdentifiers() {
+        String tooLong = "x".repeat(CnlSourceLimits.MAX_IDENTIFIER_LENGTH + 1);
+        ValidationRequest req = new ValidationRequest(tooLong, tooLong);
+        var violations = validator.validate(req);
+        assertFalse(violations.isEmpty(), "超长 module/function 名必须触发约束违规");
+    }
+
+    @Test
+    void validationRequestAcceptsNormalIdentifiers() {
+        ValidationRequest req = new ValidationRequest("aster.finance.loan", "evaluateLoanEligibility");
+        assertTrue(validator.validate(req).isEmpty(), "正常 module/function 名应通过");
+    }
+
+    @Test
+    void rollbackRequestRejectsOversizedReason() {
+        String tooLong = "x".repeat(CnlSourceLimits.MAX_FREETEXT_LENGTH + 1);
+        RollbackRequest req = new RollbackRequest(1L, tooLong);
+        var violations = validator.validate(req);
+        assertFalse(violations.isEmpty(), "超长 reason 必须触发约束违规");
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("reason")),
+            "违规应落在 reason 字段上");
+    }
 }

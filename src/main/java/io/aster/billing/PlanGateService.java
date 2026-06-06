@@ -165,7 +165,14 @@ public class PlanGateService {
      */
     private PlanInfo fetchFromCloudHttpClient(String tenantId) throws Exception {
         URI baseUri = URI.create(config.cloudInternalUrl());
-        String path = "/api/internal/tenant/" + tenantId + "/plan";
+        // 本层自卫：对 tenantId 做 path-segment 编码，避免内部调用方未来传入
+        // 含 '/'、'?'、'%2F' 的值造成 path / HMAC 签名歧义（当前 TenantFilter
+        // 已约束格式，但 PlanGateService 是公共 service 方法，不应依赖上游）。
+        // 编码后的 path 同时用于请求与签名，保证两端一致。
+        String encodedTenant = java.net.URLEncoder
+            .encode(tenantId, java.nio.charset.StandardCharsets.UTF_8)
+            .replace("+", "%20");
+        String path = "/api/internal/tenant/" + encodedTenant + "/plan";
         URI fullUri = baseUri.resolve(path);
 
         long timestamp = System.currentTimeMillis() / 1000;

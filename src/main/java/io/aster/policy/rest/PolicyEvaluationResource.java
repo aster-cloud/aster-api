@@ -566,9 +566,16 @@ public class PolicyEvaluationResource {
 
         return Uni.createFrom().item(() -> {
             // 并发闸：解析是 CPU 密集且对长输入超线性，匿名端点必须限并发，
-            // 防止突发请求拖垮 worker 池。占满则快速 503 让调用方重试。
+            // 防止突发请求拖垮 worker 池。占满则快速 503 + Retry-After 让调用方重试。
             if (!tryAcquireAnonParse()) {
-                throw new jakarta.ws.rs.ServiceUnavailableException("schema service busy");
+                throw new jakarta.ws.rs.ServiceUnavailableException(
+                    jakarta.ws.rs.core.Response.status(503)
+                        .header("Retry-After", "1")
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(java.util.Map.of(
+                            "error", "schema_busy",
+                            "message", "Schema service is busy; please retry."))
+                        .build());
             }
             try {
                 ParameterSchemaExtractor.SchemaResult result = ParameterSchemaExtractor.extractSchema(

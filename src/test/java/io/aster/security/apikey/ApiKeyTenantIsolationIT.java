@@ -244,4 +244,46 @@ class ApiKeyTenantIsolationIT {
             permits.release(drained); // 还原许可
         }
     }
+
+    @Test
+    void validateConcurrencySaturation_returns503WithRetryAfter() throws Exception {
+        // /validate 与 /schema 共用 ANON_PARSE_PERMITS，但 acquire/release 形态不同
+        // （在方法入口 acquire、.eventually 释放）。单独钉住其饱和路径：抽干许可后
+        // 必须 503 + Retry-After（在查库/编译前就被并发闸拦下）。
+        java.lang.reflect.Field f = io.aster.policy.rest.PolicyEvaluationResource.class
+            .getDeclaredField("ANON_PARSE_PERMITS");
+        f.setAccessible(true);
+        java.util.concurrent.Semaphore permits = (java.util.concurrent.Semaphore) f.get(null);
+        int drained = permits.drainPermits();
+        try {
+            given()
+                .header("X-Tenant-Id", TENANT_A)
+                .header("X-User-Role", "MEMBER")
+                .contentType("application/json")
+                .body("{\"policyModule\":\"any.module\",\"policyFunction\":\"anyFn\"}")
+            .when()
+                .post("/api/v1/policies/validate")
+            .then()
+                .statusCode(503)
+                .header("Retry-After", org.hamcrest.Matchers.notNullValue());
+        } finally {
+            permits.release(drained);
+        }
+    }
+
+    @Test
+    void schemaAnonymous_noUserRole_notForbiddenUnderRbac() {
+        // 端到端钉住 @AnonymousAllowed：rbac.enabled=true 且**不带 X-User-Role**，
+        // /schema 也不应被 RBAC 判 403 Missing role。证明类级 @RequireRole(MEMBER)
+        // 被方法级豁免覆盖、真匿名生效（与 ApiKeyAuthFilter.shouldProtect 设计一致）。
+        String body = "{\"source\":\"Module m.\\n\\nRule r given x as Number, produce:\\n  Return x.\"}";
+        given()
+            .contentType("application/json")
+            .body(body)
+        .when()
+            .post("/api/v1/policies/schema")
+        .then()
+            // 关键：不是 403。匿名可达；具体 200/解析结果由业务决定，这里只钉 RBAC 不拦。
+            .statusCode(org.hamcrest.Matchers.not(403));
+    }
 }

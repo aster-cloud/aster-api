@@ -93,6 +93,12 @@ public class RoleEnforcementFilter implements ContainerRequestFilter {
     private RequireRole getRequireRoleAnnotation() {
         Method method = resourceInfo.getResourceMethod();
         if (method != null) {
+            // 方法级匿名豁免优先于一切：标了 @AnonymousAllowed 即跳过 RBAC，
+            // 即使所在类带类级 @RequireRole（这正是 /schema、/validate 等只读
+            // 元数据端点在受保护的 PolicyEvaluationResource 类里仍需匿名的原因）。
+            if (method.isAnnotationPresent(AnonymousAllowed.class)) {
+                return null;
+            }
             RequireRole methodAnnotation = method.getAnnotation(RequireRole.class);
             if (methodAnnotation != null) {
                 return methodAnnotation;

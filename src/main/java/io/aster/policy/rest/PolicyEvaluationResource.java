@@ -22,6 +22,7 @@ import io.vertx.ext.web.RoutingContext;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
+import io.aster.policy.security.rbac.AnonymousAllowed;
 import io.aster.policy.security.rbac.RequireRole;
 import io.aster.policy.security.rbac.Role;
 import jakarta.ws.rs.*;
@@ -560,6 +561,7 @@ public class PolicyEvaluationResource {
      */
     @POST
     @Path("/schema")
+    @AnonymousAllowed  // 只读元数据：豁免类级 @RequireRole，对未认证调用方开放（防护靠 @Size + 并发闸 + 限流）
     public Uni<SchemaResponse> getSchema(@Valid SchemaRequest request) {
         LOG.infof("Extracting schema from CNL source (locale=%s, function=%s)",
             request.getLocaleOrDefault(), request.getFunctionNameOrDefault());
@@ -729,25 +731,53 @@ public class PolicyEvaluationResource {
      */
     @POST
     @Path("/validate")
+    @AnonymousAllowed  // 只读元数据：豁免类级 @RequireRole，对未认证调用方开放
     public Uni<ValidationResponse> validate(@Valid ValidationRequest request) {
         LOG.infof("Validating policy: %s.%s", request.policyModule(), request.policyFunction());
 
-        return evaluationService.validatePolicy(
-                request.policyModule(),
-                request.policyFunction()
-        )
-        .map(result -> {
-            if (result.isValid()) {
-                LOG.infof("Policy validation successful: %s.%s", request.policyModule(), request.policyFunction());
-                return ValidationResponse.success(
-                    result.getParameters() != null ? result.getParameters().size() : 0,
-                    result.getReturnType()
-                );
-            } else {
-                LOG.warnf("Policy validation failed: %s.%s - %s", request.policyModule(), request.policyFunction(), result.getMessage());
-                return ValidationResponse.failure(result.getMessage());
-            }
-        });
+        // 并发闸：validate 会查库并（在无预编译产物时，即绝大多数版本的常态）
+        // 动态编译策略——CPU 密集。匿名端点必须限并发，与 /schema 共用同一许可池，
+        // 占满则快速 503 + Retry-After，防突发请求拖垮 worker 池。
+        if (!tryAcquireAnonParse()) {
+            return Uni.createFrom().failure(
+                new jakarta.ws.rs.ServiceUnavailableException(
+                    jakarta.ws.rs.core.Response.status(503)
+                        .header("Retry-After", "1")
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(java.util.Map.of(
+                            "error", "validate_busy",
+                            "message", "Validation service is busy; please retry."))
+                        .build()));
+        }
+
+        // acquire 之后到 .eventually 挂上之前的任何同步异常（理论上 validatePolicy
+        // 当前返回 Uni.createFrom().item 不会同步抛，但写法须防御式）都必须释放许可，
+        // 否则永久泄漏。try/catch 兜底：构链阶段抛异常即就地释放并上抛。
+        try {
+            return evaluationService.validatePolicy(
+                    request.policyModule(),
+                    request.policyFunction()
+            )
+            .map(result -> {
+                if (result.isValid()) {
+                    LOG.infof("Policy validation successful: %s.%s", request.policyModule(), request.policyFunction());
+                    return ValidationResponse.success(
+                        result.getParameters() != null ? result.getParameters().size() : 0,
+                        result.getReturnType()
+                    );
+                } else {
+                    LOG.warnf("Policy validation failed: %s.%s - %s", request.policyModule(), request.policyFunction(), result.getMessage());
+                    return ValidationResponse.failure(result.getMessage());
+                }
+            })
+            // 无论 item/failure/cancellation，都释放许可（eventually 等价于
+            // onTermination().invoke）。显式 Runnable lambda：方法引用会与
+            // eventually(Supplier<Uni>) 重载歧义。
+            .eventually(() -> ANON_PARSE_PERMITS.release());
+        } catch (Throwable t) {
+            ANON_PARSE_PERMITS.release();
+            throw t;
+        }
     }
 
     /**

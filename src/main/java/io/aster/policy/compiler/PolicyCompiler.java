@@ -10,6 +10,8 @@ import io.aster.policy.entity.PolicyArtifact;
 import io.aster.policy.entity.PolicyVersion;
 import io.aster.policy.parser.InProcessCnlParser;
 import io.aster.policy.repository.PolicySourceRepository;
+import io.quarkus.cache.CacheKey;
+import io.quarkus.cache.CacheResult;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
@@ -93,10 +95,17 @@ public class PolicyCompiler {
      * 2. PolicyVersion.coreJson 字段
      * 3. 从 PolicyVersion.content 动态编译
      *
+     * <p>结果按 versionId 缓存：策略版本一经创建，其 {@code content} 不可变
+     *（任何修改都新建一条带新 ID 的版本；回滚是切换 active 指针、不改旧版本内容），
+     * 故 {@code versionId → 编译结果} 是恒定映射，缓存零陈旧风险。这消除了
+     * /validate 主路径（多数版本无预编译产物 → 走动态编译）的重复编译开销。
+     * 失败结果同样被缓存——content 恒定则失败也恒定，缓存正确且避免反复编译坏源码。
+     *
      * @param policyVersionId 策略版本 ID
      * @return 编译结果
      */
-    public CompilationResult compile(Long policyVersionId) {
+    @CacheResult(cacheName = "policy-compile-by-version")
+    public CompilationResult compile(@CacheKey Long policyVersionId) {
         if (policyVersionId == null) {
             return CompilationResult.failure("策略版本ID不能为空");
         }

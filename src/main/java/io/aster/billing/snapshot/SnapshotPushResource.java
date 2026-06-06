@@ -104,6 +104,7 @@ public class SnapshotPushResource {
                     json.getString("userId"),
                     json.getString("tenantId"),
                     json.getString("plan"),
+                    json.getString("role"),
                     json.getLong("revokedAtEpochMs", null)
                 );
             } else {

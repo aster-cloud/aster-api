@@ -42,6 +42,9 @@ public class AuditLogResource {
     RoutingContext routingContext;
 
     @Inject
+    io.aster.policy.tenant.TenantContext tenantContext;
+
+    @Inject
     AuditChainVerifier chainVerifier;
 
     /**
@@ -232,6 +235,16 @@ public class AuditLogResource {
      * 从 X-Tenant-Id 请求头提取租户ID，如果不存在则返回 "default"
      */
     private String tenantId() {
+        // 优先读 TenantContext（TenantFilter 已从 ApiKeyAuthFilter 覆盖后的
+        // 权威 X-Tenant-Id 填充）。直接读 Vert.x 原始 header 不可靠：filter 对
+        // header 的 mutation 是 JAX-RS 层，未必同步到 Vert.x layer，会让带有效
+        // key 但不带 X-Tenant-Id 的请求落到 "default"，绕过租户隔离。
+        if (tenantContext != null) {
+            String ctxTenant = tenantContext.getCurrentTenant();
+            if (ctxTenant != null && !ctxTenant.isBlank()) {
+                return ctxTenant;
+            }
+        }
         if (routingContext == null || routingContext.request() == null) {
             return "default";
         }

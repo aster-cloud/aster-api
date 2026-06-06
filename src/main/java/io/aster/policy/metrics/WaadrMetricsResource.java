@@ -30,6 +30,9 @@ public class WaadrMetricsResource {
     @Inject
     WaadrMetricsService service;
 
+    @Inject
+    io.aster.policy.tenant.TenantContext tenantContext;
+
     @Context
     RoutingContext routingContext;
 
@@ -48,6 +51,14 @@ public class WaadrMetricsResource {
     }
 
     private String currentTenantId() {
+        // 优先读 TenantContext（权威，由 TenantFilter 从 ApiKeyAuthFilter 覆盖后的
+        // X-Tenant-Id 填充）；Vert.x 原始 header 不可靠，见 AuditLogResource.tenantId。
+        if (tenantContext != null) {
+            String ctxTenant = tenantContext.getCurrentTenant();
+            if (ctxTenant != null && !ctxTenant.isBlank()) {
+                return ctxTenant;
+            }
+        }
         if (routingContext == null || routingContext.request() == null) {
             return "default";
         }

@@ -38,7 +38,10 @@ class ApiKeyTenantIsolationIT {
         public Map<String, String> getConfigOverrides() {
             return Map.of(
                 "aster.security.apikey.enabled", "true",
-                "aster.security.signature.enabled", "false"
+                "aster.security.signature.enabled", "false",
+                // 打开 RBAC，使 @RequireRole(ADMIN) 真正生效——否则伪造-ADMIN
+                // 提权测试无法验证角色覆盖逻辑（base test profile 默认关 RBAC）。
+                "aster.security.rbac.enabled", "true"
             );
         }
     }
@@ -49,12 +52,18 @@ class ApiKeyTenantIsolationIT {
     @Inject
     ApiKeyVerifierService verifier;
 
+    private static final String MEMBER_KEY = "ak_test_member_tenant_a";
+
     @BeforeEach
     void seedKey() {
-        // 预置一个绑定 tenant-a 的有效 key，模拟 cloud verify 成功结果。
+        // 预置绑定 tenant-a 的有效 key（默认 MEMBER 角色），模拟 cloud verify。
         verifier.seedCacheForTest(
             VALID_KEY,
             ApiKeyVerifyResult.valid("ak-id-1", "user-1", TENANT_A, "pro", "active"));
+        // 显式 MEMBER 角色的 key，用于验证"自带 ADMIN 头无法提权"。
+        verifier.seedCacheForTest(
+            MEMBER_KEY,
+            ApiKeyVerifyResult.valid("ak-id-2", "user-2", TENANT_A, "pro", "active", "MEMBER"));
     }
 
     private static String evalBody() {
@@ -116,6 +125,26 @@ class ApiKeyTenantIsolationIT {
         .then()
             .statusCode(403)
             .body(containsString("tenant_mismatch"));
+    }
+
+    @Test
+    void memberKey_forgedAdminHeader_cannotAccessAdminAudit() {
+        // 提权防护核心断言：持普通 MEMBER key 的调用方自带 X-User-Role: ADMIN，
+        // filter 会用已验证角色（MEMBER）无条件覆盖该头 → 下游 @RequireRole(ADMIN)
+        // 拒绝（403 Insufficient permissions / Missing role），而不是被伪造头蒙混。
+        int code = given()
+            .header("Authorization", "Bearer " + MEMBER_KEY)
+            .header("X-Tenant-Id", TENANT_A)
+            .header("X-User-Role", "ADMIN") // 伪造的提权尝试
+            .queryParam("from", "2024-01-01T00:00:00Z")
+            .queryParam("to", "2024-01-31T23:59:59Z")
+        .when()
+            .get("/api/v1/audit/range")
+        .then()
+            .extract().statusCode();
+        // 必须被 RBAC 拒绝（403）；绝不能因伪造头通过（200/业务码）。
+        org.junit.jupiter.api.Assertions.assertEquals(403, code,
+            "MEMBER key 自带 ADMIN 头不得通过 @RequireRole(ADMIN) 审计端点");
     }
 
     @Test

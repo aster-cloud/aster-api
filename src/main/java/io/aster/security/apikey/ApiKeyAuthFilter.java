@@ -136,15 +136,23 @@ public class ApiKeyAuthFilter {
         if (verifiedTenant != null && !verifiedTenant.isBlank()) {
             ctx.getHeaders().putSingle("X-Tenant-Id", verifiedTenant);
         }
-        if (ctx.getHeaderString("X-User-Id") == null) {
+        // 与 X-Tenant-Id / X-User-Role 一致：身份头一律以已验证结果**无条件覆盖**，
+        // 不沿用客户端自带值。即使下游目前优先读 aster.apikey.* property，无条件
+        // 覆盖也杜绝未来某资源直接读 header 时被伪造身份污染审计归因 / keyId。
+        if (result.userId() != null) {
             ctx.getHeaders().putSingle("X-User-Id", result.userId());
         }
-        if (ctx.getHeaderString("X-Api-Key-Id") == null) {
+        if (result.apiKeyId() != null) {
             ctx.getHeaders().putSingle("X-Api-Key-Id", result.apiKeyId());
         }
-        if (ctx.getHeaderString("X-User-Role") == null) {
-            ctx.getHeaders().putSingle("X-User-Role", "MEMBER");
-        }
+        // 角色不可伪造：用已验证结果里的权威角色**无条件覆盖** X-User-Role，
+        // 决不沿用客户端自带的值。否则持普通 MEMBER key 的调用方只要带
+        // X-User-Role: ADMIN 就能通过下游 @RequireRole(ADMIN)（提权）。
+        // role 由 cloud verify 按 key 所属用户在其租户内的真实角色返回；
+        // 缺失时 ApiKeyVerifyResult.valid 已回退到最小权限 MEMBER。
+        String verifiedRole = result.role() != null && !result.role().isBlank()
+            ? result.role() : ApiKeyVerifyResult.DEFAULT_ROLE;
+        ctx.getHeaders().putSingle("X-User-Role", verifiedRole);
         return null;
     }
 

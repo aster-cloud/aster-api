@@ -19,10 +19,18 @@ public record ApiKeyVerifyResult(
     String userId,
     String tenantId,
     String plan,
-    String subscriptionStatus
+    String subscriptionStatus,
+    // RBAC 角色（owner/admin/member/viewer），由 cloud verify 按 key 所属
+    // 用户在其租户内的真实角色返回。authoritative —— ApiKeyAuthFilter 用它
+    // 无条件覆盖客户端传的 X-User-Role，杜绝持普通 key 自带 ADMIN 头提权。
+    // 缺失/旧 snapshot 时回退到最小权限 MEMBER（fail-safe 下限）。
+    String role
 ) {
+    /** RBAC 角色缺失时的安全下限。 */
+    public static final String DEFAULT_ROLE = "MEMBER";
+
     public static ApiKeyVerifyResult invalid(String reason) {
-        return new ApiKeyVerifyResult(false, reason, null, null, null, null, null);
+        return new ApiKeyVerifyResult(false, reason, null, null, null, null, null, null);
     }
 
     public static ApiKeyVerifyResult valid(
@@ -32,6 +40,19 @@ public record ApiKeyVerifyResult(
         String plan,
         String subscriptionStatus
     ) {
-        return new ApiKeyVerifyResult(true, null, apiKeyId, userId, tenantId, plan, subscriptionStatus);
+        // 旧调用点：未提供 role → 回退最小权限 MEMBER。
+        return valid(apiKeyId, userId, tenantId, plan, subscriptionStatus, DEFAULT_ROLE);
+    }
+
+    public static ApiKeyVerifyResult valid(
+        String apiKeyId,
+        String userId,
+        String tenantId,
+        String plan,
+        String subscriptionStatus,
+        String role
+    ) {
+        String effectiveRole = (role == null || role.isBlank()) ? DEFAULT_ROLE : role.trim();
+        return new ApiKeyVerifyResult(true, null, apiKeyId, userId, tenantId, plan, subscriptionStatus, effectiveRole);
     }
 }

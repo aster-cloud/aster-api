@@ -15,10 +15,11 @@ public record ApiKeySnapshot(
     String userId,
     String tenantId,         // key 所属租户；旧 snapshot 可能为 null
     String plan,
+    String role,             // RBAC 角色；旧 snapshot 可能为 null（回退 MEMBER）
     Long revokedAtEpochMs    // null = 未撤销
 ) {
     public static ApiKeySnapshot invalid(String reason) {
-        return new ApiKeySnapshot(false, reason, null, null, null, null, null);
+        return new ApiKeySnapshot(false, reason, null, null, null, null, null, null);
     }
 
     public boolean revoked() {

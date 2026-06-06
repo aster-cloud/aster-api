@@ -39,12 +39,14 @@ public class RateLimitFilter {
     boolean enabled;
 
     /**
-     * 是否信任 {@code X-Forwarded-For} / {@code X-Real-IP} 作为客户端真实 IP。
+     * 是否信任转发头作为客户端真实 IP（解析优先级见 {@link TrialEndpointGuard#clientIp}：
+     * CF-Connecting-IP &gt; XFF 首段 &gt; X-Real-IP &gt; socket）。
      *
-     * <p>默认 false：用 socket 源地址，防止客户端轮换 XFF 绕过匿名限流、制造
-     * 高基数 key 撑爆限流 map。仅当 aster-api 前置了**会覆盖（而非追加）XFF 的
-     * 可信反代/ingress** 时才置 true。语义与 {@code aster.security.trial.
-     * trust-forwarded-for} 一致，复用 TrialEndpointGuard.clientIp 解析。
+     * <p>默认 false：用 socket 源地址，防止客户端轮换 XFF/CF 头绕过匿名限流、制造
+     * 高基数 key 撑爆限流 map。置 true 仅适用于：(a) Cloudflare Tunnel-only 拓扑
+     * （CF-Connecting-IP 边缘写入、不可伪造）；或 (b) 会覆盖 XFF 且清洗客户端 CF 头
+     * 的可信反代/ingress。语义与 {@code aster.security.trial.trust-forwarded-for}
+     * 一致（部署需同时打开），复用 TrialEndpointGuard.clientIp 解析。
      */
     @ConfigProperty(name = "aster.ratelimit.trust-forwarded-headers", defaultValue = "false")
     boolean trustForwardedHeaders;
@@ -129,7 +131,8 @@ public class RateLimitFilter {
     /**
      * 提取客户端 IP。复用 {@link TrialEndpointGuard#clientIp}：
      * trust-forwarded-headers=false（默认）时返回 socket 源地址，忽略可伪造的
-     * XFF/X-Real-IP；=true 时优先 XFF 首段。两处限流共享同一信任边界。
+     * XFF/CF 头；=true 时优先不可伪造的 CF-Connecting-IP，再 XFF 首段 / X-Real-IP。
+     * 两处限流共享同一信任边界。
      */
     private String getClientIp(ContainerRequestContext ctx) {
         return TrialEndpointGuard.clientIp(ctx, routingContext, trustForwardedHeaders);

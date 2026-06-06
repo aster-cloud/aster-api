@@ -144,11 +144,17 @@ public class TrialEndpointGuard {
     int perIpConcurrentMax;
 
     /**
-     * 是否信任 {@code X-Forwarded-For} / {@code X-Real-IP} 头作为客户端真实 IP。
+     * 是否信任转发头作为客户端真实 IP（优先级见 {@link #clientIp}：
+     * CF-Connecting-IP &gt; XFF 首段 &gt; X-Real-IP &gt; socket）。
      *
-     * <p><b>默认 false</b>（fail-closed）：客户端可任意伪造 XFF 来污染 per-IP 分桶；
-     * 只有当部署架构中存在一个 <b>始终重写</b>（非 append）XFF 的可信反代时，
-     * operator 才应显式打开。
+     * <p><b>默认 false</b>（fail-closed）：客户端可任意伪造 XFF/CF 头来污染 per-IP
+     * 分桶。仅在以下任一拓扑下 operator 才应显式打开：
+     * <ul>
+     *   <li><b>Cloudflare Tunnel-only</b>（本项目生产）：CF-Connecting-IP 由边缘
+     *       写入、单值、不可伪造，代码已优先采用它。</li>
+     *   <li>存在 <b>始终重写</b>（非 append）XFF、且会清洗客户端传入 CF-Connecting-IP
+     *       的可信反代。</li>
+     * </ul>
      *
      * <p>关闭时，client IP = Vert.x socket 远端地址。注意在 k3s ingress 模式下
      * 该地址会是 ingress 自身的 IP；所有 trial 流量会落到同一个 IP 分桶，
@@ -176,13 +182,15 @@ public class TrialEndpointGuard {
      *       —— 两者语义重叠且 .public 优先生效，trial 配置失效。operator 应只设一个。</li>
      *   <li><b>WARN</b>：trial.enabled=true 且 allowed-origins 为空 —— 任何 Origin
      *       都会被放过。生产 anti-pattern，但代码不阻拦。</li>
-     *   <li><b>WARN</b>：trial.enabled=true 且 trust-forwarded-for=true —— 如果反代
-     *       不重写 XFF，limit 可被伪造。operator 必须确认 ingress 行为。</li>
+     *   <li><b>WARN</b>：trial.enabled=true 且 trust-forwarded-for=true —— Cloudflare
+     *       Tunnel-only 下优先信任不可伪造的 CF-Connecting-IP 是安全的；但非 Cloudflare
+     *       反代若不重写 XFF / 不清洗客户端 CF 头，limit 可被伪造。operator 必须确认
+     *       ingress 行为。</li>
      * </ul>
      *
      * <p>R29+ 修订：prod profile 对 .public+.trial 同开 / trial+空 origins
      * 改为 fail-fast。dev/test 保持 warn。trust-forwarded-for=true 仍 warn
-     * （它是合法的生产配置，只是要求 ingress 正确处理 XFF）。
+     * （它是合法的生产配置，只是要求 ingress 正确处理转发头）。
      */
     void auditStartupConfig(@Observes StartupEvent ev) {
         if (!enabled) {
@@ -222,11 +230,14 @@ public class TrialEndpointGuard {
             LOG.warnf("CONFIG SMELL (dev/test profile): %s", msg);
         }
         if (trustForwardedFor) {
-            // 这一项保持 WARN：trustForwardedFor=true 在生产是合法配置，只是
-            // 要求 ingress 正确处理 XFF。fail-fast 会误伤合法部署。
-            LOG.warnf("CONFIG SMELL: aster.security.trial.trust-forwarded-for=true. The ingress in "
-                + "front of aster-api MUST be configured to OVERWRITE X-Forwarded-For (not append). "
-                + "Otherwise clients can forge XFF to shard around per-IP rate limits.");
+            // 这一项保持 WARN：trustForwardedFor=true 在生产是合法配置（Cloudflare
+            // Tunnel-only 下 CF-Connecting-IP 不可伪造）。fail-fast 会误伤合法部署。
+            LOG.warnf("CONFIG SMELL: aster.security.trial.trust-forwarded-for=true. Client IP is "
+                + "resolved as CF-Connecting-IP > X-Forwarded-For (first hop) > X-Real-IP > socket. "
+                + "Behind Cloudflare Tunnel-only this is safe (CF-Connecting-IP is edge-written and "
+                + "unspoofable). For any OTHER ingress, it MUST OVERWRITE X-Forwarded-For (not append) "
+                + "AND strip client-supplied CF-Connecting-IP/X-Real-IP, else clients can forge IPs "
+                + "to shard around per-IP rate limits.");
         }
     }
 
@@ -443,8 +454,11 @@ public class TrialEndpointGuard {
      * <ul>
      *   <li><b>false</b>（默认，fail-closed）：直接读 Vert.x socket 远端地址。
      *       XFF/X-Real-IP 头被忽略，因为它们可任意伪造。</li>
-     *   <li><b>true</b>（operator 显式开启）：优先 XFF 第一段，其次 X-Real-IP，
-     *       最后再 fallback socket 地址。仅在反代会重写而非 append XFF 时使用。</li>
+     *   <li><b>true</b>（operator 显式开启）：优先 <b>CF-Connecting-IP</b>（Cloudflare
+     *       边缘写入、单值、不可伪造），其次 XFF 第一段，再 X-Real-IP，最后 fallback
+     *       socket 地址。仅在 Cloudflare Tunnel-only 或反代会重写而非 append XFF
+     *       的拓扑下使用。<b>非 Cloudflare 部署若开启 trust，入口必须清洗/覆盖
+     *       客户端传入的 CF-Connecting-IP，否则攻击者可借该头伪造 IP 绕过限流。</b></li>
      * </ul>
      *
      * <p>包级可见以方便单测。

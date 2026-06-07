@@ -82,7 +82,7 @@ public class DynamicCnlExecutor {
      * @return 执行结果
      */
     public static ExecutionResult execute(String source, Object[] context, String functionName, String locale) {
-        return executeInternal(source, context, functionName, locale, false, null);
+        return executeInternal(source, context, functionName, locale, false, null, true);
     }
 
     /**
@@ -119,7 +119,24 @@ public class DynamicCnlExecutor {
     public static ExecutionResult executeWithContext(
             String source, Object context, String functionName, String locale,
             aster.core.identifier.IdentifierIndex identifierIndex) {
-        return executeInternal(source, context, functionName, locale, true, identifierIndex);
+        return executeWithContext(source, context, functionName, locale, identifierIndex, true);
+    }
+
+    /**
+     * 动态执行 CNL 源代码（支持命名参数格式 + 领域词汇翻译 + 入口兼容开关）
+     *
+     * @param source 源代码
+     * @param context 评估上下文（Map 或 List/Array）
+     * @param functionName 要执行的函数名
+     * @param locale 语言代码
+     * @param identifierIndex 领域词汇索引，null 表示不做用户词翻译
+     * @param legacyEvaluateSentinel 是否把显式 evaluate 视为历史自动入口哨兵
+     * @return 执行结果
+     */
+    public static ExecutionResult executeWithContext(
+            String source, Object context, String functionName, String locale,
+            aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel) {
+        return executeInternal(source, context, functionName, locale, true, identifierIndex, legacyEvaluateSentinel);
     }
 
     /**
@@ -131,9 +148,10 @@ public class DynamicCnlExecutor {
      * @param locale 语言代码
      * @param mapNamedContext 是否需要映射命名上下文
      * @param identifierIndex 领域词汇索引（null 表示不做用户词翻译）
+     * @param legacyEvaluateSentinel 是否把显式 evaluate 视为历史自动入口哨兵
      * @return 执行结果
      */
-    private static ExecutionResult executeInternal(String source, Object context, String functionName, String locale, boolean mapNamedContext, aster.core.identifier.IdentifierIndex identifierIndex) {
+    private static ExecutionResult executeInternal(String source, Object context, String functionName, String locale, boolean mapNamedContext, aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel) {
         long startTime = System.currentTimeMillis();
 
         try {
@@ -143,12 +161,17 @@ public class DynamicCnlExecutor {
             Module astModule = parseResult.module();
 
             // 2. 确定要执行的函数名
-            String targetFunction = functionName;
-            if (targetFunction == null || targetFunction.isBlank() || "evaluate".equals(targetFunction)) {
-                // 使用解析出的第一个函数名
-                targetFunction = parseResult.firstFunctionName();
-            }
-            if (targetFunction == null) {
+            EntryPointSelector.Selection selection = EntryPointSelector.select(
+                functionName, parseResult.functionNames(), legacyEvaluateSentinel);
+            String targetFunction;
+            if (selection instanceof EntryPointSelector.Selected selected) {
+                targetFunction = selected.function();
+            } else if (selection instanceof EntryPointSelector.Ambiguous ambiguous) {
+                throw new AmbiguousEntryException(ambiguous.candidates());
+            } else if (selection instanceof EntryPointSelector.NotFound notFound) {
+                throw new DynamicExecutionException(
+                    "未找到指定函数 '" + notFound.requested() + "',可用: " + notFound.candidates());
+            } else {
                 throw new DynamicExecutionException("CNL 中未找到可执行的函数");
             }
 
@@ -565,6 +588,25 @@ public class DynamicCnlExecutor {
 
         public DynamicExecutionException(String message, Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    /**
+     * 入口函数不唯一。
+     */
+    public static class AmbiguousEntryException extends DynamicExecutionException {
+        private static final long serialVersionUID = 1L;
+        // List.copyOf 产物是可序列化的不可变列表；编译器仅看接口类型故告警，此处明确抑制。
+        @SuppressWarnings("serial")
+        private final List<String> candidates;
+
+        public AmbiguousEntryException(List<String> candidates) {
+            super("未指定入口函数，候选函数不唯一: " + candidates);
+            this.candidates = candidates == null ? List.of() : List.copyOf(candidates);
+        }
+
+        public List<String> getCandidates() {
+            return candidates;
         }
     }
 }

@@ -14,7 +14,7 @@ import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.jboss.logging.Logger;
 
-import java.util.Optional;
+import java.util.List;
 
 /**
  * 内嵌 CNL 解析器
@@ -32,7 +32,8 @@ public class InProcessCnlParser {
     public record ParseResult(
         Module module,
         String moduleName,
-        String firstFunctionName
+        String firstFunctionName,
+        List<String> functionNames
     ) {}
 
     /**
@@ -137,8 +138,9 @@ public class InProcessCnlParser {
                 throw new CnlParseException("无法构建 AST 模块");
             }
 
-            // 6. 提取第一个函数名称
-            String firstFunctionName = extractFirstFunctionName(module);
+            // 6. 提取函数名称
+            List<String> functionNames = extractFunctionNames(module);
+            String firstFunctionName = functionNames.isEmpty() ? null : functionNames.get(0);
 
             // 7. 提取模块名称（如果没有模块头，使用函数名作为默认）
             String moduleName = module.name();
@@ -153,7 +155,7 @@ public class InProcessCnlParser {
 
             LOG.infof("CNL 解析成功: module=%s, function=%s", moduleName, firstFunctionName);
 
-            return new ParseResult(module, moduleName, firstFunctionName);
+            return new ParseResult(module, moduleName, firstFunctionName, functionNames);
 
         } catch (CnlParseException e) {
             throw e;
@@ -164,19 +166,17 @@ public class InProcessCnlParser {
     }
 
     /**
-     * 从模块中提取第一个函数名称
+     * 从模块中提取全部函数名称
      */
-    private static String extractFirstFunctionName(Module module) {
+    private static List<String> extractFunctionNames(Module module) {
         if (module.decls() == null || module.decls().isEmpty()) {
-            return null;
+            return List.of();
         }
 
-        Optional<String> funcName = module.decls().stream()
+        return module.decls().stream()
             .filter(decl -> decl instanceof Decl.Func)
             .map(decl -> ((Decl.Func) decl).name())
-            .findFirst();
-
-        return funcName.orElse(null);
+            .toList();
     }
 
     /**

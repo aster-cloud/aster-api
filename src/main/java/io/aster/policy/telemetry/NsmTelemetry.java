@@ -44,6 +44,11 @@ public class NsmTelemetry {
             Counter.builder(event + "_total")
                 .description("NSM event " + event + " (pre-registered)")
                 .tag("tenant_id", "unknown")
+                // Prometheus 要求同名 meter 的 tag keys 集合恒定。track() 在带
+                // source_kind 的事件上会注册 [tenant_id, source_kind]，故预注册也
+                // 必须带 source_kind 占位，否则首个带 source_kind 的事件会抛
+                // IllegalArgumentException（tag keys 不一致）。
+                .tag("source_kind", "unknown")
                 .register(registry);
         }
         LOG.info("[NSM] pre-registered draft_published_total + rule_rolled_back_total counters");
@@ -64,13 +69,15 @@ public class NsmTelemetry {
         // Prometheus Counter — 由事件名直接派生 metric 名（rule_rolled_back → rule_rolled_back_total）
         Object tenantId = properties != null ? properties.get("tenant_id") : null;
         Object sourceKind = properties != null ? properties.get("source_kind") : null;
-        Counter.Builder builder = Counter.builder(event + "_total")
+        // tag keys 集合必须与预注册（onStart）恒定一致 = [tenant_id, source_kind]。
+        // source_kind 无值时用 "unknown" 占位，而非省略该 tag，避免 Prometheus
+        // 因同名 meter tag keys 不一致而抛 IllegalArgumentException。
+        Counter.builder(event + "_total")
             .description("NSM event " + event)
-            .tag("tenant_id", tenantId != null ? tenantId.toString() : "unknown");
-        if (sourceKind != null) {
-            builder.tag("source_kind", sourceKind.toString());
-        }
-        builder.register(registry).increment();
+            .tag("tenant_id", tenantId != null ? tenantId.toString() : "unknown")
+            .tag("source_kind", sourceKind != null ? sourceKind.toString() : "unknown")
+            .register(registry)
+            .increment();
 
         mixpanelClient.enqueue(distinctId, event, properties);
     }

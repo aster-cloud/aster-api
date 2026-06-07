@@ -79,9 +79,30 @@ jobs:
         working-directory: aster-lang-platform
         run: ./gradlew publishToMavenLocal
 
+      # 与 ci.yml 一致的 Testcontainers 稳定化：关闭 ryuk（其 prune 操作会与
+      # 并发容器清理冲突，导致 DB 测试用的 postgres 容器被回收/连不上 →
+      # AuditHashChain/Idempotency/Prisma/Timer 等 DB 测试间歇性 ConnectException）。
+      - name: Configure Testcontainers reuse
+        run: |
+          mkdir -p $HOME
+          cat > $HOME/.testcontainers.properties <<EOF
+          testcontainers.reuse.enable=true
+          checks.disable=true
+          ryuk.disabled=true
+          EOF
+
+      # 预拉镜像让 Testcontainers 启动更稳；与 PostgresTestResource.java 一致
+      - name: Pre-pull test images
+        run: |
+          docker pull postgres:17-alpine &
+          docker pull redis:7-alpine &
+          wait
+
       - name: Build & Test
         working-directory: aster-api
         run: ./gradlew build -Dquarkus.package.jar.type=fast-jar
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: "true"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7

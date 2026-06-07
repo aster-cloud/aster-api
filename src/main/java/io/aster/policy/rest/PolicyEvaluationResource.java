@@ -28,6 +28,7 @@ import io.aster.policy.security.rbac.Role;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.util.ArrayList;
@@ -162,6 +163,9 @@ public class PolicyEvaluationResource {
 
     @Inject
     io.aster.policy.tenant.TenantContext tenantContext;
+
+    @ConfigProperty(name = "aster.entry.legacy-evaluate-sentinel", defaultValue = "true")
+    boolean legacyEvaluateSentinel;
 
     @Context
     RoutingContext routingContext;
@@ -378,7 +382,7 @@ public class PolicyEvaluationResource {
      *
      * POST /api/policies/evaluate-source
      * Headers: X-Tenant-Id (optional, defaults to "default")
-     * Body: { "source": "module aster.example ... ", "context": {...}, "locale": "en-US", "functionName": "evaluate" }
+     * Body: { "source": "module aster.example ... ", "context": {...}, "locale": "en-US", "functionName": "approveLoan" (可选，未指定时由入口选择器决定) }
      *
      * 适用于 Dashboard 执行场景，无需预先部署策略。
      * 使用动态执行流程：CNL → AST → Core IR → JSON → GraalVM Polyglot
@@ -469,7 +473,8 @@ public class PolicyEvaluationResource {
                     request.context(),  // 直接传递原始 context，让执行器处理格式映射
                     request.getFunctionNameOrDefault(),
                     request.getLocaleOrDefault(),
-                    vocabIndex
+                    vocabIndex,
+                    legacyEvaluateSentinel
                 );
 
                 // 记录指标
@@ -517,11 +522,25 @@ public class PolicyEvaluationResource {
                     );
                     recordApiCall("/api/v1/policies/evaluate-source", "success",
                         System.currentTimeMillis() - apiCallStart, tenantId, performedBy, apiKeyIdSnap);
-                    return EvaluationResponse.success(execResult.result(), execResult.executionTimeMs(), decisionTrace);
+                    return EvaluationResponse.success(
+                        execResult.result(), execResult.executionTimeMs(), decisionTrace, execResult.functionName());
                 }
                 recordApiCall("/api/v1/policies/evaluate-source", "success",
                     System.currentTimeMillis() - apiCallStart, tenantId, performedBy, apiKeyIdSnap);
-                return EvaluationResponse.success(execResult.result(), execResult.executionTimeMs());
+                return EvaluationResponse.success(
+                    execResult.result(), execResult.executionTimeMs(), execResult.functionName());
+
+            } catch (DynamicCnlExecutor.AmbiguousEntryException e) {
+                businessMetrics.endPolicyEvaluation(sample);
+                LOG.warnf("Dynamic CNL entry point ambiguous: %s", e.getCandidates());
+                recordApiCall("/api/v1/policies/evaluate-source", "api_error",
+                    System.currentTimeMillis() - apiCallStart, tenantId, performedBy, apiKeyIdSnap);
+                throw new WebApplicationException(
+                    jakarta.ws.rs.core.Response.status(400)
+                        .entity(EvaluationResponse.ambiguous(e.getCandidates()))
+                        .type(MediaType.APPLICATION_JSON)
+                        .build()
+                );
 
             } catch (DynamicCnlExecutor.DynamicExecutionException e) {
                 businessMetrics.endPolicyEvaluation(sample);
@@ -558,7 +577,7 @@ public class PolicyEvaluationResource {
      *
      * POST /api/policies/schema
      * Headers: X-Tenant-Id (optional, defaults to "default")
-     * Body: { "source": "module aster.example ... ", "locale": "en-US", "functionName": "evaluate" }
+     * Body: { "source": "module aster.example ... ", "locale": "en-US", "functionName": "approveLoan" (可选，未指定时由入口选择器决定) }
      *
      * 返回函数参数的结构化模式信息，用于：
      * 1. 动态生成表单（根据参数名和类型生成输入控件）

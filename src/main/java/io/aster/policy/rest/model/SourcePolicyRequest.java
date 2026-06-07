@@ -14,7 +14,7 @@ import java.util.Map;
  * @param source CNL 源代码
  * @param context 评估上下文参数（Map 或 Object 数组）
  * @param locale CNL 语言 (可选，默认 en-US)
- * @param functionName 要执行的函数名 (可选，默认 evaluate)
+ * @param functionName 要执行的函数名 (可选，未指定时由服务端入口选择器决定)
  * @param vocabulary 领域词汇表（可选）。ADR 0014 线C：发布的策略携带其快照
  *        领域词汇，使执行端规范化阶段能把用户自定义术语翻译为规范化名称。
  *        形如 aster-lang-core DomainVocabulary 的 JSON（id/name/locale/version/
@@ -44,9 +44,9 @@ public record SourcePolicyRequest(
     }
 
     /**
-     * 获取函数名，默认 evaluate
+     * 获取函数名；未指定时返回 null，由入口选择器决定。
      */
     public String getFunctionNameOrDefault() {
-        return functionName == null || functionName.isBlank() ? "evaluate" : functionName;
+        return functionName == null || functionName.isBlank() ? null : functionName.trim();
     }
 }

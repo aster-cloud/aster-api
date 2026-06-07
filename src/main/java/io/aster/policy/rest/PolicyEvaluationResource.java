@@ -457,13 +457,19 @@ public class PolicyEvaluationResource {
         // 使用 Uni.createFrom().item() 包装同步执行，避免阻塞主线程
         return Uni.createFrom().item(() -> {
             try {
+                // ADR 0014 线C：策略携带的快照领域词汇 → IdentifierIndex，
+                // 让执行端规范化阶段翻译用户自定义术语。无词汇时为 null。
+                aster.core.identifier.IdentifierIndex vocabIndex =
+                    buildVocabularyIndex(request.vocabulary());
+
                 // 使用动态执行器执行 CNL，支持命名上下文格式
                 // executeWithContext 会自动检测并映射命名参数到位置参数
                 DynamicCnlExecutor.ExecutionResult execResult = DynamicCnlExecutor.executeWithContext(
                     request.source(),
                     request.context(),  // 直接传递原始 context，让执行器处理格式映射
                     request.getFunctionNameOrDefault(),
-                    request.getLocaleOrDefault()
+                    request.getLocaleOrDefault(),
+                    vocabIndex
                 );
 
                 // 记录指标
@@ -1150,6 +1156,31 @@ public class PolicyEvaluationResource {
      *
      * @param result 策略评估结果
      */
+    /**
+     * 把请求携带的领域词汇表（Map 形式）构建为 IdentifierIndex。
+     *
+     * <p>ADR 0014 线C：发布的策略可携带其快照领域词汇，使执行端规范化阶段
+     * 能翻译用户自定义术语。词汇为空或格式非法时返回 null（退化为仅内置），
+     * 不阻断执行——执行端解析仍可在 builtin 词汇下进行。
+     *
+     * @param vocabulary 领域词汇 Map（DomainVocabulary 的 JSON 结构），可为 null
+     * @return 构建好的 IdentifierIndex，无有效词汇时返回 null
+     */
+    private aster.core.identifier.IdentifierIndex buildVocabularyIndex(Map<String, Object> vocabulary) {
+        if (vocabulary == null || vocabulary.isEmpty()) {
+            return null;
+        }
+        try {
+            aster.core.identifier.DomainVocabulary vocab =
+                aster.core.identifier.VocabularyLoader.loadFromMap(vocabulary);
+            return aster.core.identifier.IdentifierIndex.build(vocab);
+        } catch (Exception e) {
+            // 词汇格式非法不应阻断执行，记录并退化为仅内置。
+            LOG.warnf("领域词汇表解析失败，退化为仅内置词汇: %s", e.getMessage());
+            return null;
+        }
+    }
+
     private void recordLoanDecision(Object result) {
         if (result == null) {
             return;

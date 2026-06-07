@@ -3,6 +3,8 @@ package io.aster.policy.rest.model;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+import java.util.Map;
+
 /**
  * CNL 源代码策略评估请求
  *
@@ -13,6 +15,10 @@ import jakarta.validation.constraints.Size;
  * @param context 评估上下文参数（Map 或 Object 数组）
  * @param locale CNL 语言 (可选，默认 en-US)
  * @param functionName 要执行的函数名 (可选，默认 evaluate)
+ * @param vocabulary 领域词汇表（可选）。ADR 0014 线C：发布的策略携带其快照
+ *        领域词汇，使执行端规范化阶段能把用户自定义术语翻译为规范化名称。
+ *        形如 aster-lang-core DomainVocabulary 的 JSON（id/name/locale/version/
+ *        structs/fields/functions/enumValues）。为 null 时仅用内置词汇。
  */
 public record SourcePolicyRequest(
     // 见 CnlSourceLimits：CNL 解析在长输入上超线性耗时，无上限即 DoS 向量。
@@ -26,7 +32,9 @@ public record SourcePolicyRequest(
 
     String locale,
 
-    String functionName
+    String functionName,
+
+    Map<String, Object> vocabulary
 ) {
     /**
      * 获取语言配置，默认 en-US

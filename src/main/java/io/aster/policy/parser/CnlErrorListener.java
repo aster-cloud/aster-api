@@ -6,15 +6,29 @@ import org.antlr.v4.runtime.Recognizer;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * ANTLR 错误监听器
  *
- * 收集 CNL 解析过程中的语法错误
+ * 收集 CNL 解析过程中的语法错误，并把 ANTLR 的原始（面向编译器实现者的）消息
+ * 翻译成面向 CNL 作者的友好提示。
+ *
+ * <p>背景：ANTLR 默认错误形如
+ * {@code mismatched input '.' expecting {':', ',', NEWLINE}} /
+ * {@code rule softComparator failed predicate: {...}?} /
+ * {@code extraneous input '<INDENT>' expecting ...}，并且一个真实语法错误常引发
+ * 几十条级联错误。直接抛给用户既冗长又难懂（见 ADR 0013 错误信息友好化）。
+ * 本监听器：①把内部 token 名 / 谓词名翻译成人话；②对外只暴露<b>第一个</b>
+ * 友好错误（根因），原始级联仅保留供调试。
  */
 public class CnlErrorListener extends BaseErrorListener {
 
-    private final List<String> errors = new ArrayList<>();
+    /** 友好化后的错误（去内部术语）。 */
+    private final List<String> friendlyErrors = new ArrayList<>();
+    /** 原始 ANTLR 错误（供日志/调试，不展示给用户）。 */
+    private final List<String> rawErrors = new ArrayList<>();
 
     @Override
     public void syntaxError(
@@ -25,27 +39,168 @@ public class CnlErrorListener extends BaseErrorListener {
         String msg,
         RecognitionException e
     ) {
-        errors.add(String.format("行 %d:%d - %s", line, charPositionInLine, msg));
+        rawErrors.add(String.format("行 %d:%d - %s", line, charPositionInLine, msg));
+        friendlyErrors.add(String.format("行 %d 第 %d 列：%s", line, charPositionInLine + 1, humanize(msg)));
     }
 
     /**
      * 是否有解析错误
      */
     public boolean hasErrors() {
-        return !errors.isEmpty();
+        return !friendlyErrors.isEmpty();
     }
 
     /**
-     * 获取所有错误信息
+     * 面向用户的错误信息：只返回<b>第一个</b>友好错误（根因），避免级联噪声。
      */
     public String getErrors() {
-        return String.join("; ", errors);
+        if (friendlyErrors.isEmpty()) {
+            return "";
+        }
+        String first = friendlyErrors.get(0);
+        if (friendlyErrors.size() > 1) {
+            return first + "（另有 " + (friendlyErrors.size() - 1) + " 处后续错误，建议先修正此处）";
+        }
+        return first;
     }
 
     /**
-     * 获取错误列表
+     * 原始 ANTLR 错误全集，供日志/调试，不展示给最终用户。
+     */
+    public String getRawErrors() {
+        return String.join("; ", rawErrors);
+    }
+
+    /**
+     * 获取错误列表（友好化）
      */
     public List<String> getErrorList() {
-        return new ArrayList<>(errors);
+        return new ArrayList<>(friendlyErrors);
+    }
+
+    // ==========================================================
+    // ANTLR 原始消息 → 友好中文
+    // ==========================================================
+
+    private static final Pattern MISMATCHED =
+        Pattern.compile("mismatched input '(.+?)' expecting \\{?(.+?)\\}?$");
+    private static final Pattern MISSING =
+        Pattern.compile("missing '?(.+?)'? at '(.+?)'");
+    private static final Pattern EXTRANEOUS =
+        Pattern.compile("extraneous input '(.+?)' expecting");
+    private static final Pattern NO_VIABLE =
+        Pattern.compile("no viable alternative at input '(.+?)'");
+    private static final Pattern FAILED_PREDICATE =
+        Pattern.compile("rule (\\w+) failed predicate");
+
+    /**
+     * 把一条 ANTLR 消息翻译成面向 CNL 作者的提示。无法识别的模式原样返回。
+     */
+    static String humanize(String msg) {
+        if (msg == null) {
+            return "语法错误";
+        }
+
+        Matcher m;
+
+        // 谓词失败：最常见于软关键字比较词（under/over）/可选 is 连接词处。
+        // 例：rule softComparator failed predicate → 多半是用了未识别的比较词，
+        // 或 `is` 后面跟了非比较词。给出可操作建议。
+        if ((m = FAILED_PREDICATE.matcher(msg)).find()) {
+            return "无法识别此处的运算符或关键词。"
+                + "比较请用 `is less than` / `is greater than` / `is at least` / "
+                + "`is at most` / `is equal to` 等自然语言形式或 `<` `>` `>=` 等符号";
+        }
+
+        if ((m = MISMATCHED.matcher(msg)).find()) {
+            String got = friendlyToken(m.group(1));
+            String expecting = friendlyExpecting(m.group(2));
+            return "意外的 " + got + (expecting.isEmpty() ? "" : "，此处期望 " + expecting);
+        }
+
+        if ((m = MISSING.matcher(msg)).find()) {
+            String want = friendlyToken(m.group(1));
+            String at = friendlyToken(m.group(2));
+            return "缺少 " + want + "（在 " + at + " 之前）";
+        }
+
+        if ((m = EXTRANEOUS.matcher(msg)).find()) {
+            String extra = m.group(1);
+            if (extra.contains("INDENT")) {
+                return "缩进层级不正确（多了一级缩进或缩进不一致，请用 2 空格对齐）";
+            }
+            return "多余的 " + friendlyToken(extra);
+        }
+
+        if ((m = NO_VIABLE.matcher(msg)).find()) {
+            return "无法解析 " + friendlyToken(m.group(1)) + " 附近的语法";
+        }
+
+        if (msg.contains("token recognition error")) {
+            return "存在无法识别的字符或符号";
+        }
+
+        // 兜底：原样（但去掉最内部的 expecting token 集，避免暴露 token 名）
+        int idx = msg.indexOf(" expecting");
+        return idx > 0 ? msg.substring(0, idx) : msg;
+    }
+
+    /** 把 token 文本/名翻译成友好描述。 */
+    private static String friendlyToken(String tok) {
+        if (tok == null || tok.isEmpty()) {
+            return "内容";
+        }
+        switch (tok) {
+            case "<INDENT>":
+            case "INDENT":
+                return "缩进";
+            case "<DEDENT>":
+            case "DEDENT":
+                return "取消缩进";
+            case "<EOF>":
+                return "文件结尾";
+            case "\\n":
+            case "\n":
+            case "NEWLINE":
+                return "换行";
+            case "TYPE_IDENT":
+                return "类型名";
+            case "IDENT":
+                return "标识符";
+            case "INT_LITERAL":
+                return "整数";
+            case "STRING_LITERAL":
+                return "字符串";
+            default:
+                // 普通符号/关键字：加引号直观显示
+                return "'" + tok + "'";
+        }
+    }
+
+    /** 简化 expecting 集合（ANTLR 常列十几个 token），只取前几个友好项。 */
+    private static String friendlyExpecting(String set) {
+        if (set == null || set.isBlank()) {
+            return "";
+        }
+        String[] parts = set.split(",");
+        StringBuilder sb = new StringBuilder();
+        int shown = 0;
+        for (String p : parts) {
+            String t = friendlyToken(p.trim().replaceAll("^'|'$", ""));
+            if (sb.indexOf(t) >= 0) {
+                continue; // 去重
+            }
+            if (shown > 0) {
+                sb.append(" 或 ");
+            }
+            sb.append(t);
+            if (++shown >= 3) {
+                break;
+            }
+        }
+        if (parts.length > shown) {
+            sb.append(" 等");
+        }
+        return sb.toString();
     }
 }

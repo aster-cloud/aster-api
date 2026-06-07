@@ -122,9 +122,11 @@ public class InProcessCnlParser {
             // 4. 解析模块
             AsterParser.ModuleContext moduleCtx = parser.module();
 
-            // 检查解析错误
+            // 检查解析错误：抛给用户的是友好化的首个错误（根因），原始 ANTLR
+            // 级联错误仅记日志供调试，避免把几十条内部消息糊到用户脸上。
             if (errorListener.hasErrors()) {
-                throw new CnlParseException("CNL 语法错误: " + errorListener.getErrors());
+                LOG.debugf("CNL 解析原始错误（全集）: %s", errorListener.getRawErrors());
+                throw new CnlParseException("CNL 语法错误 — " + errorListener.getErrors());
             }
 
             // 5. 构建 AST

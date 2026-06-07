@@ -82,7 +82,7 @@ public class DynamicCnlExecutor {
      * @return 执行结果
      */
     public static ExecutionResult execute(String source, Object[] context, String functionName, String locale) {
-        return executeInternal(source, context, functionName, locale, false);
+        return executeInternal(source, context, functionName, locale, false, null);
     }
 
     /**
@@ -99,7 +99,27 @@ public class DynamicCnlExecutor {
      * @return 执行结果
      */
     public static ExecutionResult executeWithContext(String source, Object context, String functionName, String locale) {
-        return executeInternal(source, context, functionName, locale, true);
+        return executeWithContext(source, context, functionName, locale, null);
+    }
+
+    /**
+     * 动态执行 CNL 源代码（支持命名参数格式 + 领域词汇翻译）
+     *
+     * <p>ADR 0014 线C：发布的策略可携带其快照领域词汇，使执行端的规范化阶段
+     * 能把用户自定义术语翻译为规范化名称。{@code identifierIndex} 为 null 时
+     * 行为与仅内置一致。
+     *
+     * @param source 源代码
+     * @param context 评估上下文（Map 或 List/Array）
+     * @param functionName 要执行的函数名
+     * @param locale 语言代码
+     * @param identifierIndex 领域词汇索引，null 表示不做用户词翻译
+     * @return 执行结果
+     */
+    public static ExecutionResult executeWithContext(
+            String source, Object context, String functionName, String locale,
+            aster.core.identifier.IdentifierIndex identifierIndex) {
+        return executeInternal(source, context, functionName, locale, true, identifierIndex);
     }
 
     /**
@@ -110,15 +130,16 @@ public class DynamicCnlExecutor {
      * @param functionName 要执行的函数名
      * @param locale 语言代码
      * @param mapNamedContext 是否需要映射命名上下文
+     * @param identifierIndex 领域词汇索引（null 表示不做用户词翻译）
      * @return 执行结果
      */
-    private static ExecutionResult executeInternal(String source, Object context, String functionName, String locale, boolean mapNamedContext) {
+    private static ExecutionResult executeInternal(String source, Object context, String functionName, String locale, boolean mapNamedContext, aster.core.identifier.IdentifierIndex identifierIndex) {
         long startTime = System.currentTimeMillis();
 
         try {
-            // 1. 解析 CNL → AST（传入 locale 以支持多语言）
-            LOG.debugf("解析 CNL 源代码... locale=%s", locale);
-            InProcessCnlParser.ParseResult parseResult = InProcessCnlParser.parse(source, locale);
+            // 1. 解析 CNL → AST（传入 locale 以支持多语言，传入 index 以翻译用户词）
+            LOG.debugf("解析 CNL 源代码... locale=%s, vocab=%s", locale, identifierIndex != null);
+            InProcessCnlParser.ParseResult parseResult = InProcessCnlParser.parse(source, locale, identifierIndex);
             Module astModule = parseResult.module();
 
             // 2. 确定要执行的函数名

@@ -3,6 +3,7 @@ package io.aster.policy.parser;
 import aster.core.ast.Decl;
 import aster.core.ast.Module;
 import aster.core.canonicalizer.Canonicalizer;
+import aster.core.identifier.IdentifierIndex;
 import aster.core.lexicon.Lexicon;
 import aster.core.lexicon.LexiconRegistry;
 import aster.core.parser.AstBuilder;
@@ -54,6 +55,24 @@ public class InProcessCnlParser {
      * @throws CnlParseException 解析失败时抛出
      */
     public static ParseResult parse(String source, String locale) {
+        return parse(source, locale, null);
+    }
+
+    /**
+     * 解析 CNL 源代码（支持多语言 + 领域词汇翻译）
+     *
+     * <p>ADR 0014 线C：发布的策略在执行端也需识别用户自定义领域术语。调用方
+     * 传入由策略快照词汇构建的 {@link IdentifierIndex} 时，规范化阶段会执行
+     * 标识符翻译（step 8.5），把本地化术语翻成规范化名称；为 null 时行为与
+     * 仅内置一致（不做用户词翻译）。
+     *
+     * @param source 源代码
+     * @param locale 语言代码，null 表示默认英语
+     * @param identifierIndex 领域词汇索引，null 表示不做用户词翻译
+     * @return 解析结果
+     * @throws CnlParseException 解析失败时抛出
+     */
+    public static ParseResult parse(String source, String locale, IdentifierIndex identifierIndex) {
         if (source == null || source.isBlank()) {
             throw new CnlParseException("CNL 源代码不能为空");
         }
@@ -64,7 +83,10 @@ public class InProcessCnlParser {
 
             // 所有语言都需要规范化，因为即使是英语也需要将关键词运算符（如 "greater than"）翻译为符号（如 ">"）
             // ANTLR 解析器只支持符号运算符，不支持关键词形式
-            Canonicalizer canonicalizer = new Canonicalizer(lexicon);
+            // 提供 identifierIndex 时启用领域标识符翻译（ADR 0014 线C）。
+            Canonicalizer canonicalizer = identifierIndex != null
+                ? new Canonicalizer(lexicon, identifierIndex)
+                : new Canonicalizer(lexicon);
             String canonicalizedSource = canonicalizer.canonicalize(source);
             LOG.debugf("CNL 规范化完成: locale=%s, 原始长度=%d, 规范化后长度=%d",
                 locale, source.length(), canonicalizedSource.length());

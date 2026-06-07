@@ -106,9 +106,13 @@ jobs:
         working-directory: aster-lang-platform
         run: ./gradlew publishToMavenLocal
 
+      # Deploy 构建只跑 unit test（已含 DB 测试，由上面的 postgres service 把关）
+      # + 打包；integrationTest 的完整把关在 PR/main CI 阶段（ci.yml）。排除 IT
+      # 是因为若干 timing-sensitive IT（MixpanelClientIT / PlanGateServiceIT 的异步
+      # flush / circuit-breaker / socket-mock 时序测试）当前不稳，不应阻塞生产部署。
       - name: Build & Test
         working-directory: aster-api
-        run: ./gradlew build -Dquarkus.package.jar.type=fast-jar
+        run: ./gradlew build -x integrationTest -Dquarkus.package.jar.type=fast-jar
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7

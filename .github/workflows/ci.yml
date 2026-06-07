@@ -36,6 +36,19 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # 固定 localhost:6379 Redis。用 MockProfile 的 IT（MixpanelClientIT /
+      # PlanGateServiceIT 等）不走 RedisTestResource，redis 配置取
+      # application.properties 默认 localhost:6379；无此 service 时它们报
+      # `redis read failed: Connection refused localhost:6379` 噪声。
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v6
         with:

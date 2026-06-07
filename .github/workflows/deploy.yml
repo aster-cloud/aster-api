@@ -32,6 +32,15 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DB_JDBC_URL: "jdbc:postgresql://localhost:5432/aster_policy"
       DB_REACTIVE_URL: "postgresql://localhost:5432/aster_policy"
@@ -106,13 +115,13 @@ jobs:
         working-directory: aster-lang-platform
         run: ./gradlew publishToMavenLocal
 
-      # Deploy 构建只跑 unit test（已含 DB 测试，由上面的 postgres service 把关）
-      # + 打包；integrationTest 的完整把关在 PR/main CI 阶段（ci.yml）。排除 IT
-      # 是因为若干 timing-sensitive IT（MixpanelClientIT / PlanGateServiceIT 的异步
-      # flush / circuit-breaker / socket-mock 时序测试）当前不稳，不应阻塞生产部署。
+      # 恢复完整 build（含 integrationTest）：之前排除 IT 是因 MixpanelClientIT /
+      # PlanGateServiceIT 的 mock 端口跨 classloader 不一致导致 flaky；该根因已修
+      # （System property 缓存端口）+ 上面加了 redis service，IT 现已稳定，可重新
+      # 作为生产部署的完整把关。
       - name: Build & Test
         working-directory: aster-api
-        run: ./gradlew build -x integrationTest -Dquarkus.package.jar.type=fast-jar
+        run: ./gradlew build -Dquarkus.package.jar.type=fast-jar
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7

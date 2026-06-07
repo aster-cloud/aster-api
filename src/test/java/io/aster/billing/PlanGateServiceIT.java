@@ -67,11 +67,36 @@ class PlanGateServiceIT {
         }
     }
 
+    /**
+     * 跨 classloader 一致的 mock 端口。
+     *
+     * <p>flaky 根因：{@code @QuarkusTest} 的应用运行在独立 QuarkusClassLoader，
+     * 测试类在另一个 classloader。两个 classloader 各自初始化 static
+     * {@code MOCK_PORT} 并各 pick 一次 → <b>得到不同端口</b>：mock cloud server
+     * bind 在端口 A，而 PlanGateService 经 MockProfile 读到的 cloud-internal-url
+     * 是端口 B → WebClient 连 B 而 mock 在 A → 连接失败 → fail-open 返回 pro，
+     * freeTenant/invalidate 断言全部失败。
+     *
+     * <p>用 System property 缓存（JVM 级、跨 classloader 共享），保证 mock 端口
+     * == client 端口。
+     */
     private static int pickFreePort() {
-        try (ServerSocket s = new ServerSocket(0)) {
-            return s.getLocalPort();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        String cached = System.getProperty("test.plangate.mock.port");
+        if (cached != null) {
+            return Integer.parseInt(cached);
+        }
+        synchronized (PlanGateServiceIT.class) {
+            cached = System.getProperty("test.plangate.mock.port");
+            if (cached != null) {
+                return Integer.parseInt(cached);
+            }
+            try (ServerSocket s = new ServerSocket(0)) {
+                int port = s.getLocalPort();
+                System.setProperty("test.plangate.mock.port", String.valueOf(port));
+                return port;
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 

@@ -15,10 +15,37 @@ concurrency:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    # 真实 PostgreSQL service（固定 localhost:5432）。`./gradlew build` 含需 DB 的
+    # @QuarkusTest 测试，它们连 application.properties 默认 localhost:5432；
+    # PostgresTestResource 的 testcontainer 端口注入对这些测试不可靠。与 ci.yml 一致。
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aster_policy
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_JDBC_URL: "jdbc:postgresql://localhost:5432/aster_policy"
+      DB_REACTIVE_URL: "postgresql://localhost:5432/aster_policy"
+      DB_USERNAME: "postgres"
+      DB_PASSWORD: "postgres"
+      TESTCONTAINERS_RYUK_DISABLED: "true"
     steps:
       - uses: actions/checkout@v6
         with:
           path: aster-api
+
+      - name: Create aster_test database
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE aster_test;" || true
 
       # 共享版本目录（aster-lang-platform，ADR 0012）—— settings.gradle 依赖它。
       - uses: actions/checkout@v6

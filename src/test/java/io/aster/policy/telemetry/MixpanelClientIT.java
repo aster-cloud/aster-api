@@ -72,11 +72,37 @@ class MixpanelClientIT {
         }
     }
 
+    /**
+     * 跨 classloader 一致的 mock 端口。
+     *
+     * <p>关键修复（flaky 根因）：{@code @QuarkusTest} 的应用运行在独立的
+     * QuarkusClassLoader，测试类在另一个 classloader。两个 classloader 各自
+     * 初始化 static {@code MOCK_PORT}，{@code pickFreePort()} 各 pick 一次 →
+     * <b>得到不同端口</b>：mock server bind 在端口 A，而 MixpanelClient 经
+     * MockProfile 读到的 base-url 是端口 B → client 连 B 而 mock 在 A →
+     * 持续 Connection refused，整套 IT flaky。
+     *
+     * <p>用 System property 缓存：第一个解析的 classloader pick 后写入，另一个
+     * classloader 读到同一值，保证 mock 端口 == client 端口。System property 是
+     * JVM 级、跨 classloader 共享的。
+     */
     private static int pickFreePort() {
-        try (ServerSocket s = new ServerSocket(0)) {
-            return s.getLocalPort();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        String cached = System.getProperty("test.mixpanel.mock.port");
+        if (cached != null) {
+            return Integer.parseInt(cached);
+        }
+        synchronized (MixpanelClientIT.class) {
+            cached = System.getProperty("test.mixpanel.mock.port");
+            if (cached != null) {
+                return Integer.parseInt(cached);
+            }
+            try (ServerSocket s = new ServerSocket(0)) {
+                int port = s.getLocalPort();
+                System.setProperty("test.mixpanel.mock.port", String.valueOf(port));
+                return port;
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 

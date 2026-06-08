@@ -98,4 +98,47 @@ class EntryPointSelectorTest {
         assertThat(((EntryPointSelector.Ambiguous) selection).candidates())
             .containsExactly("helper", "main");
     }
+
+    // ===== @entry 注解优先级（ADR 0015 阶段2）=====
+
+    @Test
+    void entry_annotation_selected_over_ambiguity() {
+        // 多 Rule 本应 Ambiguous，但 @entry 标记了 main → 选 main
+        EntryPointSelector.Selection selection =
+            EntryPointSelector.select(null, List.of("helper", "main"), "main", true);
+
+        assertThat(selection).isInstanceOf(EntryPointSelector.Selected.class);
+        assertThat(((EntryPointSelector.Selected) selection).function()).isEqualTo("main");
+        assertThat(((EntryPointSelector.Selected) selection).reason()).isEqualTo("entry-annotation");
+    }
+
+    @Test
+    void explicit_function_overrides_entry_annotation() {
+        // 显式 functionName 优先于 @entry
+        EntryPointSelector.Selection selection =
+            EntryPointSelector.select("helper", List.of("helper", "main"), "main", true);
+
+        assertThat(selection).isInstanceOf(EntryPointSelector.Selected.class);
+        assertThat(((EntryPointSelector.Selected) selection).function()).isEqualTo("helper");
+        assertThat(((EntryPointSelector.Selected) selection).reason()).isEqualTo("explicit");
+    }
+
+    @Test
+    void entry_annotation_not_in_rules_falls_through_to_ambiguity() {
+        // @entry 指向不存在的 Rule（理论上 core 已校验）→ 回退到常规启发式
+        EntryPointSelector.Selection selection =
+            EntryPointSelector.select(null, List.of("helper", "main"), "ghost", true);
+
+        assertThat(selection).isInstanceOf(EntryPointSelector.Ambiguous.class);
+    }
+
+    @Test
+    void single_rule_without_entry_still_selected() {
+        // 无 @entry，单 Rule → 仍选它（@entry 为 null 不影响既有行为）
+        EntryPointSelector.Selection selection =
+            EntryPointSelector.select(null, List.of("only"), null, true);
+
+        assertThat(selection).isInstanceOf(EntryPointSelector.Selected.class);
+        assertThat(((EntryPointSelector.Selected) selection).function()).isEqualTo("only");
+    }
 }

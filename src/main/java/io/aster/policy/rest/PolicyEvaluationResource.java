@@ -162,6 +162,9 @@ public class PolicyEvaluationResource {
     ApiQuotaGuard apiQuotaGuard;
 
     @Inject
+    DynamicCnlExecutor dynamicCnlExecutor;
+
+    @Inject
     io.aster.policy.tenant.TenantContext tenantContext;
 
     @ConfigProperty(name = "aster.entry.legacy-evaluate-sentinel", defaultValue = "true")
@@ -468,7 +471,8 @@ public class PolicyEvaluationResource {
 
                 // 使用动态执行器执行 CNL，支持命名上下文格式
                 // executeWithContext 会自动检测并映射命名参数到位置参数
-                DynamicCnlExecutor.ExecutionResult execResult = DynamicCnlExecutor.executeWithContext(
+                DynamicCnlExecutor.ExecutionResult execResult = dynamicCnlExecutor.executeWithTenantContext(
+                    tenantId,
                     request.source(),
                     request.context(),  // 直接传递原始 context，让执行器处理格式映射
                     request.getFunctionNameOrDefault(),
@@ -538,6 +542,23 @@ public class PolicyEvaluationResource {
                 throw new WebApplicationException(
                     jakarta.ws.rs.core.Response.status(400)
                         .entity(EvaluationResponse.ambiguous(e.getCandidates()))
+                        .type(MediaType.APPLICATION_JSON)
+                        .build()
+                );
+
+            } catch (DynamicCnlExecutor.ModuleExecutionException e) {
+                businessMetrics.endPolicyEvaluation(sample);
+                var moduleError = e.resolutionException();
+                LOG.warnf("Dynamic CNL module resolution failed: code=%s, message=%s",
+                    moduleError.code(), moduleError.getMessage());
+                recordApiCall("/api/v1/policies/evaluate-source", "api_error",
+                    System.currentTimeMillis() - apiCallStart, tenantId, performedBy, apiKeyIdSnap);
+                throw new WebApplicationException(
+                    jakarta.ws.rs.core.Response.status(400)
+                        .entity(EvaluationResponse.diagnostic(
+                            moduleError.code().name(),
+                            moduleError.getMessage(),
+                            moduleError.candidates()))
                         .type(MediaType.APPLICATION_JSON)
                         .build()
                 );

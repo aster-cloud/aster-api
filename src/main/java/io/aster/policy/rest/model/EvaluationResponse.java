@@ -69,4 +69,10 @@ public record EvaluationResponse(
         );
         return new EvaluationResponse(null, 0, "入口函数不唯一", null, null, List.of(diagnostic));
     }
+
+    public static EvaluationResponse diagnostic(String code, String message, List<String> candidates) {
+        List<String> safeCandidates = candidates == null ? List.of() : List.copyOf(candidates);
+        EntryDiagnostic diagnostic = new EntryDiagnostic(code, message, safeCandidates);
+        return new EvaluationResponse(null, 0, message, null, null, List.of(diagnostic));
+    }
 }

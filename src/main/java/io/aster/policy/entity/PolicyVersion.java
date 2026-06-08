@@ -423,6 +423,17 @@ public class PolicyVersion extends PanacheEntityBase {
     }
 
     /**
+     * Tenant-scoped visibility probe used only to distinguish same-tenant hidden versions
+     * from missing visible versions without falling back to global/cross-tenant lookup.
+     */
+    public static boolean existsLibraryVersionInTenant(String tenantId, String moduleName, Long version) {
+        return count(
+            "tenantId = ?1 and moduleName = ?2 and version = ?3",
+            tenantId, moduleName, version
+        ) > 0;
+    }
+
+    /**
      * 停用指定策略的所有活跃版本
      *
      * @param policyId 策略ID

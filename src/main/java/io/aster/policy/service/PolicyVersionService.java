@@ -293,6 +293,22 @@ public class PolicyVersionService {
     }
 
     /**
+     * 设置版本的 library 可见性（ADR 0015 阶段3）。
+     *
+     * <p>标记 true 后，该版本可被其它策略经 {@code Use 模块名 as vN} 引用。
+     * 这是显式的发布治理动作——默认 false，需主动开启。
+     *
+     * @param versionId      策略版本主键
+     * @param libraryVisible 是否可作为 library 被引用
+     */
+    @Transactional
+    public void setLibraryVisible(Long versionId, boolean libraryVisible) {
+        PolicyVersion version = requireVersion(versionId);
+        version.libraryVisible = libraryVisible;
+        version.persist();
+    }
+
+    /**
      * NSM 埋点：发布版本被激活
      *
      * 后端为 draft_published 的权威信号源（强一致），前端同名事件保留作为 UX 计时器。

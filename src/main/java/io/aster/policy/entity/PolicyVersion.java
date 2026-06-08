@@ -64,6 +64,13 @@ public class PolicyVersion extends PanacheEntityBase {
     public Boolean active;
 
     /**
+     * 是否可作为 library 被其它策略经 {@code Use} 引用（ADR 0015 阶段3）。
+     * 默认 false，需显式发布为可引用。ModuleResolver 仅解析 library_visible=true 的版本。
+     */
+    @Column(name = "library_visible", nullable = false)
+    public Boolean libraryVisible = false;
+
+    /**
      * 创建时间
      */
     @Column(name = "created_at", nullable = false)
@@ -385,6 +392,34 @@ public class PolicyVersion extends PanacheEntityBase {
      */
     public static PolicyVersion findByVersion(String policyId, Long version) {
         return find("policyId = ?1 and version = ?2", policyId, version).firstResult();
+    }
+
+    /**
+     * 查找可作为 library 被引用的模块版本（ADR 0015 阶段3 ModuleResolver）。
+     *
+     * <p>按 (tenant_id, module_name, version) 定位，且必须 library_visible=true。
+     * tenant 隔离是安全铁律——不同 tenant 的同名模块互不可见。
+     *
+     * @param tenantId   引用方租户（与被引模块同租户才可见）
+     * @param moduleName 被引模块名（如 risk.Scoring）
+     * @param version    钉定版本号（Use ... as v2 → 2）
+     * @return 匹配的 library 版本，不存在/不可见返回 null
+     */
+    public static PolicyVersion findLibraryVersion(String tenantId, String moduleName, Long version) {
+        return find(
+            "tenantId = ?1 and moduleName = ?2 and version = ?3 and libraryVisible = true",
+            tenantId, moduleName, version
+        ).firstResult();
+    }
+
+    /**
+     * 列出某模块在 tenant 内全部 library-visible 版本号（用于「版本不存在」错误的候选提示）。
+     */
+    public static java.util.List<Long> findLibraryVersions(String tenantId, String moduleName) {
+        return find(
+            "tenantId = ?1 and moduleName = ?2 and libraryVisible = true order by version desc",
+            tenantId, moduleName
+        ).<PolicyVersion>list().stream().map(v -> v.version).toList();
     }
 
     /**

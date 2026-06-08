@@ -423,6 +423,19 @@ public class PolicyVersion extends PanacheEntityBase {
     }
 
     /**
+     * 列出某 tenant 内全部可作 library 被 {@code Use} 引用的模块版本（ADR 0015 阶段3d 模块目录）。
+     *
+     * <p>供编辑器拉取「当前租户可引用模块 + 版本」用于 Monaco 补全/hover。
+     * tenant 隔离——只返回本租户的 library 模块，不泄露其它租户。
+     */
+    public static java.util.List<PolicyVersion> findLibraryCatalog(String tenantId) {
+        return find(
+            "tenantId = ?1 and libraryVisible = true order by moduleName asc, version desc",
+            tenantId
+        ).list();
+    }
+
+    /**
      * Tenant-scoped visibility probe used only to distinguish same-tenant hidden versions
      * from missing visible versions without falling back to global/cross-tenant lookup.
      */

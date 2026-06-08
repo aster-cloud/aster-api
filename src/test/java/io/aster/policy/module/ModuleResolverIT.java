@@ -97,26 +97,28 @@ class ModuleResolverIT {
 
     @Test
     void importCycleRaisesStructuredCycleError() {
-        persistLibrary(TENANT, "risk.A", 1L, true, """
-            Module risk.A.
-            Use risk.B version 1 as B.
+        // 注：模块名/别名用多字母（risk.Alpha 非 risk.A）——Canonicalizer 会吞掉
+        // 单字母大写标识符段（risk.A→risk.），是独立既存局限，不在跨模块特性范围。
+        persistLibrary(TENANT, "risk.Alpha", 1L, true, """
+            Module risk.Alpha.
+            Use risk.Beta version 1 as Beta.
 
-            Rule a given x as Int, produce Int:
-              Return B.b(x).
+            Rule alpha given x as Int, produce Int:
+              Return Beta.beta(x).
             """);
-        persistLibrary(TENANT, "risk.B", 1L, true, """
-            Module risk.B.
-            Use risk.A version 1 as A.
+        persistLibrary(TENANT, "risk.Beta", 1L, true, """
+            Module risk.Beta.
+            Use risk.Alpha version 1 as Alpha.
 
-            Rule b given x as Int, produce Int:
-              Return A.a(x).
+            Rule beta given x as Int, produce Int:
+              Return Alpha.alpha(x).
             """);
         ParsedRoot root = root("""
             Module app.Root.
-            Use risk.A version 1 as A.
+            Use risk.Alpha version 1 as Alpha.
 
             Rule run given amount as Int, produce Int:
-              Return A.a(amount).
+              Return Alpha.alpha(amount).
             """);
 
         assertThatThrownBy(() -> resolver.resolveGraph(TENANT, root.core(), root.imports(), "en-US"))

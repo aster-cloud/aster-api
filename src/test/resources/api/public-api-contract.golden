@@ -1,0 +1,32 @@
+# Public REST API contract golden ({HTTP method} {path}).
+# 客户集成依赖此契约——删除/改路径/改方法 = breaking，走 /api/v2 或 deprecation。
+# 新增端点（向后兼容）：运行 PublicApiContractTest 会自动追加，连同本文件提交。
+DELETE /api/v1/admin/lexicons
+DELETE /api/v1/policies/cache
+GET /api/v1/audit
+GET /api/v1/audit/anomalies
+GET /api/v1/audit/compare
+GET /api/v1/audit/range
+GET /api/v1/audit/stats/version-usage
+GET /api/v1/audit/verify-chain
+GET /api/v1/lexicons
+GET /api/v1/lexicons/stream
+GET /api/v1/metrics/waadr
+GET /api/v1/modules/catalog
+GET /api/v1/policies
+GET /api/v1/workflows
+GET /api/v1/workflows/metrics
+PATCH /api/v1/audit
+POST /api/v1/admin/lexicons
+POST /api/v1/ai/complete
+POST /api/v1/ai/explain
+POST /api/v1/ai/generate
+POST /api/v1/ai/suggest
+POST /api/v1/audit
+POST /api/v1/policies
+POST /api/v1/policies/evaluate
+POST /api/v1/policies/evaluate-json
+POST /api/v1/policies/evaluate-source
+POST /api/v1/policies/evaluate/batch
+POST /api/v1/policies/schema
+POST /api/v1/policies/validate

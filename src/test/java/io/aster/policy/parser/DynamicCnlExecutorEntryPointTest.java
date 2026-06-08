@@ -31,6 +31,21 @@ class DynamicCnlExecutorEntryPointTest {
           Return driver.age.
         """;
 
+    // 多 Rule 本应 Ambiguous，但 @entry 标记了入口（ADR 0015 阶段2）。
+    // 注：@entry 与 Rule 同行（grammar 的 annotation* RULE 要求注解紧邻 Rule，
+    // 中间无换行）。独立行 @entry 形态需 grammar 增强（双引擎），留待后续。
+    private static final String ENTRY_ANNOTATED_SOURCE = """
+        Module entry.annotated.
+
+        Define Driver has age as Int.
+
+        Rule helper given driver as Driver, produce Int:
+          Return driver.age.
+
+        @entry Rule main given driver as Driver, produce Int:
+          Return driver.age.
+        """;
+
     @Test
     void single_rule_without_function_executes_selected_rule() {
         Map<String, Object> context = Map.of("driver", Map.of("age", 42));
@@ -54,5 +69,17 @@ class DynamicCnlExecutorEntryPointTest {
                     (DynamicCnlExecutor.AmbiguousEntryException) error;
                 assertThat(ambiguous.getCandidates()).containsExactly("helper", "main");
             });
+    }
+
+    @Test
+    void entry_annotation_resolves_ambiguity_and_executes_marked_rule() {
+        Map<String, Object> context = Map.of("driver", Map.of("age", 42));
+
+        // 多 Rule 无显式 functionName，但 @entry 标记 main → 不再 Ambiguous，执行 main
+        ExecutionResult result = DynamicCnlExecutor.executeWithContext(
+            ENTRY_ANNOTATED_SOURCE, context, null, "en-US", null, false);
+
+        assertThat(result.functionName()).isEqualTo("main");
+        assertThat(result.result()).isEqualTo(42);
     }
 }

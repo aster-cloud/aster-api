@@ -33,7 +33,8 @@ public class InProcessCnlParser {
         Module module,
         String moduleName,
         String firstFunctionName,
-        List<String> functionNames
+        List<String> functionNames,
+        String entryFunctionName
     ) {}
 
     /**
@@ -141,6 +142,9 @@ public class InProcessCnlParser {
             // 6. 提取函数名称
             List<String> functionNames = extractFunctionNames(module);
             String firstFunctionName = functionNames.isEmpty() ? null : functionNames.get(0);
+            // 6.1 提取 @entry 标记的入口函数名（ADR 0015 阶段2）。唯一性由
+            //     aster-lang-core TypeChecker 校验，此处仅取首个匹配。
+            String entryFunctionName = extractEntryFunctionName(module);
 
             // 7. 提取模块名称（如果没有模块头，使用函数名作为默认）
             String moduleName = module.name();
@@ -155,7 +159,7 @@ public class InProcessCnlParser {
 
             LOG.infof("CNL 解析成功: module=%s, function=%s", moduleName, firstFunctionName);
 
-            return new ParseResult(module, moduleName, firstFunctionName, functionNames);
+            return new ParseResult(module, moduleName, firstFunctionName, functionNames, entryFunctionName);
 
         } catch (CnlParseException e) {
             throw e;
@@ -177,6 +181,35 @@ public class InProcessCnlParser {
             .filter(decl -> decl instanceof Decl.Func)
             .map(decl -> ((Decl.Func) decl).name())
             .toList();
+    }
+
+    /**
+     * 提取带 @entry 注解的入口函数名（无则返回 null）。
+     *
+     * <p>@entry 唯一性由 aster-lang-core TypeChecker 校验，此处取首个匹配即可。
+     */
+    private static String extractEntryFunctionName(Module module) {
+        if (module.decls() == null || module.decls().isEmpty()) {
+            return null;
+        }
+        return module.decls().stream()
+            .filter(decl -> decl instanceof Decl.Func)
+            .map(decl -> (Decl.Func) decl)
+            .filter(InProcessCnlParser::hasEntryAnnotation)
+            .map(Decl.Func::name)
+            .findFirst()
+            .orElse(null);
+    }
+
+    /**
+     * 判断函数是否带 @entry 注解。
+     */
+    private static boolean hasEntryAnnotation(Decl.Func func) {
+        if (func.annotations() == null) {
+            return false;
+        }
+        return func.annotations().stream()
+            .anyMatch(ann -> "entry".equals(ann.name()));
     }
 
     /**

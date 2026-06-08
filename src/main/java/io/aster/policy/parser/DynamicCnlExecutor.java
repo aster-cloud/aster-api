@@ -160,9 +160,10 @@ public class DynamicCnlExecutor {
             InProcessCnlParser.ParseResult parseResult = InProcessCnlParser.parse(source, locale, identifierIndex);
             Module astModule = parseResult.module();
 
-            // 2. 确定要执行的函数名
+            // 2. 确定要执行的函数名（优先级：显式 functionName > @entry 注解 > 单 Rule > 诊断）
             EntryPointSelector.Selection selection = EntryPointSelector.select(
-                functionName, parseResult.functionNames(), legacyEvaluateSentinel);
+                functionName, parseResult.functionNames(), parseResult.entryFunctionName(),
+                legacyEvaluateSentinel);
             String targetFunction;
             if (selection instanceof EntryPointSelector.Selected selected) {
                 targetFunction = selected.function();

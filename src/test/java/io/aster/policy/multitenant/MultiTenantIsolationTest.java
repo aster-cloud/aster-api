@@ -54,9 +54,11 @@ class MultiTenantIsolationTest {
             WorkflowStateEntity.delete("tenantId = ?1", tenant);
             AnomalyReportEntity.delete("tenantId = ?1", tenant);
         });
-        // 清理本测试创建的共享策略版本（policyId = policy-shared）
-        io.aster.policy.entity.PolicyArtifact.delete("policyVersionId in (select id from PolicyVersion where policyId = 'policy-shared')");
+        // 清理本测试创建的共享策略版本（policyId = policy-shared）及 library 夹具（lib-%）
+        io.aster.policy.entity.PolicyArtifact.delete(
+            "policyVersionId in (select id from PolicyVersion where policyId = 'policy-shared' or policyId like 'lib-%')");
         PolicyVersion.delete("policyId = ?1", "policy-shared");
+        PolicyVersion.delete("policyId like ?1", "lib-%");
 
         baseTime = Instant.now().minusSeconds(600);
         sharedVersionId = persistSharedPolicyVersion();
@@ -268,6 +270,74 @@ class MultiTenantIsolationTest {
         anomaly.status = "PENDING";
         anomaly.tenantId = tenant;  // Phase 4.3: 添加租户 ID 确保隔离
         anomaly.persist();
+    }
+
+    // ============================================================
+    // 模块目录隔离（ADR 0015 阶段3d）：ModuleCatalogResource 注释声称
+    // "严格 tenant 隔离"，此前无测试佐证。补进隔离矩阵。
+    // ============================================================
+
+    @Test
+    void moduleCatalogShouldReturnOnlyCurrentTenantLibraryModules() {
+        seedLibraryModule(TENANT_ALPHA, "alpha.lib.scoring", "score");
+        seedLibraryModule(TENANT_BETA, "beta.lib.pricing", "price");
+
+        List<Map<String, Object>> alphaModules = fetchModuleCatalog(TENANT_ALPHA);
+        List<String> alphaNames = alphaModules.stream()
+            .map(m -> (String) m.get("moduleName")).toList();
+
+        assertTrue(alphaNames.contains("alpha.lib.scoring"),
+            "alpha 应能看到自己的 library 模块，实际=" + alphaNames);
+        assertFalse(alphaNames.contains("beta.lib.pricing"),
+            "alpha 不应看到 beta 的 library 模块（跨租户泄露），实际=" + alphaNames);
+    }
+
+    @Test
+    void moduleCatalogShouldRejectMissingTenantContext() {
+        int status = given()
+            .when()
+            .get("/api/v1/modules/catalog")
+            .then()
+            .extract()
+            .statusCode();
+        // 无 tenant context → 拒绝（不泄露任何租户的模块）
+        assertTrue(status == 401 || status == 400,
+            "缺失 tenant context 应被拒绝（401/400），实际 status=" + status);
+    }
+
+    private List<Map<String, Object>> fetchModuleCatalog(String tenant) {
+        Map<String, Object> resp = given()
+            .header("X-Tenant-Id", tenant)
+            .when()
+            .get("/api/v1/modules/catalog")
+            .then()
+            .statusCode(200)
+            .extract()
+            .jsonPath()
+            .getMap("");
+        Object modules = resp == null ? null : resp.get("modules");
+        return modules == null ? List.of() : toMapList((List<?>) modules);
+    }
+
+    void seedLibraryModule(String tenant, String moduleName, String functionName) {
+        // @Test 内 self-invocation，@Transactional 不生效，用显式事务（项目惯例）
+        io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+            PolicyVersion v = new PolicyVersion();
+            // 唯一 policyId（lib-{tenant}-{module}）避免与 shared fixture 或彼此撞
+            // uk_policy_version UNIQUE(policy_id, version)；清理范围含 lib-%
+            v.policyId = "lib-" + tenant + "-" + moduleName;
+            v.version = 1L;
+            v.moduleName = moduleName;
+            v.functionName = functionName;
+            v.content = "// library fixture for " + tenant;
+            v.active = true;
+            v.libraryVisible = true;  // 关键：可作为 library 被 Use 引用
+            v.tenantId = tenant;
+            v.createdAt = baseTime;
+            v.createdBy = "multitenant-test";
+            v.notes = "module catalog isolation fixture";
+            v.persist();
+        });
     }
 
     @SuppressWarnings("unchecked")

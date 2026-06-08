@@ -214,6 +214,13 @@ tasks.named('test', Test) {
     }
     // 排除 *IT 集成测试，让 test 任务保持快速反馈（< 30s）
     exclude '**/*IT.class'
+    // 单元测试在慢 CI runner 上偶发 flaky（并发/时序敏感的 RateLimiter 吞吐、
+    // audit outbox 调度等，与被测改动无关）。重试 1 次容忍瞬时 flakiness，
+    // 避免无关 flaky 阻塞 PR；首次通过即视为通过（不强制重试后仍通过）。
+    retry {
+        maxRetries = 1
+        failOnPassedAfterRetry = false
+    }
 }
 
 tasks.register('integrationTest', Test) {

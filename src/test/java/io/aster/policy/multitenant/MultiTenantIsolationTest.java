@@ -270,6 +270,70 @@ class MultiTenantIsolationTest {
         anomaly.persist();
     }
 
+    // ============================================================
+    // 模块目录隔离（ADR 0015 阶段3d）：ModuleCatalogResource 注释声称
+    // "严格 tenant 隔离"，此前无测试佐证。补进隔离矩阵。
+    // ============================================================
+
+    @Test
+    void moduleCatalogShouldReturnOnlyCurrentTenantLibraryModules() {
+        seedLibraryModule(TENANT_ALPHA, "alpha.lib.scoring", "score");
+        seedLibraryModule(TENANT_BETA, "beta.lib.pricing", "price");
+
+        List<Map<String, Object>> alphaModules = fetchModuleCatalog(TENANT_ALPHA);
+        List<String> alphaNames = alphaModules.stream()
+            .map(m -> (String) m.get("moduleName")).toList();
+
+        assertTrue(alphaNames.contains("alpha.lib.scoring"),
+            "alpha 应能看到自己的 library 模块，实际=" + alphaNames);
+        assertFalse(alphaNames.contains("beta.lib.pricing"),
+            "alpha 不应看到 beta 的 library 模块（跨租户泄露），实际=" + alphaNames);
+    }
+
+    @Test
+    void moduleCatalogShouldRejectMissingTenantContext() {
+        int status = given()
+            .when()
+            .get("/api/v1/modules/catalog")
+            .then()
+            .extract()
+            .statusCode();
+        // 无 tenant context → 拒绝（不泄露任何租户的模块）
+        assertTrue(status == 401 || status == 400,
+            "缺失 tenant context 应被拒绝（401/400），实际 status=" + status);
+    }
+
+    private List<Map<String, Object>> fetchModuleCatalog(String tenant) {
+        Map<String, Object> resp = given()
+            .header("X-Tenant-Id", tenant)
+            .when()
+            .get("/api/v1/modules/catalog")
+            .then()
+            .statusCode(200)
+            .extract()
+            .jsonPath()
+            .getMap("");
+        Object modules = resp == null ? null : resp.get("modules");
+        return modules == null ? List.of() : toMapList((List<?>) modules);
+    }
+
+    @Transactional
+    void seedLibraryModule(String tenant, String moduleName, String functionName) {
+        PolicyVersion v = new PolicyVersion();
+        v.policyId = "policy-shared";  // 复用 setup 的清理范围（policyId=policy-shared）
+        v.version = 1L;
+        v.moduleName = moduleName;
+        v.functionName = functionName;
+        v.content = "// library fixture for " + tenant;
+        v.active = true;
+        v.libraryVisible = true;  // 关键：可作为 library 被 Use 引用
+        v.tenantId = tenant;
+        v.createdAt = baseTime;
+        v.createdBy = "multitenant-test";
+        v.notes = "module catalog isolation fixture";
+        v.persist();
+    }
+
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> toMapList(List<?> raw) {
         return (List<Map<String, Object>>) raw;

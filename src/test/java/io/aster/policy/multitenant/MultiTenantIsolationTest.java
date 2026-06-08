@@ -54,9 +54,11 @@ class MultiTenantIsolationTest {
             WorkflowStateEntity.delete("tenantId = ?1", tenant);
             AnomalyReportEntity.delete("tenantId = ?1", tenant);
         });
-        // 清理本测试创建的共享策略版本（policyId = policy-shared）
-        io.aster.policy.entity.PolicyArtifact.delete("policyVersionId in (select id from PolicyVersion where policyId = 'policy-shared')");
+        // 清理本测试创建的共享策略版本（policyId = policy-shared）及 library 夹具（lib-%）
+        io.aster.policy.entity.PolicyArtifact.delete(
+            "policyVersionId in (select id from PolicyVersion where policyId = 'policy-shared' or policyId like 'lib-%')");
         PolicyVersion.delete("policyId = ?1", "policy-shared");
+        PolicyVersion.delete("policyId like ?1", "lib-%");
 
         baseTime = Instant.now().minusSeconds(600);
         sharedVersionId = persistSharedPolicyVersion();
@@ -317,21 +319,25 @@ class MultiTenantIsolationTest {
         return modules == null ? List.of() : toMapList((List<?>) modules);
     }
 
-    @Transactional
     void seedLibraryModule(String tenant, String moduleName, String functionName) {
-        PolicyVersion v = new PolicyVersion();
-        v.policyId = "policy-shared";  // 复用 setup 的清理范围（policyId=policy-shared）
-        v.version = 1L;
-        v.moduleName = moduleName;
-        v.functionName = functionName;
-        v.content = "// library fixture for " + tenant;
-        v.active = true;
-        v.libraryVisible = true;  // 关键：可作为 library 被 Use 引用
-        v.tenantId = tenant;
-        v.createdAt = baseTime;
-        v.createdBy = "multitenant-test";
-        v.notes = "module catalog isolation fixture";
-        v.persist();
+        // @Test 内 self-invocation，@Transactional 不生效，用显式事务（项目惯例）
+        io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+            PolicyVersion v = new PolicyVersion();
+            // 唯一 policyId（lib-{tenant}-{module}）避免与 shared fixture 或彼此撞
+            // uk_policy_version UNIQUE(policy_id, version)；清理范围含 lib-%
+            v.policyId = "lib-" + tenant + "-" + moduleName;
+            v.version = 1L;
+            v.moduleName = moduleName;
+            v.functionName = functionName;
+            v.content = "// library fixture for " + tenant;
+            v.active = true;
+            v.libraryVisible = true;  // 关键：可作为 library 被 Use 引用
+            v.tenantId = tenant;
+            v.createdAt = baseTime;
+            v.createdBy = "multitenant-test";
+            v.notes = "module catalog isolation fixture";
+            v.persist();
+        });
     }
 
     @SuppressWarnings("unchecked")

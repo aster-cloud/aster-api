@@ -1,12 +1,19 @@
 package io.aster.policy.parser;
 
 import aster.core.ast.Module;
+import aster.core.ast.Decl;
 import aster.core.ir.CoreModel;
 import aster.core.lowering.CoreLowering;
+import aster.core.module.LinkException;
+import aster.core.module.ModuleGraphLinker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.aster.common.JacksonMappers;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.aster.policy.api.convert.NamedContextMapper;
+import io.aster.policy.module.ModuleResolutionException;
+import io.aster.policy.module.ModuleResolver;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.HostAccess;
@@ -34,6 +41,12 @@ public class DynamicCnlExecutor {
 
     private static final Logger LOG = Logger.getLogger(DynamicCnlExecutor.class);
     private static final ObjectMapper MAPPER = JacksonMappers.PRETTY;
+
+    @Inject
+    ModuleResolver moduleResolver;
+
+    @ConfigProperty(name = "aster.modules.enabled", defaultValue = "false")
+    boolean modulesEnabled;
 
     /**
      * 进程级共享 Engine。GraalVM 推荐模式：Engine 持有 AST/字节码 cache
@@ -82,7 +95,7 @@ public class DynamicCnlExecutor {
      * @return 执行结果
      */
     public static ExecutionResult execute(String source, Object[] context, String functionName, String locale) {
-        return executeInternal(source, context, functionName, locale, false, null, true);
+        return executeInternal(source, context, functionName, locale, false, null, true, null, null, false);
     }
 
     /**
@@ -136,7 +149,20 @@ public class DynamicCnlExecutor {
     public static ExecutionResult executeWithContext(
             String source, Object context, String functionName, String locale,
             aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel) {
-        return executeInternal(source, context, functionName, locale, true, identifierIndex, legacyEvaluateSentinel);
+        return executeInternal(
+            source, context, functionName, locale, true, identifierIndex, legacyEvaluateSentinel,
+            null, null, false);
+    }
+
+    /**
+     * CDI entry point used by callers that have tenant context and module feature flags.
+     */
+    public ExecutionResult executeWithTenantContext(
+            String tenantId, String source, Object context, String functionName, String locale,
+            aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel) {
+        return executeInternal(
+            source, context, functionName, locale, true, identifierIndex, legacyEvaluateSentinel,
+            tenantId, moduleResolver, modulesEnabled);
     }
 
     /**
@@ -151,7 +177,10 @@ public class DynamicCnlExecutor {
      * @param legacyEvaluateSentinel 是否把显式 evaluate 视为历史自动入口哨兵
      * @return 执行结果
      */
-    private static ExecutionResult executeInternal(String source, Object context, String functionName, String locale, boolean mapNamedContext, aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel) {
+    private static ExecutionResult executeInternal(
+            String source, Object context, String functionName, String locale, boolean mapNamedContext,
+            aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel,
+            String tenantId, ModuleResolver moduleResolver, boolean modulesEnabled) {
         long startTime = System.currentTimeMillis();
 
         try {
@@ -182,6 +211,18 @@ public class DynamicCnlExecutor {
             LOG.debugf("降级 AST → Core IR...");
             CoreLowering lowering = new CoreLowering();
             CoreModel.Module coreModule = lowering.lowerModule(astModule);
+            List<Decl.Import> imports = importsOf(astModule);
+            if (!imports.isEmpty() && modulesEnabled) {
+                if (moduleResolver == null) {
+                    throw new ModuleResolutionException(
+                        ModuleResolutionException.Code.MODULE_NOT_VISIBLE,
+                        "Module resolver is unavailable");
+                }
+                LOG.debugf("解析跨模块 imports: count=%d, tenant=%s", imports.size(), tenantId);
+                var graph = moduleResolver.resolveGraph(tenantId, coreModule, imports, locale);
+                coreModule = new ModuleGraphLinker().link(graph).merged();
+                LOG.debugf("跨模块 imports 已 link: modules=%d, edges=%d", graph.modules().size(), graph.imports().size());
+            }
 
             // 4. 映射命名上下文到位置参数（如需）
             Object[] positionalContext;
@@ -231,12 +272,30 @@ public class DynamicCnlExecutor {
 
         } catch (InProcessCnlParser.CnlParseException e) {
             throw new DynamicExecutionException("CNL 解析失败: " + e.getMessage(), e);
+        } catch (ModuleResolutionException e) {
+            throw new ModuleExecutionException(e);
+        } catch (LinkException e) {
+            throw new ModuleExecutionException(new ModuleResolutionException(
+                ModuleResolutionException.Code.MODULE_CYCLE,
+                e.getMessage(),
+                e
+            ));
         } catch (DynamicExecutionException e) {
             throw e;
         } catch (Exception e) {
             LOG.errorf(e, "动态执行失败: %s", e.getMessage());
             throw new DynamicExecutionException("动态执行失败: " + e.getMessage(), e);
         }
+    }
+
+    private static List<Decl.Import> importsOf(Module module) {
+        if (module == null || module.decls() == null) {
+            return List.of();
+        }
+        return module.decls().stream()
+            .filter(Decl.Import.class::isInstance)
+            .map(Decl.Import.class::cast)
+            .toList();
     }
 
     /**
@@ -589,6 +648,24 @@ public class DynamicCnlExecutor {
 
         public DynamicExecutionException(String message, Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    /**
+     * Structured module/linking failure.
+     */
+    public static class ModuleExecutionException extends DynamicExecutionException {
+        private static final long serialVersionUID = 1L;
+
+        private final ModuleResolutionException resolutionException;
+
+        public ModuleExecutionException(ModuleResolutionException resolutionException) {
+            super(resolutionException.getMessage(), resolutionException);
+            this.resolutionException = resolutionException;
+        }
+
+        public ModuleResolutionException resolutionException() {
+            return resolutionException;
         }
     }
 

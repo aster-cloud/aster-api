@@ -111,6 +111,9 @@ public class LexiconAdminResource {
     @POST
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
+    // `try (var ignored = xLock.get())` 是“持有即用”的分布式锁惯用法（try 退出即
+    // 释放锁），javac 的 [try] 警告对此为误报——抑制以保持编译零警告。
+    @SuppressWarnings("try")
     public Response upload(
         @Context HttpHeaders headers,
         @RestForm("file") @PartType(MediaType.APPLICATION_OCTET_STREAM) FileUpload file
@@ -367,6 +370,8 @@ public class LexiconAdminResource {
     @DELETE
     @Path("/{fileName}")
     @Produces(MediaType.APPLICATION_JSON)
+    // 同 upload：`try (var ignored = xLock.get())` 的 [try] 警告为误报，抑制。
+    @SuppressWarnings("try")
     public Response delete(@Context HttpHeaders headers, @PathParam("fileName") String fileName) {
         String sanitized = sanitizeFileName(fileName);
         // R3-delete-jar-restrict：DELETE 同样必须是 .jar

@@ -16,10 +16,22 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * 策略持久化服务，当前使用内存存储实现。
+ * 策略 CRUD 存储服务。
  *
- * <p>支持多租户隔离，后续可以替换为数据库或远程存储。</p>
+ * <p><b>⚠️ GA blocker（2026-06 评估）</b>：此实现为<b>进程内内存存储</b>
+ * （{@link ConcurrentHashMap}），<b>重启即丢、不跨副本共享</b>。它是
+ * {@link io.aster.policy.api.PolicyManagementService} 的 CRUD backing，
+ * 而真正的版本化策略持久化在 DB（{@code policy_versions} /
+ * {@code policy_catalog} / {@code policy_artifacts} 表）。两套存储并存意味着
+ * 经此服务写入的 policy 文档在重启/扩缩容后会丢失。</p>
+ *
+ * <p><b>GA 前必须替换为 DB-backed 实现</b>（schema 设计 + repository + 从
+ * 内存 CRUD 迁移），不能作为正式 API 面的策略存储。在此之前调用方应清楚：
+ * 此服务的数据没有持久化保证。</p>
+ *
+ * @deprecated 内存存储，非生产级持久化。GA 前替换为 DB-backed 实现。
  */
+@Deprecated
 @ApplicationScoped
 public class PolicyStorageService {
 

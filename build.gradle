@@ -13,7 +13,7 @@ jacoco {
 }
 
 group = 'io.aster'
-version = '1.0.0-SNAPSHOT'
+version = '1.0.0'
 
 ext.reportsDir = layout.buildDirectory.dir('reports/gatling').get().asFile
 

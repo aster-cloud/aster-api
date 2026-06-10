@@ -16,6 +16,10 @@ import java.util.Objects;
 /**
  * 策略管理服务，封装策略文档的增删改查、GraphQL类型转换与缓存协同。
  */
+// PolicyStorageService 已标 @Deprecated（内存存储，重启即丢，GA 前须 DB 化）。
+// 此服务当前仍以它作 CRUD backing——风险已在 PolicyStorageService 显式记录，
+// 待 DB-backed 实现就绪后切换。在此之前抑制 deprecation 噪声但保留标注意图。
+@SuppressWarnings("deprecation")
 @ApplicationScoped
 public class PolicyManagementService {
 

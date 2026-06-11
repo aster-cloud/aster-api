@@ -67,7 +67,7 @@ dependencies {
 
     // GraphQL支持
     implementation 'io.quarkus:quarkus-smallrye-graphql'
-    implementation 'commons-codec:commons-codec:1.17.1'
+    implementation 'commons-codec:commons-codec:1.22.0'
 
     // Persistence - Hibernate Panache + PostgreSQL + Flyway + Reactive Inbox
     implementation 'io.quarkus:quarkus-hibernate-orm-panache'

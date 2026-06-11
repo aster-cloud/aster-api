@@ -120,6 +120,11 @@ class PolicyStorageServiceIT {
         String recordedId = first.getId();
         assertThat(recordedId).isNotBlank();
 
+        // 模拟 workflow replay：重放同一次 createPolicy 会复用录制的 UUID。
+        // DB 主键唯一，故先删除录制态产生的行，让重放态的 INSERT（同 ID）成功，
+        // 从而验证「重放生成与录制相同的 ID」这一确定性契约。
+        service.deletePolicy("tenant-replay", recordedId);
+
         DeterminismContext replay = new DeterminismContext();
         replay.uuid().enterReplayMode(recording.uuid().getRecordedUuids());
         Mockito.reset(workflowRuntime);

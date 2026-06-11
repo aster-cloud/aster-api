@@ -4,26 +4,15 @@ import aster.runtime.workflow.InMemoryWorkflowRuntime;
 import io.aster.policy.api.PolicyCacheKey;
 import io.aster.policy.api.PolicyEvaluationService;
 import io.aster.policy.api.model.PolicyEvaluationResult;
-import io.aster.policy.service.PolicyStorageService;
-import io.aster.policy.service.PolicyStorageService.PolicyDocument;
-import io.smallrye.mutiny.Uni;
-import io.smallrye.mutiny.helpers.test.UniAssertSubscriber;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import java.io.IOException;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,34 +23,8 @@ import java.util.stream.Stream;
  */
 class NonDeterminismSourceTest {
 
-    @Test
-    void testPolicyStorageUuidReplay() throws Exception {
-        PolicyStorageService service = new PolicyStorageService();
-        PostgresWorkflowRuntime runtime = Mockito.mock(PostgresWorkflowRuntime.class);
-        setField(service, "workflowRuntime", runtime);
-
-        DeterminismContext recording = new DeterminismContext();
-        Mockito.when(runtime.getDeterminismContext()).thenReturn(recording);
-
-        PolicyDocument first = service.createPolicy(
-                "tenant-a",
-                new PolicyDocument(null, "Policy A", Collections.emptyMap(), Collections.emptyMap())
-        );
-        String recordedId = first.getId();
-        Assertions.assertThat(recordedId).isNotBlank();
-
-        DeterminismContext replay = new DeterminismContext();
-        replay.uuid().enterReplayMode(recording.uuid().getRecordedUuids());
-        Mockito.reset(runtime);
-        Mockito.when(runtime.getDeterminismContext()).thenReturn(replay);
-
-        PolicyDocument replayDoc = service.createPolicy(
-                "tenant-a",
-                new PolicyDocument(null, "Policy B", Collections.emptyMap(), Collections.emptyMap())
-        );
-
-        Assertions.assertThat(replayDoc.getId()).isEqualTo(recordedId);
-    }
+    // testPolicyStorageUuidReplay 已迁移到 PolicyStorageServiceIT —— createPolicy
+    // 现已 DB-backed（@Transactional + persist），需真实数据源，故改为 @QuarkusTest IT。
 
     @Test
     void testIdempotencyKeyDeterministic() throws Exception {
@@ -123,12 +86,6 @@ class NonDeterminismSourceTest {
                 .containsExactly("src/main/java/io/aster/policy/api/PolicyEvaluationService.java");
     }
 
-    private static void setField(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
-
     private static Map<String, List<Integer>> scanPattern(String needle, Path... roots) throws IOException {
         Map<String, List<Integer>> matches = new LinkedHashMap<>();
         Path moduleRoot = Paths.get("").toAbsolutePath();
@@ -168,9 +125,4 @@ class NonDeterminismSourceTest {
         }
     }
 
-    private static final class SamplePolicy {
-        static String echo(String value) {
-            return value;
-        }
-    }
 }

@@ -3,6 +3,7 @@ package io.aster.policy.api;
 import io.aster.policy.graphql.types.PolicyTypes;
 import io.aster.policy.service.PolicyStorageService;
 import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
@@ -15,11 +16,10 @@ import java.util.Objects;
 
 /**
  * 策略管理服务，封装策略文档的增删改查、GraphQL类型转换与缓存协同。
+ *
+ * <p>CRUD backing 为 {@link PolicyStorageService}，现已 DB-backed
+ * （{@code policy_documents} 表），GA blocker 已清除。</p>
  */
-// PolicyStorageService 已标 @Deprecated（内存存储，重启即丢，GA 前须 DB 化）。
-// 此服务当前仍以它作 CRUD backing——风险已在 PolicyStorageService 显式记录，
-// 待 DB-backed 实现就绪后切换。在此之前抑制 deprecation 噪声但保留标注意图。
-@SuppressWarnings("deprecation")
 @ApplicationScoped
 public class PolicyManagementService {
 
@@ -46,9 +46,13 @@ public class PolicyManagementService {
      */
     public Uni<PolicyTypes.Policy> createPolicy(String tenantId, PolicyTypes.PolicyInput input) {
         String normalizedTenant = normalizeTenant(tenantId);
+        // 存储层现为阻塞 JPA（@Transactional），必须 offload 到 worker pool，
+        // 否则在 GraphQL 的 event-loop 线程上跑阻塞 DB 调用会抛异常（旧内存存储
+        // 是非阻塞的，故此前无需 offload）。
         return Uni.createFrom().item(() ->
             policyStorageService.createPolicy(normalizedTenant, convertToDocument(null, input))
-        ).onItem().transform(this::convertFromDocument)
+        ).runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+         .onItem().transform(this::convertFromDocument)
          .call(created -> cacheManagementService.invalidateTenantCache(normalizedTenant).replaceWithVoid());
     }
 
@@ -64,7 +68,8 @@ public class PolicyManagementService {
                 sanitizedId,
                 convertToDocument(sanitizedId, input)
             )
-        ).call(optional -> optional.isPresent()
+        ).runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+         .call(optional -> optional.isPresent()
             ? cacheManagementService.invalidateTenantCache(normalizedTenant).replaceWithVoid()
             : Uni.createFrom().voidItem())
          .onItem().transform(optional -> optional.map(this::convertFromDocument).orElse(null));
@@ -78,7 +83,8 @@ public class PolicyManagementService {
         String sanitizedId = sanitize(id);
         return Uni.createFrom().item(() ->
             policyStorageService.deletePolicy(normalizedTenant, sanitizedId)
-        ).call(deleted -> Boolean.TRUE.equals(deleted)
+        ).runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+         .call(deleted -> Boolean.TRUE.equals(deleted)
             ? cacheManagementService.invalidateTenantCache(normalizedTenant).replaceWithVoid()
             : Uni.createFrom().voidItem());
     }
@@ -92,7 +98,7 @@ public class PolicyManagementService {
             policyStorageService.getPolicy(normalizedTenant, sanitize(id))
                 .map(this::convertFromDocument)
                 .orElse(null)
-        );
+        ).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }
 
     /**
@@ -117,7 +123,7 @@ public class PolicyManagementService {
                 }
             }
             return policies;
-        });
+        }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }
 
     /**

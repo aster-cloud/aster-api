@@ -232,6 +232,10 @@ tasks.register('integrationTest', Test) {
         excludeTags 'chaos'
     }
     include '**/*IT.class'
+    // 集成测试套件每个 @QuarkusTest 配置（如 @InjectMock）会触发独立 Quarkus boot，
+    // 套件增大后默认堆不足，曾导致 MixpanelClient 重试路径 OOM 拖挂整个测试 JVM
+    // （@QuarkusTest hang-detection 等死 JVM = 表现为 CI 挂死）。显式给足堆。
+    maxHeapSize = '2g'
     systemProperty 'java.util.logging.manager', 'org.jboss.logmanager.LogManager'
     systemProperty 'quarkus.test.flat-class-path', 'true'
     systemProperty 'aster.truffle.tests.skip', 'true'

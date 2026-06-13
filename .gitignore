@@ -10,3 +10,6 @@ build/
 
 # Claude
 .claude/
+
+# CCG workflow scaffolding (local-only task/state, never committed)
+.ccg/

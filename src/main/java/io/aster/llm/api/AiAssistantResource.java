@@ -2,7 +2,6 @@ package io.aster.llm.api;
 
 import io.aster.llm.api.dto.CompleteRequest;
 import io.aster.llm.api.dto.CompleteResponse;
-import io.aster.llm.api.dto.ExplainRequest;
 import io.aster.llm.api.dto.GeneratePolicyRequest;
 import io.aster.llm.api.dto.SuggestRequest;
 import io.aster.llm.config.LlmConfig;
@@ -84,27 +83,6 @@ public class AiAssistantResource {
         LOG.infof("AI 生成请求: tenant=%s, locale=%s, goal=%.50s...",
             tenantId, request.getLocaleOrDefault(), request.goal());
         return llmProxyService.streamGenerate(tenantId, request);
-    }
-
-    /**
-     * 策略/追踪解释（SSE 流式）
-     *
-     * POST /api/v1/ai/explain
-     */
-    @POST
-    @Path("/explain")
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.SERVER_SENT_EVENTS)
-    @RestStreamElementType(MediaType.TEXT_PLAIN)
-    public Multi<String> explain(@Valid ExplainRequest request) {
-        checkEnabled();
-        String tenantId = tenantId();
-        SafetyVerdict v = guard(request.source(), PromptScopeFilter.Strictness.MEDIUM, tenantId, "explain");
-        if (v.blocked()) {
-            return refusalStream(v);
-        }
-        LOG.infof("AI 解释请求: tenant=%s, locale=%s", tenantId, request.getLocaleOrDefault());
-        return llmProxyService.streamExplain(tenantId, request);
     }
 
     /**

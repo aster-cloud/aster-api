@@ -70,7 +70,7 @@ public class InternalCallerFilter {
      * 仅在紧急回退时使用 —— 例如 cloud-side proxy 也挂了的情况下让浏览器直连维持服务。
      * <b>生产应保持 false</b>。
      *
-     * <p>{@code aster.security.ai.sse.public}：仅旁路 SSE 端点 (/generate, /explain, /suggest)，
+     * <p>{@code aster.security.ai.sse.public}：仅旁路 SSE 端点 (/generate, /suggest)，
      * /complete 保持锁定。R25-Major-3 引入：cloud-side proxy 目前只覆盖 /complete，
      * SSE proxy 还没写完。生产可以临时设 true 让浏览器直连 SSE 端点维持 AI 面板能用，
      * 同时保留 /complete 的鉴权（因为 cloud-side 已迁移）。设 true 时每次调用打 warn。
@@ -89,7 +89,6 @@ public class InternalCallerFilter {
      */
     private static final java.util.Set<String> AI_SSE_PATHS = java.util.Set.of(
         "/api/v1/ai/generate",
-        "/api/v1/ai/explain",
         "/api/v1/ai/suggest"
     );
 
@@ -117,7 +116,7 @@ public class InternalCallerFilter {
         if (isEvaluateSource && evaluateSourcePublic) return Classification.BYPASS_OK;
         if (isEvaluateSource && evaluateSourceTrial) return Classification.BYPASS_TRIAL;
         if (isAi && aiPublic) return Classification.BYPASS_OK;
-        // R25-Major-3：细粒度 SSE 旁路 —— 只放 generate/explain/suggest，
+        // R25-Major-3：细粒度 SSE 旁路 —— 只放 generate/suggest，
         // /complete 仍要求 HMAC（已走 cloud-side proxy）。
         if (isAi && aiSsePublic && AI_SSE_PATHS.contains(normalizedPath)) {
             return Classification.BYPASS_OK;
@@ -238,7 +237,7 @@ public class InternalCallerFilter {
 
     private static WebApplicationException forbidden(String reason, String path) {
         // R27-Minor-2: operator-actionable 错误消息。区分三类：
-        //   1. AI SSE endpoint (generate/explain/suggest) —— 当前 cloud SSE proxy 还没写完，
+        //   1. AI SSE endpoint (generate/suggest) —— 当前 cloud SSE proxy 还没写完，
         //      operator 可临时开 aster.security.ai.sse.public=true 灰度回退
         //   2. AI complete —— cloud proxy 已就绪 (/api/llm/complete)，必须经它转发；
         //      ai.sse.public 对 /complete 无效

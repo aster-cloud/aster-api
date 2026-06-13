@@ -135,15 +135,16 @@ class InternalCallerFilterTest {
 
     @Test
     void aiSsePublicBypassesOnlySseEndpoints() {
-        // R25-Major-3: ai.sse.public 只放 generate/explain/suggest
+        // R25-Major-3: ai.sse.public 只放 generate/suggest（explain 端点已移除）
         assertEquals(Classification.BYPASS_OK,
             InternalCallerFilter.classify("/api/v1/ai/generate",
                 false, false, false, /*aiSsePublic*/ true));
         assertEquals(Classification.BYPASS_OK,
-            InternalCallerFilter.classify("/api/v1/ai/explain",
-                false, false, false, true));
-        assertEquals(Classification.BYPASS_OK,
             InternalCallerFilter.classify("/api/v1/ai/suggest",
+                false, false, false, true));
+        // explain 端点已删除：即便 sse.public=true 也不在白名单 → 仍要求 HMAC。
+        assertEquals(Classification.REQUIRE_HMAC,
+            InternalCallerFilter.classify("/api/v1/ai/explain",
                 false, false, false, true));
     }
 

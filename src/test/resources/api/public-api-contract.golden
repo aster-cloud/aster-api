@@ -19,7 +19,6 @@ GET /api/v1/workflows/metrics
 PATCH /api/v1/audit
 POST /api/v1/admin/lexicons
 POST /api/v1/ai/complete
-POST /api/v1/ai/explain
 POST /api/v1/ai/generate
 POST /api/v1/ai/suggest
 POST /api/v1/audit

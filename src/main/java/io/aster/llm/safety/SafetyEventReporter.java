@@ -38,7 +38,7 @@ public class SafetyEventReporter {
 
     /**
      * @param tenantId 用作 userId（aster-cloud 端 recordAiUsage 接受 userId）
-     * @param callKind generate / explain / suggest / complete
+     * @param callKind generate / suggest / complete
      * @param ruleId   命中的 PG 规则 id
      */
     public void reportBlocked(String tenantId, String callKind, String ruleId) {

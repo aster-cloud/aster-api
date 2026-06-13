@@ -2,7 +2,6 @@ package io.aster.llm.service;
 
 import io.aster.llm.api.dto.CompleteRequest;
 import io.aster.llm.api.dto.CompleteResponse;
-import io.aster.llm.api.dto.ExplainRequest;
 import io.aster.llm.api.dto.GeneratePolicyEvent;
 import io.aster.llm.api.dto.GeneratePolicyRequest;
 import io.aster.llm.api.dto.SuggestRequest;
@@ -156,23 +155,6 @@ public class LlmProxyService {
                     }
                 }
             );
-    }
-
-    /**
-     * 流式策略解释（直接透传 LLM 输出，无需编译校验）
-     */
-    public Multi<String> streamExplain(String tenantId, ExplainRequest req) {
-        String apiKey = keyProvider.getApiKey(tenantId, config.provider());
-
-        if (apiKey == null || apiKey.isBlank()) {
-            return Multi.createFrom().item(toJson(GeneratePolicyEvent.error("未配置 LLM API Key")));
-        }
-
-        PromptContext ctx = promptComposer.buildExplainContext(tenantId, req);
-
-        return llmClient.streamChat(ctx.toLlmRequest(), apiKey)
-            .filter(event -> event.type() == LlmStreamEvent.Type.DELTA && event.delta() != null)
-            .map(event -> event.delta());
     }
 
     /**

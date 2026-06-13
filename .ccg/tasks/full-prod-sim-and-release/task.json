@@ -1,0 +1,12 @@
+{
+  "id": "full-prod-sim-and-release",
+  "title": "本地全量生产模拟测试(所有组件+压测+灾备)全绿后打 tag",
+  "status": "in_progress",
+  "strategy": "refactor-safely",
+  "currentPhase": "1",
+  "nextAction": "起 podman PG+Redis, 跑全量测试(单测+IT+灾备+混沌), Flyway 收紧验证, 压测, 全绿后打 v1.0.0 tag",
+  "gate": null,
+  "branch": "fix/ops-contract-hardening",
+  "scope": "full-prod-sim-and-release",
+  "createdAt": "2026-06-10T20:51:35Z"
+}

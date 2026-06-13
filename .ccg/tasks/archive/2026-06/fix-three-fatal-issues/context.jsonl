@@ -1,4 +1,0 @@
-{"_example": "Fill with {\"file\": \"path\", \"reason\": \"why\"}. Seed rows are skipped."}
-{"file":"aster-api/src/main/resources/application.properties","reason":"#3 Flyway 配置可分环境(prod严格/dev宽松)"}
-{"file":"aster-api/src/main/java/io/aster/policy/service/PolicyStorageService.java","reason":"#3 内存存储 @Deprecated 标注+隔离"}
-{"file":"aster-cloud/src/app/[locale]/page.tsx","reason":"#2 landing 首屏叙事收敛"}

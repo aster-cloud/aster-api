@@ -110,7 +110,7 @@ dependencies {
     testImplementation 'org.assertj:assertj-core:3.27.7'
     testImplementation 'org.mockito:mockito-core:5.23.0'
     testImplementation 'io.quarkus:quarkus-jdbc-h2'
-    testImplementation 'org.awaitility:awaitility:4.2.0'
+    testImplementation 'org.awaitility:awaitility:4.3.0'
     testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.2'
 
     // Testcontainers - PostgreSQL 测试环境（Phase 3.4）

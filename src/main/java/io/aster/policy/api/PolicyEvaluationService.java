@@ -40,6 +40,7 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.Set;
 
+import io.aster.policy.cache.PolicyVersionResolutionCache;
 import org.jboss.logging.Logger;
 
 /**
@@ -72,6 +73,9 @@ public class PolicyEvaluationService {
 
     @Inject
     io.aster.policy.cache.CompiledPolicyCache compiledPolicyCache;
+
+    @Inject
+    io.aster.policy.cache.PolicyVersionResolutionCache versionResolutionCache;
 
     @Inject
     TenantContext tenantContext;
@@ -110,12 +114,22 @@ public class PolicyEvaluationService {
 
         Object[] normalizedContext = normalizeContext(tenantId, context);
 
-        // 动态加载模式下，需要在 worker pool 中获取 versionId 以避免阻塞 IO 线程
-        // 使用 QuarkusTransaction.requiringNew() 确保在独立事务中执行，避免并发访问时的会话共享问题
+        // 动态加载模式下，需要先解析活跃 versionId（作为结果缓存键）。
         if (dynamicLoadingEnabled) {
+            // 热路径优化：版本解析走短 TTL 内存缓存命中时，直接跳过 DB 查询 +
+            // requiringNew() 事务 + JDBC 连接占用——这是 k6 高并发下 /evaluate 把
+            // 8 连接池压满超时的主因。命中即在当前线程继续，零 DB IO。
+            PolicyVersionResolutionCache.Holder cached =
+                versionResolutionCache.get(tenantId, policyModule, policyFunction);
+            if (cached.isPresent()) {
+                return evaluatePolicyWithVersionId(
+                    tenantId, policyModule, policyFunction, cached.versionId(), normalizedContext);
+            }
+            // 未命中：在 worker pool 的独立事务里解析，结果回填缓存，避免阻塞 IO 线程。
             return Uni.createFrom().item(() -> QuarkusTransaction.requiringNew()
                     .call(() -> loadVersionId(tenantId, policyModule, policyFunction)))
                 .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+                .invoke(versionId -> versionResolutionCache.put(tenantId, policyModule, policyFunction, versionId))
                 .chain(versionId -> evaluatePolicyWithVersionId(tenantId, policyModule, policyFunction, versionId, normalizedContext));
         }
 
@@ -322,6 +336,8 @@ public class PolicyEvaluationService {
     public Uni<Void> invalidateCache(String tenantId, String policyModule, String policyFunction, Object[] context) {
         Object[] normalizedContext = normalizeContext(tenantId, context);
         PolicyCacheKey cacheKey = new PolicyCacheKey(tenantId, policyModule, policyFunction, normalizedContext);
+        // 策略变更 → 版本解析缓存也要立即失效，避免短 TTL 窗口内继续解析到旧版本。
+        versionResolutionCache.invalidate(tenantId, policyModule, policyFunction);
         return invalidateCacheWithKey(cacheKey);
     }
 
@@ -345,6 +361,15 @@ public class PolicyEvaluationService {
         if (targets.isEmpty()) {
             return Uni.createFrom().voidItem();
         }
+
+        // 同步失效版本解析缓存（按 module.function 去重）。
+        targets.stream()
+            .map(k -> k.getTenantId() + ":" + k.getPolicyModule() + ":" + k.getPolicyFunction())
+            .distinct()
+            .forEach(sig -> {
+                String[] parts = sig.split(":", 3);
+                versionResolutionCache.invalidate(parts[0], parts[1], parts[2]);
+            });
 
         java.util.List<Uni<Void>> invalidations = new java.util.ArrayList<>();
         Cache cache = policyCacheManager.getPolicyResultCache();

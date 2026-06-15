@@ -82,8 +82,15 @@ class NonDeterminismSourceTest {
                 Paths.get("src/main/java"),
                 Paths.get("../aster-runtime/src/main/java")
         );
+        // 允许的 System.nanoTime 白名单：
+        // - PolicyEvaluationService: 评估耗时测量起点（不入 workflow 重放状态）
+        // - PolicyVersionResolutionCache: 短 TTL 缓存的单调过期时钟（仅用于缓存淘汰，
+        //   不持久化、不参与 workflow 确定性重放，安全）
         Assertions.assertThat(nanoMatches.keySet())
-                .containsExactly("src/main/java/io/aster/policy/api/PolicyEvaluationService.java");
+                .containsExactlyInAnyOrder(
+                        "src/main/java/io/aster/policy/api/PolicyEvaluationService.java",
+                        "src/main/java/io/aster/policy/cache/PolicyVersionResolutionCache.java"
+                );
     }
 
     private static Map<String, List<Integer>> scanPattern(String needle, Path... roots) throws IOException {

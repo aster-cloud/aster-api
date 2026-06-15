@@ -35,18 +35,25 @@ const eval5xx = new Counter('eval_5xx');
 
 export const options = {
   scenarios: {
-    // 30s warmup at 50 RPS — primes the JIT, fills the compiled-policy
-    // cache, opens DB connection pool. Production runs already-warm;
-    // CI starts cold so without warmup the first ~5s of the sustained
-    // scenario times out 5-6% of requests. Warmup tagged `phase:warmup`
-    // so it doesn't pollute the sustained metrics.
+    // Warmup ramps 50→500 RPS over 40s — primes the JIT, fills the
+    // compiled-policy cache, AND ramps the worker pool + JDBC pool to their
+    // sustained-load working set. Production runs already-warm; CI starts
+    // cold. A flat 50-RPS warmup left the 500-RPS path cold (pool/threads
+    // cold-ramped only when sustained hit), timing out the first ~5s →
+    // ~0.3% error spilled into the threshold-gated sustained window. Ramping
+    // to the full 500 RPS pre-warms the actual hot-path resources so the
+    // sustained phase starts truly hot. Tagged `phase:warmup` → excluded
+    // from acceptance metrics.
     warmup: {
-      executor: 'constant-arrival-rate',
-      rate: 50,
+      executor: 'ramping-arrival-rate',
+      startRate: 50,
       timeUnit: '1s',
-      duration: '30s',
-      preAllocatedVUs: 10,
-      maxVUs: 30,
+      preAllocatedVUs: 20,
+      maxVUs: 90,
+      stages: [
+        { target: 500, duration: '30s' }, // ramp 50→500
+        { target: 500, duration: '10s' }, // hold at 500 to fully warm
+      ],
       tags: { phase: 'warmup' },
       exec: 'warmup',
     },
@@ -59,9 +66,9 @@ export const options = {
       rate: 500,           // 500 RPS sustained
       timeUnit: '1s',
       duration: '3m',
-      preAllocatedVUs: 20,
-      maxVUs: 80,
-      startTime: '35s',    // wait for warmup + 5s settle
+      preAllocatedVUs: 80,
+      maxVUs: 120,
+      startTime: '42s',    // wait for 40s warmup + 2s settle (system now hot)
       tags: { phase: 'sustained' },
     },
   },

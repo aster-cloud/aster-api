@@ -30,7 +30,7 @@ java {
 
 dependencies {
     // Quarkus BOM (Bill of Materials) for dependency management
-    implementation enforcedPlatform('io.quarkus.platform:quarkus-bom:3.36.1')
+    implementation enforcedPlatform('io.quarkus.platform:quarkus-bom:3.36.2')
 
     // Quarkus核心依赖 - Reactive REST endpoints (quarkus-rest already includes reactive support)
     implementation 'io.quarkus:quarkus-rest'
@@ -93,11 +93,11 @@ dependencies {
     implementation asterLibs.validation
 
     // GraalVM Polyglot SDK (用于动态 CNL 执行)
-    implementation 'org.graalvm.polyglot:polyglot:25.0.1'
-    implementation 'org.graalvm.sdk:graal-sdk:25.0.1'
+    implementation 'org.graalvm.polyglot:polyglot:25.0.3'
+    implementation 'org.graalvm.sdk:graal-sdk:25.0.3'
     // truffle-api 需要作为 implementation 以便访问 VirtualFrame（DynamicCnlExecutor 需要）
-    implementation 'org.graalvm.truffle:truffle-api:25.0.1'
-    runtimeOnly 'org.graalvm.truffle:truffle-runtime:25.0.1'
+    implementation 'org.graalvm.truffle:truffle-api:25.0.3'
+    runtimeOnly 'org.graalvm.truffle:truffle-runtime:25.0.3'
     runtimeOnly 'org.graalvm.truffle:truffle-compiler:25.0.3'
     runtimeOnly 'org.graalvm.compiler:compiler:25.0.3'
 

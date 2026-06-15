@@ -13,6 +13,33 @@ permissions:
 jobs:
   fresh-it:
     runs-on: ubuntu-latest
+    # 同 ci.yml：部分 *IT（PlanCacheResourceIT/PlanGateServiceIT/WaadrMetricsResourceIT
+    # 等，多为 MockProfile 或不挂 @QuarkusTestResource）连默认 localhost:5432/6379。
+    # 无固定 service 时 ConnectException（连挂 6 天）。Testcontainers 仍服务于走
+    # @QuarkusTestResource 的 *IT；两者共存（与 ci.yml 一致）。
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aster_policy
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v6
         with:
@@ -69,6 +96,12 @@ jobs:
         env:
           TESTCONTAINERS_REUSE_ENABLE: "false"
           TESTCONTAINERS_RYUK_DISABLED: "false"
+          # 指向上面的 postgres service（与 ci.yml 一致），让连默认 localhost:5432
+          # 的 *IT 稳定；走 @QuarkusTestResource 的 *IT 仍各自起 Testcontainers。
+          DB_JDBC_URL: "jdbc:postgresql://localhost:5432/aster_policy"
+          DB_REACTIVE_URL: "postgresql://localhost:5432/aster_policy"
+          DB_USERNAME: "postgres"
+          DB_PASSWORD: "postgres"
 
       - name: Publish JUnit Report
         if: always()
@@ -95,6 +128,34 @@ jobs:
   chaos:
     # 与 fresh-it 解耦：chaos 失败不阻塞 fresh-it 结果，反之亦然
     runs-on: ubuntu-latest
+    # WorkflowChaosTest 是 @QuarkusTest extends CrashRecoveryTestBase，未挂
+    # @QuarkusTestResource(PostgresTestResource)，连 application.properties 默认
+    # ${DB_JDBC_URL:...localhost:5432}。无固定 5432 service 时 Quarkus 启动即
+    # ConnectException → 全 26 个 chaos test fail/skip（连挂 6 天的根因）。提供与
+    # ci.yml build job 同款的 postgres+redis service + DB_* env 让其稳定可用。
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aster_policy
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v6
         with:
@@ -143,6 +204,12 @@ jobs:
         run: ./gradlew testChaos
         env:
           TESTCONTAINERS_RYUK_DISABLED: "true"
+          # 指向上面的 postgres service（与 ci.yml build job 一致），让连默认
+          # localhost:5432 的 @QuarkusTest chaos 测试稳定启动。
+          DB_JDBC_URL: "jdbc:postgresql://localhost:5432/aster_policy"
+          DB_REACTIVE_URL: "postgresql://localhost:5432/aster_policy"
+          DB_USERNAME: "postgres"
+          DB_PASSWORD: "postgres"
 
       # R10-CI-7 + R11-CI：哨兵步骤 —— 要求
       #   (1) 至少 1 个 JUnit XML 报告

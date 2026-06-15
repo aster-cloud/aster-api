@@ -178,16 +178,47 @@ public class PolicyEvaluationService {
                 // 始终使用 System.nanoTime() 记录开始时间，确保时间计算准确
                 long startMarker = System.nanoTime();
 
-                // 使用动态执行路径，在独立事务中执行以确保并发批量评估的线程安全
-                LOG.debugf("使用动态执行路径: %s.%s", cacheKey.getPolicyModule(), cacheKey.getPolicyFunction());
-                PolicyEvaluationResult result = QuarkusTransaction.requiringNew()
-                    .call(() -> evaluateDynamic(cacheKey, startMarker, deterministicTiming));
+                // 热路径优化：用 cacheKey 已带的 versionId 直接探编译缓存。命中即纯 Truffle
+                // 执行（coreJson + metadata，零 DB），**不开 requiringNew() 事务、不占 JDBC
+                // 连接**——这是 500 RPS 下 jdbc.max-size 连接池被占满、请求排队等连接导致
+                // 延迟爆炸 + 反压填满 worker 队列的根因。仅编译缓存 MISS 才进 DB 事务编译。
+                String versionId = cacheKey.getVersionId();
+                if (versionId != null) {
+                    java.util.Optional<io.aster.policy.cache.CompiledPolicy> hit =
+                        compiledPolicyCache.get(cacheKey.getTenantId(), cacheKey.getPolicyModule(),
+                            cacheKey.getPolicyFunction(), versionId);
+                    if (hit.isPresent()) {
+                        return executeCompiled(cacheKey, hit.get().getCoreJson(),
+                            hit.get().getMetadata(), startMarker, deterministicTiming);
+                    }
+                }
 
-                return result;
+                // 编译缓存未命中：在独立事务中加载策略源 + 编译 + 执行（含 DB 访问）。
+                LOG.debugf("使用动态执行路径: %s.%s", cacheKey.getPolicyModule(), cacheKey.getPolicyFunction());
+                return QuarkusTransaction.requiringNew()
+                    .call(() -> evaluateDynamic(cacheKey, startMarker, deterministicTiming));
             } catch (Throwable e) {
                 throw new RuntimeException("Policy evaluation failed", e);
             }
         }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+    }
+
+    /**
+     * 纯执行已编译策略（零 DB 访问）：Truffle 执行 coreJson + 计时。
+     * 编译缓存命中的热路径走这里，不占 JDBC 连接、不开事务。
+     */
+    private PolicyEvaluationResult executeCompiled(PolicyCacheKey cacheKey, String coreJson,
+            CompilationMetadata metadata, long startMarker, boolean deterministicTiming) {
+        ExecutionResult executionResult = trufflePolicyRuntime.execute(
+            coreJson, cacheKey.getContext(), metadata);
+        if (!executionResult.success()) {
+            throw new RuntimeException(String.format(
+                "策略执行失败: %s.%s - %s",
+                cacheKey.getPolicyModule(), cacheKey.getPolicyFunction(), executionResult.error()));
+        }
+        long endMarker = System.nanoTime();
+        long durationNanos = deterministicTiming ? 0L : Math.max(0, endMarker - startMarker);
+        return new PolicyEvaluationResult(executionResult.result(), durationNanos / 1_000_000.0, false);
     }
 
     /**
@@ -291,35 +322,8 @@ public class PolicyEvaluationService {
                 );
             }
 
-            // 3. 执行策略
-            ExecutionResult executionResult = trufflePolicyRuntime.execute(
-                coreJson,
-                cacheKey.getContext(),
-                metadata
-            );
-
-            if (!executionResult.success()) {
-                throw new RuntimeException(String.format(
-                    "策略执行失败: %s.%s - %s",
-                    cacheKey.getPolicyModule(),
-                    cacheKey.getPolicyFunction(),
-                    executionResult.error()
-                ));
-            }
-
-            // 4. 计算执行时间
-            // 注意：始终使用 System.nanoTime() 计算实际执行时间，
-            // 确定性计时仅用于工作流重放场景的输入参数，不应影响性能指标
-            long endMarker = System.nanoTime();
-            long durationNanos = deterministicTiming
-                ? 0L  // 确定性模式下返回 0，表示时间不确定
-                : Math.max(0, endMarker - startMarker);  // 确保非负
-
-            return new PolicyEvaluationResult(
-                executionResult.result(),
-                durationNanos / 1_000_000.0,
-                false
-            );
+            // 3-4. 执行策略 + 计时（与编译缓存命中路径共用，零额外 DB）
+            return executeCompiled(cacheKey, coreJson, metadata, startMarker, deterministicTiming);
 
         } catch (Exception e) {
             throw new RuntimeException(String.format(

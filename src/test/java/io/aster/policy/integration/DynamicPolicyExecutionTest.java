@@ -51,6 +51,9 @@ class DynamicPolicyExecutionTest {
     @Inject
     CompiledPolicyCache compiledPolicyCache;
 
+    @Inject
+    io.aster.policy.cache.PolicyVersionResolutionCache versionResolutionCache;
+
     @ConfigProperty(name = "aster.policy.dynamic-loading.enabled", defaultValue = "false")
     boolean dynamicLoadingEnabled;
 
@@ -71,8 +74,10 @@ class DynamicPolicyExecutionTest {
         // 4. 最后删除测试租户的 PolicyCatalog
         PolicyCatalog.delete("tenantId = ?1", TEST_TENANT);
 
-        // 清空编译缓存
+        // 清空编译缓存 + 版本解析缓存（后者短 TTL，跨测试方法会服务陈旧 versionId
+        // 导致用例间污染——清掉确保每个测试从干净状态解析新建的 version）。
         compiledPolicyCache.clear();
+        versionResolutionCache.clear();
     }
 
     /**

@@ -26,6 +26,7 @@ dependencyResolutionManagement {
  'aster-lang-en',
  'aster-lang-zh',
  'aster-lang-de',
+ 'aster-lang-hi',
 ].each { name ->
     def dir = file("../$name")
     if (dir.isDirectory()) {

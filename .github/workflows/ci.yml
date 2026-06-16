@@ -110,6 +110,15 @@ jobs:
           path: aster-lang-de
           token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
 
+      # Hindi (hi-IN) is now a standalone SPI pack (extracted from core's
+      # builtins). aster-api depends on it via runtimeOnly asterLibs.hi +
+      # the composite includeBuild, so its source must be present.
+      - uses: actions/checkout@v6
+        with:
+          repository: aster-cloud/aster-lang-hi
+          path: aster-lang-hi
+          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
+
       - uses: actions/setup-java@v5
         with:
           java-version: '25'

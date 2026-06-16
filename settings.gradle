@@ -10,7 +10,7 @@ dependencyResolutionManagement {
     }
     versionCatalogs {
         create('asterLibs') {
-            from('cloud.aster-lang:aster-lang-platform:1.0.2')
+            from('cloud.aster-lang:aster-lang-platform:1.0.3')
         }
     }
 }
@@ -26,6 +26,7 @@ dependencyResolutionManagement {
  'aster-lang-en',
  'aster-lang-zh',
  'aster-lang-de',
+ 'aster-lang-hi',
 ].each { name ->
     def dir = file("../$name")
     if (dir.isDirectory()) {

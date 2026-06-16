@@ -218,10 +218,9 @@ public class ApiKeyAuthFilter {
      * @return true 表示存在冲突，必须拒绝
      */
     static boolean isTenantMismatch(String verifiedTenant, String headerTenant) {
-        if (headerTenant == null || headerTenant.isBlank()) {
-            return false;
-        }
-        return !headerTenant.trim().equals(verifiedTenant);
+        // #55: 单一事实来源——委托给 ApiKeyPerimeter，避免 REST filter 与 GraphQL
+        // route handler 的租户冲突判定语义漂移。
+        return ApiKeyPerimeter.isTenantMismatch(verifiedTenant, headerTenant);
     }
 
     private static Response unauthorizedResponse(String reason) {

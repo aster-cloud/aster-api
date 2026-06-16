@@ -13,6 +13,8 @@ import io.aster.policy.graphql.types.LifeInsuranceTypes;
 import io.aster.policy.graphql.types.LoanTypes;
 import io.aster.policy.graphql.types.PolicyTypes;
 import io.aster.policy.graphql.types.PersonalLendingTypes;
+import io.aster.policy.security.rbac.Role;
+import io.aster.security.apikey.ApiKeyPerimeter;
 import io.smallrye.graphql.api.Context;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
@@ -35,6 +37,11 @@ import org.eclipse.microprofile.graphql.Query;
 @GraphQLApi
 public class PolicyGraphQLResource {
 
+    // TODO(#55): deferred to follow-up PRs (intentionally NOT in this security fix):
+    //   - dual blocking/reactive persistence refactor for policy CRUD
+    //   - platform-version reconcile
+    //   (outbox await().indefinitely() → atMost() IS fixed in this PR, see GenericOutboxScheduler.)
+
     @Inject
     PolicyManagementService policyManagementService;
 
@@ -50,13 +57,76 @@ public class PolicyGraphQLResource {
     @jakarta.ws.rs.core.Context
     RoutingContext routingContext;
 
+    @org.eclipse.microprofile.config.inject.ConfigProperty(
+        name = "aster.security.apikey.enabled", defaultValue = "true")
+    boolean apiKeyEnabled;
+
+    @org.eclipse.microprofile.config.inject.ConfigProperty(
+        name = "aster.security.rbac.enabled", defaultValue = "true")
+    boolean rbacEnabled;
+
+    /**
+     * #55 (CRITICAL): 从**已验证身份**推导租户，而非客户端 {@code X-Tenant-Id} 头。
+     *
+     * <p>{@link GraphQLApiKeyAuthHandler} 认证通过后，会把权威租户写入
+     * {@link RoutingContext}（{@link ApiKeyPerimeter#PROP_TENANT_ID}）。这里优先读它，
+     * 杜绝持任意有效 key 的调用方靠伪造 X-Tenant-Id 跨租户操作。
+     *
+     * <p>当 apikey 边界关闭时（{@code aster.security.apikey.enabled=false}，如多数单测
+     * profile），回退到 header（保持既有 query/cache 测试行为）；此时无认证边界，header
+     * 即唯一可用来源。**认证开启时绝不回退 header / "default"**。
+     */
     private String tenantId() {
-        // GraphQL 请求不经过 RESTEasy Reactive 的 JAX-RS 上下文，这里改用 Vert.x RoutingContext 获取 HTTP 头
+        if (routingContext != null) {
+            Object verified = routingContext.get(ApiKeyPerimeter.PROP_TENANT_ID);
+            if (verified instanceof String s && !s.isBlank()) {
+                return s.trim();
+            }
+        }
+        // 认证开启却没有已验证租户：理论上不可达（handler 会先 401），但 fail-closed。
+        if (apiKeyEnabled) {
+            throw new graphql.GraphQLException("unauthenticated: no verified tenant on request");
+        }
+        // 边界关闭（测试 / 本地）：回退 header。
         if (routingContext == null || routingContext.request() == null) {
             return "default";
         }
         String tenant = routingContext.request().getHeader("X-Tenant-Id");
         return tenant == null || tenant.isBlank() ? "default" : tenant.trim();
+    }
+
+    /**
+     * #55 (HIGH): 镜像 {@code @RequireRole}/{@code RoleEnforcementFilter} 的语义，在
+     * GraphQL mutation 上强制角色——角色来自**已验证身份**（{@link ApiKeyPerimeter#PROP_ROLE}），
+     * 绝不读客户端的 {@code X-User-Role} 头。
+     *
+     * <p>RBAC 关闭时（{@code aster.security.rbac.enabled=false}，多数单测 profile）跳过，
+     * 与 {@link io.aster.policy.security.rbac.RoleEnforcementFilter} 行为一致。
+     */
+    private void requireRole(Role required) {
+        if (!rbacEnabled) {
+            return;
+        }
+        String roleHeader = null;
+        if (routingContext != null) {
+            Object verified = routingContext.get(ApiKeyPerimeter.PROP_ROLE);
+            if (verified instanceof String s) {
+                roleHeader = s;
+            }
+        }
+        if (roleHeader == null || roleHeader.isBlank()) {
+            throw new graphql.GraphQLException("forbidden: missing role information");
+        }
+        Role userRole;
+        try {
+            userRole = Role.valueOf(roleHeader.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new graphql.GraphQLException("forbidden: invalid role");
+        }
+        if (!userRole.hasAtLeast(required)) {
+            throw new graphql.GraphQLException(
+                "forbidden: insufficient permissions, required=" + required);
+        }
     }
 
     // ==================== Life Insurance Queries ====================
@@ -233,6 +303,7 @@ public class PolicyGraphQLResource {
             PolicyTypes.PolicyInput input,
             Context graphQLContext
     ) {
+        requireRole(Role.MEMBER);
         GraphQLContext graphqlJavaContext = null;
         if (graphQLContext != null) {
             try {
@@ -246,10 +317,9 @@ public class PolicyGraphQLResource {
         if ((idempotencyKey == null || idempotencyKey.isBlank()) && routingContext != null && routingContext.request() != null) {
             idempotencyKey = routingContext.request().getHeader("Idempotency-Key");
         }
-        String tenantFromHeader = extractHeader(graphqlJavaContext, "X-Tenant-Id");
-        String effectiveTenantId = (tenantFromHeader == null || tenantFromHeader.isBlank())
-            ? tenantId()
-            : tenantFromHeader;
+        // #55 (CRITICAL): 租户必须来自已验证身份，与 update/delete 一致。
+        // 移除此前"优先读未验证的 X-Tenant-Id 头"的旁路——伪造该头不再生效。
+        String effectiveTenantId = tenantId();
 
         final String resolvedIdempotencyKey = idempotencyKey;
 
@@ -276,6 +346,7 @@ public class PolicyGraphQLResource {
             @NonNull @Description("策略输入 / Policy payload")
             PolicyTypes.PolicyInput input
     ) {
+        requireRole(Role.MEMBER);
         return policyManagementService.updatePolicy(tenantId(), id, input);
     }
 
@@ -285,6 +356,7 @@ public class PolicyGraphQLResource {
             @NonNull @Description("策略ID / Policy identifier")
             String id
     ) {
+        requireRole(Role.MEMBER);
         return policyManagementService.deletePolicy(tenantId(), id);
     }
 
@@ -293,6 +365,8 @@ public class PolicyGraphQLResource {
     @Mutation("clearAllCache")
     @Description("清空所有策略缓存 / Clear all policy cache")
     public Uni<CacheOperationResult> clearAllCache() {
+        // 全局缓存清理跨所有租户，权限更敏感 → 要求 ADMIN。
+        requireRole(Role.ADMIN);
         return cacheManagementService.clearAllCache();
     }
 
@@ -305,6 +379,8 @@ public class PolicyGraphQLResource {
             @Description("策略函数名称 / Policy function name")
             String policyFunction
     ) {
+        // 租户范围缓存失效（仅影响已验证租户自身）→ MEMBER 即可。
+        requireRole(Role.MEMBER);
         return cacheManagementService.invalidateTenantCache(tenantId(), policyModule, policyFunction);
     }
 

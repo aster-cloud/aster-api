@@ -25,10 +25,13 @@ import java.util.concurrent.Executors;
 /**
  * 统一语言包的界面文案（ui-messages）内存仓与热刷新（ADR 0018 Phase 2）。
  *
- * <p><b>启动加载</b>：从 classpath 资源 {@code ui-messages/<locale-id>.json}
- * （随各语言包 jar 进 classpath，见 aster-api build.gradle 的 runtimeOnly en/zh/de/hi）
- * 读入内存 {@link ConcurrentHashMap}。{@code /api/v1/messages} 直接吐内存 ——
- * 零 DB、零阻塞（不踩 PolicyStorageService DB 化时阻塞 JPA 的坑）。
+ * <p><b>启动加载</b>：从 classpath 资源 {@code ui-messages/<locale-id>.json} 读入内存
+ * {@link ConcurrentHashMap}。这些资源由 <b>aster-api 自带</b>（{@code src/main/resources/
+ * ui-messages/}），其真相源是 {@code @aster-cloud/ui-messages} npm 包 / aster-lang-locales
+ * 仓的 {@code ui-messages/}（ADR 0018：界面文案走独立 npm 通道、<b>不进语言包 JVM jar</b>，
+ * 故 api 不从 {@code runtimeOnly en/zh/de} 的 jar 读 messages —— 那些 jar 只提供 lexicon
+ * SPI）。同步方式见 {@code src/main/resources/ui-messages/README.md}。
+ * {@code /api/v1/messages} 直接吐内存 —— 零 DB、零阻塞。
  *
  * <p><b>热刷新</b>：复用现有 Redis pub/sub（同 {@code PolicyCacheManager} 的分布式
  * 失效广播模式，aster-api 已有 Redis，无需引入 Kafka）。发布方（locales 发版流水线

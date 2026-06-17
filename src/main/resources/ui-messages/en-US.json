@@ -1,0 +1,3003 @@
+{
+  "common": {
+    "signIn": "Sign in",
+    "signUp": "Sign Up",
+    "startFreeTrial": "Start free",
+    "getStarted": "Start free",
+    "contactSales": "Talk to sales",
+    "learnMore": "Learn More",
+    "languageUnavailable": "{name} is no longer available",
+    "switchedTo": "switched to {name}",
+    "selectLanguage": "Select language",
+    "loading": "Loading…",
+    "retry": "Try again",
+    "somethingWrong": "Something went wrong",
+    "notFoundTitle": "Page not found",
+    "notFoundBody": "The page you were looking for doesn't exist or has moved.",
+    "backToDashboard": "Back to dashboard",
+    "cancel": "Cancel",
+    "searchPlaceholder": "Search…",
+    "themeLight": "Light theme",
+    "themeDark": "Dark theme",
+    "themeSystem": "System theme",
+    "skipToContent": "Skip to main content",
+    "somethingWrongBody": "This page could not load. The problem has been logged with our team.",
+    "tryAgain": "Try again",
+    "errorId": "Error ID",
+    "contactSupport": "Contact support",
+    "loadFailed": "Could not load this view.",
+    "confirm": "Confirm"
+  },
+  "pagination": {
+    "label": "Pagination",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page",
+    "pageOf": "Page {page} of {totalPages}",
+    "goToPage": "Go to page {page}",
+    "showing": "Showing {start}-{end} of {total, plural, one {# {noun}} other {# {noun}}}",
+    "showingEmpty": "No items",
+    "itemNoun": "items",
+    "itemsPerPage": "Items per page",
+    "perPage": "{count} per page",
+    "ellipsis": "More pages"
+  },
+  "nav": {
+    "brand": "Aster Cloud",
+    "pricing": "Pricing",
+    "docs": "Docs"
+  },
+  "hero": {
+    "title": "Replay any decision.",
+    "titleHighlight": "{locales}",
+    "description": "When a regulator or customer asks how a decision was made, pull the exact rules and data from that moment and recompute the identical result — not a log entry, the real answer. Two independent engines prove the execution byte-for-byte, a hash-chained audit makes it tamper-evident, and AI drafts while humans approve. For loan approvals, KYC exceptions, claims, and access policies.",
+    "builtOnAsterLang": "Built on the open-source Aster Lang engine. Read the language docs →",
+    "tryDemo": "Replay a real credit decision",
+    "noCreditCard": "No credit card required."
+  },
+  "cnlDemo": {
+    "loanEligibility": "Loan eligibility",
+    "complianceCheck": "Compliance check",
+    "workflowGuard": "Workflow guard"
+  },
+  "trust": {
+    "eyebrow": "Built for production",
+    "items": {
+      "compiled": {
+        "title": "Compiled, not interpreted",
+        "description": "Truffle on GraalVM runs your rules at JVM speed. Same .class output across machines."
+      },
+      "audited": {
+        "title": "Audit-trail by default",
+        "description": "Every decision pinned to a SHA-256 hash chain. Replay any historical evaluation byte-for-byte."
+      },
+      "multilang": {
+        "title": "Three lexicons today",
+        "description": "English, 中文, Deutsch ship in every plan (EN canonical; ZH/DE community-maintained). Custom industry lexicons on Enterprise."
+      }
+    }
+  },
+  "features": {
+    "title": "Built for credit-risk decisioning",
+    "nativeLanguage": {
+      "title": "Native-language CNL",
+      "description": "Write rules in English, 中文, or Deutsch — same semantics across all three lexicon packs."
+    },
+    "aiDraftHumanReview": {
+      "title": "AI drafts, humans approve",
+      "description": "Let AI generate the first cut. Reviewers, not authors, approve every published version."
+    },
+    "hashChainAudit": {
+      "title": "Tamper-evident audit",
+      "description": "SHA-256 hash chain over every decision. Replay any historical evaluation byte-for-byte."
+    },
+    "dualEngineSemantics": {
+      "title": "Java + TypeScript dual engine",
+      "description": "Identical results from the Truffle backend and the in-browser TypeScript engine. No semantic drift."
+    },
+    "multiLanguagePacks": {
+      "title": "Multi-language lexicon packs",
+      "description": "English, 中文, Deutsch ship in every plan. Custom industry lexicons available on Enterprise."
+    },
+    "selfHostable": {
+      "title": "Self-host on your cluster",
+      "description": "Helm chart, K3S, ArgoCD GitOps. Your data stays inside your perimeter."
+    }
+  },
+  "pricing": {
+    "title": "Simple, transparent pricing",
+    "subtitle": "Start free, upgrade when you need more",
+    "perMonth": "/month",
+    "perUser": "/user",
+    "minUsers": "min {count} users",
+    "free": {
+      "name": "Free",
+      "features": {
+        "executions": "100 executions/month",
+        "policies": "3 saved policies",
+        "pii": "Basic PII detection"
+      }
+    },
+    "pro": {
+      "name": "Pro",
+      "badge": "Most Popular",
+      "features": {
+        "executions": "Unlimited executions",
+        "policies": "Unlimited policies",
+        "compliance": "Compliance reports",
+        "api": "API access"
+      }
+    },
+    "team": {
+      "name": "Team",
+      "features": {
+        "everything": "Everything in Pro",
+        "collaboration": "Team collaboration",
+        "rbac": "Role-based access",
+        "sso": "SSO (coming soon)"
+      }
+    }
+  },
+  "cta": {
+    "title": "Run your credit rules through Aster — free",
+    "description": "Bring a real loan-approval or limit rule. We'll show you the full chain: approve the rule, pin the version, execute, and replay any decision for an auditor. No credit card."
+  },
+  "footer": {
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "documentation": "Documentation",
+    "support": "Support",
+    "demo": "Live demo",
+    "equivalence": "Engine equivalence",
+    "copyright": "All rights reserved.",
+    "whitepaper": "White paper",
+    "vocabDemo": "Domain vocabulary",
+    "catMood": "Cat mood 🐱"
+  },
+  "legal": {
+    "terms": {
+      "title": "Terms of Service",
+      "lastUpdated": "Last updated: {date}",
+      "sections": {
+        "acceptance": {
+          "title": "1. Acceptance of Terms",
+          "content": "By accessing and using Aster Cloud, you accept and agree to be bound by the terms and provision of this agreement."
+        },
+        "services": {
+          "title": "2. Description of Services",
+          "content": "Aster Cloud provides a policy management platform that allows users to create, test, and execute business rules. Our services include policy creation and management, PII detection, compliance reporting, and API access."
+        },
+        "accounts": {
+          "title": "3. User Accounts",
+          "content": "You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You must notify us immediately of any unauthorized use of your account."
+        },
+        "usage": {
+          "title": "4. Acceptable Use",
+          "content": "You agree not to use our services for any unlawful purpose or in any way that could damage, disable, or impair our services. You may not attempt to gain unauthorized access to any part of the service."
+        },
+        "payment": {
+          "title": "5. Payment Terms",
+          "content": "Paid subscriptions are billed in advance on a monthly or annual basis. All fees are non-refundable except as expressly set forth in our refund policy."
+        },
+        "termination": {
+          "title": "6. Termination",
+          "content": "We may terminate or suspend your account at any time for violations of these terms. You may cancel your subscription at any time through your account settings."
+        },
+        "liability": {
+          "title": "7. Limitation of Liability",
+          "content": "Aster Cloud shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of our services."
+        },
+        "changes": {
+          "title": "8. Changes to Terms",
+          "content": "We reserve the right to modify these terms at any time. We will notify users of any material changes via email or through the service."
+        }
+      }
+    },
+    "privacy": {
+      "title": "Privacy Policy",
+      "lastUpdated": "Last updated: {date}",
+      "sections": {
+        "intro": {
+          "title": "Introduction",
+          "content": "Aster offers two deployment modes: a multi-tenant SaaS at aster-lang.cloud, and a self-hosted on-prem build that you operate yourself. This policy covers both. The on-prem build never sends data to Aster except for opt-in usage telemetry described below — your policy content, decision traces, and end-user data stay on infrastructure you control."
+        },
+        "collection": {
+          "title": "1. Information we collect",
+          "content": "SaaS account: name, email, billing address, payment method (Stripe-tokenized; we never see raw card data). Usage: workspace, policy, and API call metadata required to run the service. On-prem deployments only send what you explicitly opt into; see the Telemetry section below."
+        },
+        "usage": {
+          "title": "2. How we use your information",
+          "content": "Operating the service (provisioning, billing, authentication), preventing abuse (rate limiting, fraud detection), customer support, legal compliance, and capacity planning. We do not sell personal data and do not use customer data to train AI models."
+        },
+        "sharing": {
+          "title": "3. Information sharing",
+          "content": "We share with sub-processors (Stripe for billing, Resend for transactional email, Cloudflare for edge protection, our cloud provider for hosting). Each is bound by a written agreement and processes data only on our instructions. See the Sub-processors section for the current list."
+        },
+        "telemetry": {
+          "title": "4. On-prem usage telemetry (opt-in)",
+          "content": "If you opt in with ASTER_TELEMETRY_OPT_IN=1, your on-prem deployment sends a weekly batch of aggregate counters (active seats, policy execution counts, features used) to our SaaS ingest endpoint. Every field is an integer or boolean; no user identifiers, no policy content, no decision traces. The full machine-readable contract is at /api/v1/telemetry/schema and the per-field necessity rationale is documented in docs/on-prem/telemetry-fields.md."
+        },
+        "transfers": {
+          "title": "5. International data transfers",
+          "content": "Aster SaaS currently operates from a single region. Each telemetry row is tagged with the SaaS region that accepted it (us / eu / apac / unknown), exposed in the admin transparency panel and in DSAR access responses. For customers in restricted jurisdictions we offer Standard Contractual Clauses (SCC) via our DPA template."
+        },
+        "subprocessors": {
+          "title": "6. Sub-processors",
+          "content": "Stripe (payment processing, US), Resend (transactional email, US), Cloudflare (edge protection, global), Oracle Cloud (hosting, US/EU regions as contracted). New sub-processors are announced via the changelog at least 30 days before they begin processing data; existing customers may object before that window closes."
+        },
+        "security": {
+          "title": "7. Data security",
+          "content": "TLS 1.3 in transit. Database encrypted at rest with provider-managed AES-256. Telemetry HMAC verification keys are additionally envelope-encrypted (AES-256-GCM) under a key held in our secrets manager — a database compromise alone does not yield usable keys. Access to production data is logged for SOC 2 evidence; every read of telemetry rows generates an audit record."
+        },
+        "retention": {
+          "title": "8. Data retention",
+          "content": "SaaS account data is retained while the account is active and for a brief wind-down after cancellation. On-prem telemetry rows are deleted automatically 365 days after receipt by a nightly retention job. Access-audit records have a 90-day window; deletion-audit records have a 7-year hold for regulatory evidence. Configurable via TELEMETRY_RETENTION_DAYS."
+        },
+        "rights": {
+          "title": "9. Your rights",
+          "content": "Subject to GDPR / CCPA: rights of access, rectification, erasure, portability, restriction, and objection. For SaaS account data, contact privacy@aster-lang.cloud. For on-prem telemetry, use the self-service DSAR API below — no Aster support ticket required."
+        },
+        "dsar": {
+          "title": "10. Self-service DSAR for telemetry",
+          "content": "POST /api/v1/dsar with HMAC-signed body to request access (action='access') or deletion (action='delete'). dryRun=true previews the affected row count without committing. Both actions are recorded in the immutable audit log so we can prove fulfillment to regulators. Full curl examples and the request schema are in docs/on-prem/dsar.md."
+        },
+        "cookies": {
+          "title": "11. Cookies and tracking",
+          "content": "We use first-party cookies for session continuity (auth, preferences). We do not use third-party advertising cookies. Mixpanel product-analytics is loaded on SaaS pages with anonymized identifiers only; you can disable it via your account preferences."
+        },
+        "contact": {
+          "title": "12. Contact us",
+          "content": "Privacy questions: privacy@aster-lang.cloud. Data Protection Officer: dpo@aster-lang.cloud. EU representative: see the DPA template in docs/on-prem/dpa-template.md. Supervisory-authority complaints may be filed in the jurisdiction where you reside."
+        }
+      }
+    }
+  },
+  "changePassword": {
+    "title": "Set a new password",
+    "subtitle": "Your account ({email}) was provisioned with a temporary password. Choose a new one before continuing.",
+    "currentLabel": "Temporary password",
+    "newLabel": "New password",
+    "newHint": "At least 8 characters. Use something you don't reuse elsewhere.",
+    "confirmLabel": "Confirm new password",
+    "submit": "Set password",
+    "submitting": "Setting…",
+    "success": "Password updated. Welcome.",
+    "errorTooShort": "New password must be at least 8 characters.",
+    "errorMismatch": "Passwords don't match.",
+    "errorSame": "New password must differ from the temporary one.",
+    "errorGeneric": "Could not update password. Try again."
+  },
+  "auth": {
+    "signup": {
+      "title": "Start your free trial",
+      "subtitle": "14 days of Pro features, no credit card required",
+      "trialIncludes": "Your trial includes:",
+      "trialFeatures": {
+        "executions": "Unlimited policy executions",
+        "pii": "Advanced PII detection",
+        "compliance": "Compliance reports",
+        "api": "API access",
+        "support": "Priority support"
+      },
+      "continueWithGithub": "Continue with GitHub",
+      "continueWithGoogle": "Continue with Google",
+      "termsAgreement": "By signing up, you agree to our",
+      "termsOfService": "Terms of Service",
+      "and": "and",
+      "privacyPolicy": "Privacy Policy",
+      "alreadyHaveAccount": "Already have an account?",
+      "signIn": "Sign in"
+    },
+    "login": {
+      "title": "Sign in to your account",
+      "subtitle": "Welcome back! Please sign in to continue.",
+      "continueWithGithub": "Continue with GitHub",
+      "continueWithGoogle": "Continue with Google",
+      "orContinueWith": "Or continue with",
+      "email": "Email address",
+      "password": "Password",
+      "forgotPassword": "Forgot your password?",
+      "signIn": "Sign in",
+      "noAccount": "Don't have an account?",
+      "startTrial": "Start free trial",
+      "errors": {
+        "generic": "Something went wrong. Please try again.",
+        "rateLimited": "Too many attempts. Please wait {seconds} seconds.",
+        "accountLocked": "Account locked. Please try again in {minutes} minutes.",
+        "accountLockedGeneric": "Account is temporarily locked due to too many failed attempts.",
+        "captchaFailed": "CAPTCHA verification failed. Please try again.",
+        "verificationFailed": "Verification failed",
+        "invalidCredentials": "Invalid email or password",
+        "invalidCredentialsWithAttempts": "Invalid email or password. {attempts} attempts remaining.",
+        "accessDenied": {
+          "signup_rate_limit": "Too many sign-up attempts from your network in the last 24 hours. Please try again later, or contact support if you believe this is an error.",
+          "disposable_email": "Sign-up with disposable or temporary email providers is not supported. Please use a permanent email address.",
+          "account_deleted": "This account has been permanently deleted and cannot be restored. Please sign up for a new account.",
+          "oauth_link_blocked": "Could not link this provider to your account. Please sign in with the original method you used to register.",
+          "unknown": "Access was denied. If this continues, please contact support."
+        },
+        "refSupport": "Reference: {ref}"
+      }
+    },
+    "forgotPassword": {
+      "title": "Reset your password",
+      "subtitle": "Enter your email address and we'll send you a link to reset your password.",
+      "email": "Email address",
+      "sendResetLink": "Send reset link",
+      "sending": "Sending...",
+      "successTitle": "Check your email",
+      "successMessage": "If an account exists with that email, we've sent a password reset link.",
+      "backToLogin": "Back to login"
+    },
+    "resetPassword": {
+      "title": "Set new password",
+      "subtitle": "Enter your new password below.",
+      "newPassword": "New password",
+      "confirmPassword": "Confirm password",
+      "resetPassword": "Reset password",
+      "resetting": "Resetting...",
+      "invalidToken": "Invalid or expired reset token",
+      "passwordMismatch": "Passwords do not match",
+      "successTitle": "Password reset successful",
+      "successMessage": "Your password has been reset. You can now sign in with your new password.",
+      "signIn": "Sign in"
+    },
+    "logout": {
+      "title": "Signing out...",
+      "message": "You are being signed out of your account."
+    },
+    "onboarding": {
+      "welcome": "Welcome! Let's get you started",
+      "industryQuestion": "What industry are you in?",
+      "goalsQuestion": "What are your main goals with Aster Cloud?",
+      "continue": "Continue",
+      "back": "Back",
+      "getStarted": "Get Started",
+      "starting": "Starting...",
+      "skipForNow": "Skip for now",
+      "useCases": {
+        "finance": "Financial Services",
+        "healthcare": "Healthcare",
+        "ecommerce": "E-commerce",
+        "insurance": "Insurance",
+        "legal": "Legal",
+        "other": "Other"
+      },
+      "goals": {
+        "pii": "PII detection & protection",
+        "compliance": "Compliance reporting",
+        "automation": "Business rule automation",
+        "team": "Team policy collaboration",
+        "integration": "API integration"
+      }
+    }
+  },
+  "dashboardNav": {
+    "dashboard": "Dashboard",
+    "policies": "Policies",
+    "reports": "Reports",
+    "teams": "Teams",
+    "domainVocabularies": "Domain Vocabularies",
+    "security": "Security",
+    "billing": "Billing",
+    "docs": "Docs",
+    "settings": "Settings",
+    "mobile": {
+      "openMenu": "Open menu",
+      "closeMenu": "Close menu"
+    },
+    "userMenu": {
+      "profile": "User menu"
+    },
+    "commandPalette": {
+      "placeholder": "Search or jump to…",
+      "noResults": "No matches.",
+      "groupNavigate": "Navigate",
+      "groupCreate": "Create",
+      "groupSettings": "Settings",
+      "groupDocs": "Docs",
+      "hintOpen": "Open command palette (⌘K)",
+      "newPolicy": "New policy",
+      "apiKeys": "API keys",
+      "aiKeys": "AI keys",
+      "aiAssistant": "AI assistant"
+    },
+    "groupWorkspace": "Workspace",
+    "groupAdmin": "Admin",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "apiKeys": "API keys",
+    "aiKeys": "AI keys"
+  },
+  "teams": {
+    "title": "Teams",
+    "subtitle": "Manage your team workspaces and collaborate on policies",
+    "createTeam": {
+      "title": "Create a New Team",
+      "subtitle": "Set up a workspace to collaborate with your teammates.",
+      "nameLabel": "Team name",
+      "namePlaceholder": "e.g., Engineering Team",
+      "nameHint": "Choose a descriptive name your teammates will recognize.",
+      "slugLabel": "Team URL",
+      "slugPlaceholder": "engineering-team",
+      "slugHint": "Lowercase letters, numbers, and hyphens only.",
+      "submitButton": "Create team"
+    },
+    "newTeam": "New Team",
+    "noTeams": "No teams yet",
+    "noTeamsDesc": "Create a team to start collaborating with others",
+    "getStarted": "Create a team to start collaborating with others",
+    "failedToLoad": "Failed to load teams",
+    "yourRole": "Your role",
+    "members": {
+      "title": "Team Members",
+      "inviteMember": "Invite Member",
+      "inviteTitle": "Invite New Member",
+      "emailLabel": "Email Address",
+      "emailPlaceholder": "colleague@example.com",
+      "roleLabel": "Role",
+      "sending": "Sending...",
+      "sendInvite": "Send Invitation",
+      "inviteFailed": "Failed to send invitation",
+      "pendingInvitations": "Pending Invitations",
+      "noPending": "No pending invitations",
+      "noMembers": "No members yet",
+      "currentMembers": "Current Members ({count})",
+      "joinedAt": "Joined {date}",
+      "expiresAt": "Expires {date}",
+      "revoke": "Revoke",
+      "remove": "Remove",
+      "leave": "Leave",
+      "changeRole": "Change Role",
+      "confirmRemove": "Are you sure you want to remove {name}?",
+      "confirmRevokeInvitation": "Are you sure you want to revoke this invitation?",
+      "confirmLeave": "Are you sure you want to leave this team?",
+      "removeFailed": "Failed to remove member",
+      "revokeFailed": "Failed to revoke invitation",
+      "updateFailed": "Failed to update role",
+      "leaveFailed": "Failed to leave team",
+      "loadFailed": "Failed to load members",
+      "invitationsLoadFailed": "Failed to load invitations",
+      "showingPartial": "Showing first {shown} of {total} members",
+      "loadMore": "Load more",
+      "loadingMore": "Loading...",
+      "cannotRemoveOwner": "Cannot remove team owner",
+      "cannotLeaveAsOwner": "Transfer ownership before leaving"
+    },
+    "policies": {
+      "title": "Team Policies",
+      "noPolicies": "No team policies yet",
+      "assignPolicy": "Assign Policy",
+      "createNew": "Create New Policy",
+      "newPolicy": "New policy",
+      "createTitle": "Create team policy",
+      "create": "Create policy",
+      "createFailed": "Failed to create policy",
+      "createdBy": "Created by {name}",
+      "updatedAt": "Updated {date}",
+      "getStarted": "Add a policy to get started",
+      "nameLabel": "Policy name",
+      "namePlaceholder": "e.g., Loan Eligibility",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Optional short description",
+      "contentLabel": "Policy source",
+      "contentPlaceholder": "Module example.policy.\\nRule decide given input:\\n  ..."
+    },
+    "sharedPolicies": {
+      "title": "Shared with this team",
+      "subtitle": "Policies that owners outside this team have shared in.",
+      "permissionView": "View only",
+      "permissionExecute": "View + execute",
+      "fromOwner": "From {owner}",
+      "sharedOn": "shared on {date}"
+    },
+    "memberCount": "{count} members",
+    "policyCount": "{count} policies",
+    "viewTeam": "View Team",
+    "upgradeRequired": {
+      "title": "Upgrade Required",
+      "description": "Team features require a Team subscription to use",
+      "upgradeButton": "Upgrade Plan",
+      "contactAdmin": "Contact your administrator"
+    },
+    "roles": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member",
+      "viewer": "Viewer"
+    },
+    "create": {
+      "title": "Create a New Team",
+      "subtitle": "Set up a workspace for your team",
+      "nameLabel": "Team Name",
+      "namePlaceholder": "e.g., Engineering Team",
+      "slugLabel": "Team URL",
+      "slugPlaceholder": "engineering-team",
+      "slugHint": "This will be used in URLs. Only lowercase letters, numbers, and hyphens.",
+      "slugTaken": "This slug is already taken",
+      "creating": "Creating...",
+      "create": "Create Team"
+    },
+    "dashboard": {
+      "overview": "Overview",
+      "members": "Members",
+      "policies": "Policies",
+      "settings": "Settings",
+      "recentActivity": "Recent Activity",
+      "noActivity": "No recent activity",
+      "manageTeam": "Manage team",
+      "pendingInvitations": "Pending invitations",
+      "recentMembers": "Recent members",
+      "recentPolicies": "Recent policies"
+    },
+    "invite": {
+      "title": "Invite Team Member",
+      "emailLabel": "Email Address",
+      "emailPlaceholder": "colleague@example.com",
+      "roleLabel": "Role",
+      "sending": "Sending...",
+      "send": "Send Invitation",
+      "sent": "Invitation sent!",
+      "alreadyMember": "This user is already a team member"
+    },
+    "settings": {
+      "general": "General Settings",
+      "dangerZone": "Danger Zone",
+      "transferOwnership": "Transfer Ownership",
+      "transferOwnershipDesc": "Transfer team ownership to another admin",
+      "transferDialogTitle": "Transfer team ownership",
+      "transferDialogBody": "Pick the team member who should become the new owner. You become an admin on this team after the transfer. This action cannot be undone except by the new owner transferring back.",
+      "transferSelectLabel": "New owner",
+      "transferSelectPlaceholder": "Select a member…",
+      "transferConfirm": "Transfer",
+      "transferCancel": "Cancel",
+      "transferSuccess": "Ownership transferred.",
+      "transferFailed": "Failed to transfer ownership: {error}",
+      "transferNoEligible": "No eligible members. Invite an admin first.",
+      "leaveTeam": "Leave Team",
+      "leaveTeamDesc": "Remove yourself from this team",
+      "deleteTeam": "Delete Team",
+      "deleteTeamDesc": "Permanently delete this team and all its data",
+      "confirmDelete": "Are you sure? This action cannot be undone.",
+      "sso": "Single Sign-On (SSO)",
+      "ssoComingSoon": "SSO configuration coming soon",
+      "auditLogs": "Audit Logs",
+      "auditLogsComingSoon": "Audit logs coming soon",
+      "title": "Team settings",
+      "generalTitle": "General",
+      "generalSubtitle": "Basic team profile and identifiers.",
+      "nameLabel": "Team name",
+      "slugLabel": "Team URL",
+      "slugHint": "Lowercase letters, numbers, and hyphens only.",
+      "saveChanges": "Save changes",
+      "saveSuccess": "Settings saved.",
+      "saveFailed": "Failed to save settings",
+      "noPermission": "You do not have permission to change these settings.",
+      "typeToConfirm": "Type {value} to confirm",
+      "ssoTitle": "Single Sign-On (SSO)",
+      "ssoDescription": "SSO configuration is available on Enterprise plans.",
+      "auditLogsTitle": "Audit logs",
+      "auditLogsDescription": "Tamper-evident audit log retention follows your plan limit.",
+      "dangerZoneSubtitle": "Irreversible actions affecting the entire team.",
+      "deleteTeamTitle": "Delete team",
+      "deleteTeamDescription": "Permanently delete this team and all its data.",
+      "deleteFailed": "Failed to delete team",
+      "confirmDeleteTitle": "Delete this team?",
+      "confirmDeleteWarning": "This action cannot be undone. Please type the team name to confirm.",
+      "deleteWarning1": "All policies, members, and invitations in this team will be removed.",
+      "deleteWarning2": "Audit logs will be retained according to your plan, but no longer accessible from this team.",
+      "deleteWarning3": "Active subscription seats will be released and prorated on the next invoice."
+    },
+    "acceptInvite": {
+      "title": "Team Invitation",
+      "joining": "You've been invited to join",
+      "accept": "Accept Invitation",
+      "accepting": "Accepting...",
+      "expired": "This invitation has expired",
+      "invalid": "Invalid invitation",
+      "alreadyMember": "You're already a member of this team"
+    },
+    "backToTeam": "← Back to team",
+    "backToTeams": "← Back to teams",
+    "cancel": "Cancel",
+    "comingSoon": "Coming soon",
+    "creating": "Creating...",
+    "deleting": "Deleting...",
+    "executions": "Executions",
+    "failedToCreate": "Failed to create team",
+    "saving": "Saving...",
+    "teamNotFound": "Team not found",
+    "viewAll": "View all",
+    "viewDetails": "View details",
+    "inbox": {
+      "title": "Pending invitations",
+      "subtitle": "Teams that have invited you. Accept to join without leaving the app.",
+      "expiresOn": "Expires {date}",
+      "accept": "Accept",
+      "decline": "Decline",
+      "accepting": "Accepting…",
+      "declining": "Declining…",
+      "acceptFailed": "Could not accept the invitation. Please try again.",
+      "declineFailed": "Could not decline the invitation. Please try again.",
+      "rolePrefix": "Invited as {role}"
+    }
+  },
+  "dashboard": {
+    "welcomeBack": "Welcome back, {name}!",
+    "newPolicy": "New Policy",
+    "trialActive": "Pro Trial Active",
+    "trialDaysLeft": "You have {count} day left in your trial.",
+    "trialDaysLeftPlural": "You have {count} days left in your trial.",
+    "upgradeNow": "Upgrade now",
+    "toKeepProFeatures": "to keep all Pro features.",
+    "planActive": "{plan} Plan Active",
+    "stats": {
+      "totalPolicies": "Total Policies",
+      "executionsThisMonth": "Executions This Month",
+      "piiFieldsDetected": "PII Fields Detected",
+      "apiCalls": "API Calls",
+      "limit": "Limit: {count}",
+      "reviewRecommended": "Review recommended",
+      "upgradeForApi": "Upgrade for API access"
+    },
+    "quickActions": {
+      "title": "Quick Actions",
+      "createPolicy": "Create Policy",
+      "createPolicyDesc": "Define new business rules",
+      "generateReport": "Generate Report",
+      "generateReportDesc": "GDPR, HIPAA, SOC2",
+      "apiKeys": "API Keys",
+      "apiKeysDesc": "Manage API access"
+    },
+    "recentPolicies": {
+      "title": "Top Policies",
+      "viewAll": "View all",
+      "noPolicies": "No policies yet.",
+      "createFirst": "Create your first policy",
+      "noDescription": "No description",
+      "runs": "{count} runs",
+      "deleted": "Deleted",
+      "restoreHint": "This policy has been deleted. Please restore it from the Trash to continue using it."
+    },
+    "aiUsage": {
+      "title": "AI usage this month",
+      "byokActive": "Using your own key",
+      "byokUsage": "{tokens} tokens consumed via your own key",
+      "manageKeys": "Manage keys",
+      "bannedTitle": "AI temporarily disabled",
+      "bannedUntil": "Auto-resumes at {date}",
+      "costThisMonth": "Cost: ${dollars}",
+      "plan": "{plan} plan",
+      "warningHighUsage": "{remaining} calls left this month.",
+      "upgrade": "Upgrade",
+      "or": "or",
+      "byok": "Bring your own key",
+      "emailUnverifiedTitle": "Verify your email to unlock AI",
+      "emailUnverifiedHint": "Free accounts need a verified email before using AI features.",
+      "verifyNow": "Verify now"
+    },
+    "apiUsage": {
+      "title": "Policy Execution API",
+      "locked": "Not included",
+      "lockedHint": "Policy Execution API is not available on Free. Upgrade to Pro/Team or start a 14-day Trial.",
+      "latencyP50": "p50: {ms}ms",
+      "latencyP95": "p95: {ms}ms",
+      "plan": "{plan} plan",
+      "warningHighUsage": "{remaining} calls left this month.",
+      "warningOverage": "Over quota ({percent}%) — soft mode, will hard-stop at 200%.",
+      "upgrade": "Upgrade"
+    },
+    "dunning": {
+      "paymentFailedTitle": "Payment failed.",
+      "paymentFailedHint": "Service will be downgraded to Free in {days} days unless resolved.",
+      "downgradedTitle": "Account downgraded to Free.",
+      "downgradedHint": "Reactivate within {days} days to restore your Pro/Team features and data.",
+      "updatePayment": "Update Payment Method",
+      "reactivate": "Reactivate",
+      "opening": "Opening..."
+    }
+  },
+  "billing": {
+    "title": "Billing & Subscription",
+    "subtitle": "Manage your subscription and billing details",
+    "currentPlan": "Current Plan",
+    "trialEnds": "Trial ends {date}",
+    "executionsThisMonth": "Executions this month",
+    "apiCallsThisMonth": "API calls this month",
+    "savedPolicies": "Saved policies",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "year": "year",
+    "month": "month",
+    "save20": "Get 2 months free",
+    "mostPopular": "Most Popular",
+    "currentPlanButton": "Current Plan",
+    "upgradeTo": "Upgrade to {plan}",
+    "loading": "Loading...",
+    "freeTier": "Free Tier",
+    "contactSales": "Contact Sales",
+    "perUser": "user",
+    "teamUsers": "Team Members",
+    "minUsers": "Minimum {count} users",
+    "subscriptionActivated": "Subscription activated successfully!",
+    "checkoutCanceled": "Checkout was canceled.",
+    "faq": {
+      "title": "Frequently Asked Questions",
+      "productQuestions": "Product Questions",
+      "billingQuestions": "Billing & Account",
+      "whatIsAster": {
+        "question": "What is Aster Cloud?",
+        "answer": "Aster Cloud is a policy management platform that lets you define, test, and execute business rules as code. It's ideal for compliance automation, decision engines, and business logic that changes frequently without code deployments."
+      },
+      "whatIsPolicy": {
+        "question": "What is a policy and how do I create one?",
+        "answer": "A policy is a set of business rules written in Aster's human-readable language. For example: 'if credit_score >= 700 and income > 50000 then approve_loan'. Create policies from the dashboard using our visual editor or by writing rules directly."
+      },
+      "piiDetection": {
+        "question": "How does PII detection work?",
+        "answer": "Our AI automatically scans your policies for personally identifiable information (PII) like email addresses, phone numbers, SSN, and financial data. Detected PII is flagged in reports to help you maintain compliance with GDPR, HIPAA, and other regulations."
+      },
+      "complianceStandards": {
+        "question": "What compliance standards do you support?",
+        "answer": "We generate compliance reports for GDPR (data protection), HIPAA (healthcare), SOC 2 (security controls), and PCI-DSS (payment data). Reports analyze your policies and provide actionable recommendations."
+      },
+      "integration": {
+        "question": "Can I integrate Aster Cloud with my applications?",
+        "answer": "Yes! Use our REST API to execute policies from any application. We provide code examples for JavaScript, Python, cURL, and more. API keys can be managed from Settings > API Keys."
+      },
+      "selfHosted": {
+        "question": "Is there a self-hosted option?",
+        "answer": "Enterprise customers can request on-premise deployment with dedicated support, custom SLA guarantees, and private cloud options. Contact our sales team for details."
+      },
+      "downgrade": {
+        "question": "What happens to my policies when I downgrade?",
+        "answer": "When you downgrade to a lower plan, policies beyond your new limit are automatically frozen (newest policies remain active). Frozen policies can still be viewed but cannot be executed or edited. To unfreeze, either delete some policies or upgrade your plan. Your policy data is never deleted during a downgrade."
+      },
+      "cancelAnytime": {
+        "question": "Can I cancel my subscription anytime?",
+        "answer": "Yes, you can cancel your subscription at any time. Your access will continue until the end of your current billing period."
+      },
+      "trialEnds": {
+        "question": "What happens when my trial ends?",
+        "answer": "After your trial ends, you'll be automatically downgraded to the Free plan. You can upgrade to Pro or Team at any time to regain access to premium features."
+      },
+      "refunds": {
+        "question": "Do you offer refunds?",
+        "answer": "We offer a 30-day money-back guarantee. If you're not satisfied with your subscription, contact us within 30 days for a full refund."
+      },
+      "apiVsExecutions": {
+        "question": "What's the difference between API calls and executions?",
+        "answer": "Executions count all policy runs (web UI + API). API calls only count requests made via the REST API. Each API request consumes both quotas. Web UI usage only consumes executions."
+      },
+      "upgradePlan": {
+        "question": "How do I upgrade or downgrade my plan?",
+        "answer": "You can upgrade anytime from this page. Your new plan takes effect immediately. To downgrade, cancel your current subscription and it will revert to Free at the end of the billing period."
+      },
+      "dataSecurity": {
+        "question": "How is my data secured?",
+        "answer": "All data is encrypted in transit (TLS 1.3) and at rest (AES-256). We follow SOC 2 Type II practices and never share your policy data with third parties."
+      },
+      "invoices": {
+        "question": "Can I get invoices for my subscription?",
+        "answer": "Yes, invoices are automatically generated and sent to your email after each payment. You can also download past invoices from your Stripe customer portal."
+      },
+      "freeLimits": {
+        "question": "What are the limitations of the Free plan?",
+        "answer": "Free plan includes 3 saved policies, 100 executions/month, and basic PII detection. API access and compliance reports require a Pro or Team plan."
+      },
+      "support": {
+        "question": "How can I contact support?",
+        "answer": "Free users can reach us via email at support(at)aster-lang.cloud. Pro users get priority support with faster response times."
+      }
+    },
+    "plans": {
+      "names": {
+        "free": "Free",
+        "trial": "Trial",
+        "pro": "Pro",
+        "team": "Team",
+        "enterprise": "Enterprise"
+      },
+      "features": {
+        "rules5": "5 published rules",
+        "evaluations1k": "1,000 evaluations / month",
+        "aiDrafts20": "20 AI drafts / month (gpt-4o-mini)",
+        "allLanguagePacks": "All language packs (en / zh / de)",
+        "audit7days": "7-day audit log",
+        "unlimitedTeamMembers": "Unlimited team members",
+        "rules100": "100 published rules",
+        "evaluations50k": "50,000 evaluations / month",
+        "aiDrafts500": "500 AI drafts / seat / month (gpt-5.2)",
+        "audit90days": "90-day audit log",
+        "inviteReviewersPaidSeat": "Invite reviewers — each seat ¥299 / month",
+        "reviewerNotAuthor": "Reviewer ≠ author (enforced for ≥ 2 seats)",
+        "soxCompliant": "Meets SOX Segregation of Duties",
+        "stripeBilling": "Stripe billing, monthly or yearly",
+        "customDomainVocabulary": "User-managed domain vocabularies",
+        "multiTeamCustomApprovals": "Multi-team, custom approval groups",
+        "unlimitedRulesEvaluations": "Unlimited rules and evaluations",
+        "unlimitedAiDraftsByok": "Unlimited AI drafts via BYOK",
+        "customIndustryLexicons": "Custom industry lexicons",
+        "hashChainAuditSignature": "Hash-chained audit + digital signature",
+        "ssoSamlOidc": "SSO (SAML / OIDC / Authentik)",
+        "customDeployment": "Custom deployment",
+        "slaGuarantee": "SLA guarantee",
+        "dedicatedSupport": "Dedicated support"
+      }
+    },
+    "overview": {
+      "overviewTitle": "Billing",
+      "overviewSubtitle": "Plan, usage, seats, invoices.",
+      "planCardTitle": "Plan",
+      "planTrial": "{plan} (trial)",
+      "planActive": "Active",
+      "trialDaysLeft": "{days} days left",
+      "trialNoActive": "No active trial",
+      "nextInvoiceTitle": "Next invoice",
+      "nextInvoiceAmount": "{amount} on {date}",
+      "nextInvoicePending": "Plan picker payment method not yet added.",
+      "seatsTitle": "Seats",
+      "seatsUsedTemplate": "{used} of {limit} used",
+      "seatsInvite": "Invite teammate",
+      "usageTitle": "Usage this cycle",
+      "invoicesTitle": "Invoices",
+      "invoicesEmpty": "No invoices yet.",
+      "invoiceUnpaid": "unpaid",
+      "invoicePaid": "paid",
+      "invoiceVoid": "void",
+      "invoiceViewReceipt": "View receipt",
+      "changePlan": "Change plan",
+      "managePayment": "Manage payment method"
+    }
+  },
+  "policies": {
+    "title": "Policies",
+    "subtitle": "Manage your business policies and rules",
+    "newPolicy": "New Policy",
+    "multiSelectClearedOnPaging": "Selection cleared because you moved to another page or filter.",
+    "noPolicies": "No policies",
+    "getStarted": "Get started by creating a new policy.",
+    "piiFields": "{count} PII fields",
+    "public": "Public",
+    "private": "Private",
+    "executions": "{count} executions",
+    "executeAction": "Execute",
+    "edit": "Edit",
+    "delete": "Delete",
+    "updated": "Updated {date}",
+    "confirmDelete": "Are you sure you want to delete this policy?",
+    "failedToLoad": "Failed to load policies",
+    "failedToDelete": "Failed to delete policy",
+    "freeze": {
+      "title": "Policy Limit Exceeded",
+      "message": "{frozen} of your {total} policies are frozen. Your plan allows {limit} active policies.",
+      "upgradeLink": "Upgrade your plan to unlock all policies",
+      "badge": "Frozen",
+      "cannotExecute": "Cannot execute frozen policy",
+      "cannotEdit": "Cannot edit frozen policy"
+    },
+    "groups": {
+      "allPolicies": "All Policies",
+      "ungrouped": "Ungrouped",
+      "newGroup": "New Group",
+      "newSubgroup": "New Subgroup",
+      "edit": "Edit",
+      "delete": "Delete",
+      "policiesCount": "{count} policies",
+      "createTitle": "Create Group",
+      "editTitle": "Edit Group",
+      "nameLabel": "Group Name",
+      "namePlaceholder": "Enter group name",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Optional description",
+      "save": "Save",
+      "cancel": "Cancel",
+      "deleteConfirm": "Delete this group?",
+      "deleteWarning": "Policies in this group will be moved to the parent group.",
+      "saving": "Saving...",
+      "deleting": "Deleting..."
+    },
+    "form": {
+      "createTitle": "Create New Policy",
+      "createSubtitle": "Define your business rules using Aster policy language",
+      "editTitle": "Edit Policy",
+      "editSubtitle": "Update your policy rules and settings",
+      "loadExample": "Load example",
+      "name": "Policy Name",
+      "namePlaceholder": "e.g., Loan Approval Policy",
+      "description": "Description (optional)",
+      "descriptionPlaceholder": "Brief description of what this policy does",
+      "content": "Policy Content",
+      "contentPlaceholder": "// Write your policy rules here...",
+      "contentHelp": "Use Aster policy syntax. Format: if [field] [condition] [value] then [action]",
+      "isPublic": "Make this policy public (shareable via link)",
+      "cancel": "Cancel",
+      "create": "Create Policy",
+      "creating": "Creating...",
+      "save": "Save Changes",
+      "saving": "Saving...",
+      "viewPlans": "View plans",
+      "failedToCreate": "Failed to create policy",
+      "failedToUpdate": "Failed to update policy",
+      "failedToLoad": "Failed to load policy",
+      "failedToMove": "Failed to move policy",
+      "selectionSingle": "Single",
+      "selectionMulti": "Multi",
+      "deleteDialogTitle": "Delete policy",
+      "deleteDialogBody": "Are you sure you want to delete \"{name}\"? This can be undone from the trash.",
+      "deleteDialogConfirm": "Delete",
+      "deleteDialogCancel": "Cancel",
+      "metaSection": "Details",
+      "metaSectionHint": "Name, description, group, visibility",
+      "metaExpand": "Show details",
+      "metaCollapse": "Hide details",
+      "sidePanelAI": "AI",
+      "sidePanelSyntax": "Syntax",
+      "sidePanelTemplates": "Templates",
+      "sidePanelToggle": "Toggle side panel",
+      "statusLines": "{count, plural, one {# line} other {# lines}}",
+      "statusLocale": "CNL {locale}",
+      "statusSaveHint": "⌘S to save",
+      "statusPaletteHint": "⌘K for commands",
+      "statusSavedAgo": "Saved {time}",
+      "statusUnsaved": "Unsaved changes",
+      "compileChecking": "Checking…",
+      "compileOk": "Compiles",
+      "compileErrors": "{count, plural, one {# error} other {# errors}}",
+      "compileWarnings": "{count, plural, one {# warning} other {# warnings}}",
+      "compileTransportError": "Compile unreachable",
+      "decisionPreview": "Decision preview",
+      "decisionModule": "Module",
+      "decisionFunctions": "Functions",
+      "decisionTypes": "Types",
+      "decisionNone": "No compiled module yet. Start writing — results will appear here.",
+      "paletteTitle": "Editor commands",
+      "palettePlaceholder": "Type a command…",
+      "paletteNoResults": "No matching commands.",
+      "paletteGroupAI": "AI",
+      "paletteGroupEdit": "Edit",
+      "paletteGroupNav": "Navigate",
+      "paletteCmdAskAI": "Ask AI to write a policy",
+      "paletteCmdInsertTemplate": "Insert template at cursor…",
+      "paletteCmdConvertLocale": "Convert CNL language…",
+      "paletteCmdFormat": "Format document",
+      "paletteCmdSave": "Save",
+      "paletteCmdSaveAndView": "Save and view detail",
+      "paletteCmdTogglePanel": "Toggle side panel",
+      "paletteCmdShowSyntax": "Show syntax reference",
+      "paletteCmdShowDecision": "Show decision preview",
+      "paletteSubBackToCommands": "← Back to commands",
+      "templateInsertedAtCursor": "Template inserted at cursor.",
+      "draftRestoreTitle": "Restore unsaved draft?",
+      "draftRestoreBody": "You have an unsaved draft from {time}.",
+      "draftRestore": "Restore",
+      "draftDiscard": "Discard",
+      "unsavedLeaveWarning": "You have unsaved changes. Leave anyway?",
+      "saveSuccess": "Policy saved",
+      "saveFailed": "Failed to save",
+      "shortcutsTitle": "Shortcuts",
+      "shortcutSave": "Save",
+      "shortcutSaveAndView": "Save and view",
+      "shortcutTogglePanel": "Toggle side panel",
+      "shortcutClose": "Close panel / blur input"
+    },
+    "detail": {
+      "version": "Version",
+      "executions": "Executions",
+      "viewLogs": "View logs",
+      "piiFields": "PII Fields",
+      "status": "Status",
+      "piiWarning": "PII Detected",
+      "piiWarningMessage": "This policy references potentially sensitive data:",
+      "policyContent": "Policy Content",
+      "versionHistory": "Version History",
+      "backToPolicies": "Back to policies",
+      "policyNotFound": "Policy not found"
+    },
+    "versions": {
+      "title": "Versions & approvals",
+      "subtitle": "Every save is a new version. Approval gates govern which versions can execute.",
+      "panelTitle": "Versions",
+      "compare": "Compare versions",
+      "createdOn": "Created {date}",
+      "viewSource": "View source",
+      "submitForApproval": "Submit for approval",
+      "submitDialogTitle": "Submit version {n} for approval",
+      "submitDialogBody": "Are you sure you want to submit v{n} for approval?",
+      "breadcrumb": "Versions",
+      "newVersion": "New version",
+      "noVersions": "No versions yet",
+      "noVersionsBody": "Save the policy at least once to create v1.",
+      "table": {
+        "version": "Version",
+        "status": "Status",
+        "author": "Author",
+        "approvals": "Approvals",
+        "createdAt": "Created",
+        "releaseNote": "Release note",
+        "actions": "Actions"
+      },
+      "status": {
+        "DRAFT": "Draft",
+        "PENDING_APPROVAL": "Pending approval",
+        "APPROVED": "Approved",
+        "REJECTED": "Rejected",
+        "DEPRECATED": "Deprecated",
+        "ARCHIVED": "Archived"
+      },
+      "isDefault": "Default",
+      "actions": {
+        "view": "View",
+        "submit": "Submit for approval",
+        "approve": "Approve",
+        "reject": "Reject",
+        "setDefault": "Make default",
+        "deprecate": "Deprecate",
+        "archive": "Archive"
+      },
+      "submitDialog": {
+        "title": "Submit version {n} for approval?",
+        "body": "This locks the source — further edits go into a new draft version. Approvers will be notified.",
+        "confirm": "Submit",
+        "cancel": "Cancel",
+        "noteLabel": "Release note (optional)",
+        "notePlaceholder": "What changed in this version?"
+      },
+      "approveDialog": {
+        "title": "Approve version {n}?",
+        "body": "Approved versions are eligible to execute. You can mark it as default after approval.",
+        "confirm": "Approve",
+        "cancel": "Cancel",
+        "commentLabel": "Comment (optional)",
+        "commentPlaceholder": "Anything reviewers should know…"
+      },
+      "rejectDialog": {
+        "title": "Reject version {n}?",
+        "body": "The author will see your comment and can address it in a new draft.",
+        "confirm": "Reject",
+        "cancel": "Cancel",
+        "commentLabel": "Reason",
+        "commentPlaceholder": "Why is this rejected?"
+      },
+      "setDefaultDialog": {
+        "title": "Make version {n} the default?",
+        "body": "New executions without an explicit version pin will use v{n}. Existing pinned executions continue to use their pinned version.",
+        "confirm": "Make default",
+        "cancel": "Cancel"
+      },
+      "deprecateDialog": {
+        "title": "Deprecate version {n}?",
+        "body": "Deprecated versions can still execute when pinned, but the default will move off this version.",
+        "confirm": "Deprecate",
+        "cancel": "Cancel",
+        "reasonLabel": "Reason (optional)"
+      },
+      "archiveDialog": {
+        "title": "Archive version {n}?",
+        "body": "Archived versions cannot execute and are hidden from default execution. This is permanent — undo requires creating a new version.",
+        "confirm": "Archive",
+        "cancel": "Cancel",
+        "reasonLabel": "Reason (optional)"
+      },
+      "sox": {
+        "selfApprovalNotAllowed": "You cannot approve a version you authored. Ask another team member.",
+        "inviteReviewerRequired": "Approval requires a second reviewer on your plan. Invite a team member to continue."
+      },
+      "approvalHistory": "Approval history",
+      "approvalDecision": {
+        "APPROVED": "Approved",
+        "REJECTED": "Rejected",
+        "REQUESTED_CHANGES": "Requested changes"
+      }
+    },
+    "deleteDialog": {
+      "title": "Delete Policy",
+      "description": "Are you sure you want to delete \"{name}\"? This can be undone from the trash.",
+      "confirm": "Delete",
+      "cancel": "Cancel"
+    },
+    "example": {
+      "name": "Loan Approval Policy",
+      "description": "Rules for evaluating loan applications based on credit score and income"
+    },
+    "ruleSelector": {
+      "label": "Rule",
+      "placeholder": "Select a Rule",
+      "empty": "No Rules found",
+      "entryOption": "{name} (entry)",
+      "ambiguousHint": "This policy has multiple Rules and no @entry marker. Select the Rule to execute.",
+      "entryHover": "Main entry Rule"
+    },
+    "modules": {
+      "moduleNotFound": "Module \"{moduleName}\" is not available in this tenant.",
+      "versionNotFound": "Module \"{moduleName}\" version {version} is not available. Available versions: {versions}.",
+      "moduleVersionRequired": "Pin \"{moduleName}\" with an explicit version.",
+      "moduleCatalogLoadFailed": "Module catalog could not be loaded. Use diagnostics are temporarily unavailable.",
+      "moduleHoverSource": "Source function: {functionName}. Versions: {versions}.",
+      "moduleHoverVersion": "Version {version}: published {publishedAt}",
+      "moduleCompletionDetail": "Source function: {functionName}",
+      "versionCompletionDetail": "Pin {moduleName} to a published version"
+    },
+    "execute": {
+      "title": "Execute: {name}",
+      "subtitle": "Test your policy with sample input data",
+      "input": "Input",
+      "generateSampleData": "Generate sample",
+      "inputPlaceholder": "'{'\"key\": \"value\"'}'",
+      "executeButton": "Execute Policy",
+      "executing": "Executing...",
+      "result": "Result",
+      "status": "Status",
+      "success": "Success",
+      "failed": "Failed",
+      "duration": "Duration",
+      "executedRule": "Executed Rule",
+      "decision": "Decision",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "matchedRules": "Matched Rules:",
+      "actions": "Actions:",
+      "viewRawOutput": "View raw output",
+      "emptyState": "Enter input and click Execute",
+      "invalidJson": "Invalid JSON input",
+      "executionFailed": "Execution failed",
+      "upgradePlan": "Upgrade plan",
+      "saveToMyPolicies": "Save to My Policies",
+      "saving": "Saving...",
+      "savedSuccessfully": "Policy saved successfully!",
+      "saveError": "Failed to save policy",
+      "policyLimitReached": "Policy limit reached. Upgrade your plan for more.",
+      "schemaExtractionFailed": "Unable to parse policy parameters",
+      "schemaExtractionFailedHint": "The policy syntax may have issues. The \"Generate sample\" feature is unavailable. You can manually enter JSON data to execute the policy.",
+      "policyFetchFailed": "Failed to load policy",
+      "policyEmptyContent": "Policy has no content",
+      "entryAmbiguousTitle": "Choose a Rule to execute",
+      "entryAmbiguousBody": "The policy has multiple Rules and no entry Rule. Pick one candidate and run again.",
+      "viewDetails": "View details"
+    },
+    "logs": {
+      "title": "Execution Logs",
+      "backToPolicy": "Back to policy",
+      "noLogs": "No execution logs yet",
+      "filter": "Status",
+      "all": "All",
+      "success": "Success",
+      "failed": "Failed",
+      "source": "Source",
+      "web": "Web",
+      "api": "API",
+      "cli": "CLI",
+      "dateRange": "Date Range",
+      "from": "From",
+      "to": "To",
+      "apply": "Apply",
+      "reset": "Reset",
+      "executedAt": "Executed at",
+      "duration": "Duration",
+      "version": "Version",
+      "input": "Input",
+      "output": "Output",
+      "error": "Error",
+      "showMore": "Show details",
+      "showLess": "Hide details",
+      "page": "Page",
+      "of": "of",
+      "previous": "Previous",
+      "next": "Next",
+      "stats": "Statistics",
+      "totalExecutions": "Total Executions",
+      "successRate": "Success Rate",
+      "avgDuration": "Avg Duration",
+      "recentActivity": "Recent Activity",
+      "loadError": "Failed to load execution logs"
+    },
+    "trash": {
+      "title": "Recycle Bin",
+      "description": "Deleted policies are kept for 30 days before permanent deletion",
+      "backToPolicies": "Back to policies",
+      "empty": "Recycle bin is empty",
+      "emptyTrash": "Empty Trash",
+      "confirmEmptyTrash": "Are you sure you want to permanently delete all items in trash? This action cannot be undone.",
+      "restore": "Restore",
+      "permanentDelete": "Delete Forever",
+      "confirmPermanentDelete": "Are you sure you want to permanently delete this policy? This action cannot be undone.",
+      "deletedAt": "Deleted",
+      "expiresAt": "Expires",
+      "reason": "Reason",
+      "noReason": "No reason provided",
+      "restoreSuccess": "Policy restored successfully",
+      "restoreWithNewName": "Policy restored with new name: {name}",
+      "deleteSuccess": "Policy permanently deleted",
+      "emptySuccess": "{count} policies permanently deleted",
+      "loadError": "Failed to load recycle bin",
+      "actionError": "Action failed. Please try again.",
+      "itemCount": "{count} items in trash",
+      "daysRemaining": "{days} days remaining"
+    },
+    "share": {
+      "title": "Share with teams",
+      "subtitle": "Grant other teams access to this policy. Members of those teams can view it; execute access lets them run it.",
+      "selectTeam": "Team",
+      "placeholderSelect": "Select a team…",
+      "noEligibleTeams": "No eligible teams to share with.",
+      "share": "Share",
+      "sharing": "Sharing…",
+      "revoke": "Revoke",
+      "viewExecute": "View + execute",
+      "permissionLabel": "Access",
+      "permissionView": "View only",
+      "permissionExecute": "View + execute",
+      "permissionHelp": "Execute access automatically includes view. Re-sharing with a different tier updates the existing permission.",
+      "addFailed": "Could not share the policy. Please try again.",
+      "revokeFailed": "Could not revoke the share. Please try again."
+    },
+    "sharedWithMe": {
+      "title": "Shared with my teams",
+      "subtitle": "Policies that other owners have shared with teams you belong to.",
+      "permissionView": "View only",
+      "permissionExecute": "View + execute",
+      "viaTeam": "Shared with {team}",
+      "fromOwner": "by {owner}",
+      "updated": "updated {date}"
+    }
+  },
+  "reports": {
+    "title": "Compliance Reports",
+    "subtitle": "Generate compliance reports for your policies",
+    "generateNew": "Generate New Report",
+    "noReports": "No reports yet",
+    "generateFirst": "Generate your first compliance report above.",
+    "upgradePlan": "Upgrade plan",
+    "generating": "Generating...",
+    "generate": "Generate {type} Report",
+    "status": {
+      "completed": "Completed",
+      "generating": "Generating...",
+      "failed": "Failed"
+    },
+    "type": "Type: {type}",
+    "created": "Created: {date}",
+    "policiesAnalyzed": "{count} policies analyzed",
+    "reportTypes": {
+      "gdpr": {
+        "name": "GDPR",
+        "description": "General Data Protection Regulation"
+      },
+      "hipaa": {
+        "name": "HIPAA",
+        "description": "Health Insurance Portability and Accountability Act"
+      },
+      "soc2": {
+        "name": "SOC 2",
+        "description": "Service Organization Control 2"
+      },
+      "pci_dss": {
+        "name": "PCI-DSS",
+        "description": "Payment Card Industry Data Security Standard"
+      }
+    },
+    "detail": {
+      "failedToLoad": "Failed to load report",
+      "reportNotFound": "Report not found",
+      "backToReports": "Back to reports",
+      "generatingMessage": "This report is being generated. Please check back shortly.",
+      "failedMessage": "This report failed to generate. Please try generating a new one.",
+      "complianceScore": "Compliance Score",
+      "overallCompliance": "Overall compliance rating based on your policies",
+      "categories": {
+        "dataProtection": "Data Protection",
+        "accessControl": "Access Control",
+        "auditLogging": "Audit Logging"
+      },
+      "summary": {
+        "totalPolicies": "Total Policies",
+        "policiesWithPII": "Policies with PII",
+        "totalExecutions": "Total Executions",
+        "riskLevel": "Risk Level"
+      },
+      "riskLevel": {
+        "low": "Low Risk",
+        "medium": "Medium Risk",
+        "high": "High Risk"
+      },
+      "piiAnalysis": "PII Analysis",
+      "detectedFields": "Detected PII Fields",
+      "recommendations": "Recommendations",
+      "policiesAnalyzed": "Policies Analyzed",
+      "executionCount": "{count} executions"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Manage your account settings and preferences.",
+    "dataCard": {
+      "title": "Your data (GDPR)",
+      "subtitle": "Download or erase the AI conversations we have stored for you.",
+      "open": "Manage data"
+    },
+    "apiKeys": {
+      "title": "API Keys",
+      "subtitle": "Manage API keys for programmatic access to Aster Cloud.",
+      "manageKeys": "Manage Keys",
+      "breadcrumb": "API Keys",
+      "createNew": "Create New API Key",
+      "keyPlaceholder": "Key name (e.g., Production, Development)",
+      "createKey": "Create Key",
+      "creating": "Creating...",
+      "yourKeys": "Your API Keys",
+      "noKeys": "No API keys yet. Create one above to get started.",
+      "name": "Name",
+      "key": "Key",
+      "lastUsed": "Last Used",
+      "created": "Created",
+      "actions": "Actions",
+      "revoke": "Revoke",
+      "never": "Never",
+      "keyCreated": "API Key Created",
+      "copyWarning": "Copy your API key now. You won't be able to see it again!",
+      "copy": "Copy",
+      "dismiss": "Dismiss",
+      "confirmRevoke": "Are you sure you want to revoke this API key? This action cannot be undone.",
+      "usageExample": "Usage Examples",
+      "usageDescription": "Use your API key to integrate Aster Cloud policies into your applications. Include the key in the Authorization header.",
+      "enterName": "Please enter a name for your API key",
+      "examples": {
+        "getPolicyId": "How to find a policy module + function",
+        "getPolicyIdDesc": "Open any policy in the Policies page; the module name (e.g. aster.finance.loan) and the entry function name (e.g. evaluateLoanEligibility) are shown in the editor header. You will pass both to /api/v1/policies/evaluate.",
+        "executePolicy": "Evaluate a policy",
+        "executePolicyDesc": "Send context data to a deployed policy and receive its decision result.",
+        "listPolicies": "Inspect a policy's version history",
+        "listPoliciesDesc": "Returns every version of a given policy together with its publish status — useful when auditing a decision.",
+        "responseExample": "Response shape",
+        "responseExampleDesc": "Successful evaluation returns { result, executionTimeMs, error }. result is the policy's return value; error is null on success.",
+        "errorHandling": "Error Codes",
+        "errorHandlingDesc": "Common HTTP status codes you may encounter when using the API.",
+        "error401": "Invalid or missing API key",
+        "error403": "Insufficient permissions or quota exceeded",
+        "error404": "Policy not found",
+        "error429": "Rate limit exceeded, please retry later"
+      }
+    },
+    "dataPage": {
+      "breadcrumb": "My data",
+      "title": "Your AI data",
+      "subtitle": "Under GDPR Articles 15 and 17 you have the right to access and erase the AI conversations we store. Use the actions below.",
+      "downloadCard": {
+        "title": "Download a copy",
+        "body": "Exports every AI call we have for you (prompt + completion + safety flags) as a JSON file. Useful for compliance archives or to migrate elsewhere.",
+        "action": "Download JSON"
+      },
+      "deleteCard": {
+        "title": "Erase AI conversation content",
+        "body": "Permanently clears the encrypted prompt + completion + redacted text of every AI call you have made. We keep aggregate counters (tokens, cost, status) for billing and abuse detection — those are GDPR-permitted.",
+        "action": "Erase content",
+        "confirmTitle": "Erase your AI conversation content?",
+        "confirmBody": "This wipes the original prompts and completions across {count, plural, =0 {no records} one {# record} other {# records}}. Counts and billing metadata are kept.",
+        "confirmAction": "Erase",
+        "confirmCancel": "Cancel",
+        "success": "{count, plural, =0 {Nothing to erase} one {# record erased} other {# records erased}}",
+        "failure": "Failed to erase: {error}"
+      },
+      "downloadFailure": "Failed to download data: {error}",
+      "lastUpdatedAt": "Generated at {iso}"
+    },
+    "aiCircuitBreakerPage": {
+      "breadcrumb": "AI circuit breaker",
+      "title": "AI circuit breaker",
+      "subtitle": "Manual override for the platform-wide LLM kill switch. Use only when an upstream LLM provider is sustained-degraded and we need to stop new calls from accruing cost.",
+      "todaySpend": "Today's platform spend",
+      "spendUsd": "${usd}",
+      "currentState": "Current state",
+      "stateOpen": "Open (calls allowed)",
+      "stateClosedFree": "Closed for Free plan",
+      "stateClosedTrial": "Closed for Free + Trial plans",
+      "stateClosedAll": "Closed for all plans",
+      "thresholds": "Auto-trip thresholds",
+      "thresholdFree": "Free stop ${usd}",
+      "thresholdTrial": "Trial stop ${usd}",
+      "release": "Release circuit",
+      "releaseConfirmTitle": "Release the circuit?",
+      "releaseConfirmBody": "New AI calls from all plans will be allowed again. Only do this if you've confirmed the upstream incident is resolved.",
+      "releaseConfirmAction": "Release",
+      "releaseConfirmCancel": "Cancel",
+      "releaseSuccess": "Circuit released.",
+      "releaseFailure": "Failed to release: {error}",
+      "refresh": "Refresh"
+    },
+    "aiKeysPage": {
+      "breadcrumb": "AI Keys (BYOK)",
+      "title": "AI Keys (Bring Your Own Key)",
+      "subtitle": "Bind your own OpenAI / Anthropic / Vertex AI key. AI calls use your quota and bypass the platform LLM monthly limit.",
+      "viewUsage": "View AI usage →",
+      "addTitle": "Add a BYOK key",
+      "provider": "Provider",
+      "providerOpenai": "OpenAI (sk-...)",
+      "providerAnthropic": "Anthropic (sk-ant-...)",
+      "providerVertex": "Google Vertex AI",
+      "apiKey": "API key",
+      "apiKeyHint": "Stored encrypted via pgcrypto; the plaintext is unrecoverable.",
+      "keyTooShort": "API key is too short — at least 20 characters required.",
+      "saveFailed": "Save failed (HTTP {status})",
+      "saved": "{provider} key saved.",
+      "saving": "Saving…",
+      "save": "Save key",
+      "boundTitle": "Bound keys",
+      "noneBound": "No BYOK keys bound. AI calls will use the platform monthly quota.",
+      "thProvider": "Provider",
+      "thKeyHint": "Key hint",
+      "thStatus": "Status",
+      "thLastUsed": "Last used",
+      "thCreated": "Created",
+      "thActions": "Actions",
+      "statusActive": "Active",
+      "statusDisabled": "Disabled",
+      "lastError": "Last error",
+      "revoke": "Revoke",
+      "revokeFailed": "Revoke failed (HTTP {status})",
+      "never": "Never",
+      "whyTitle": "Why use BYOK?",
+      "whyQuota": "Doesn't consume the platform AI monthly quota (Free 20 / Pro 500 / Team 500 per seat).",
+      "whyBilling": "Calls bill directly to your provider account using your rate limits.",
+      "whyCompliance": "Data stays out of third-parties in compliance scenarios (Vertex runs in your GCP project).",
+      "revokeDialogTitle": "Revoke BYOK key",
+      "revokeDialogBody": "Revoke the {provider} BYOK key? Future AI calls will fall back to the platform LLM quota.",
+      "revokeDialogConfirm": "Revoke",
+      "revokeDialogCancel": "Cancel"
+    },
+    "profile": {
+      "title": "Profile",
+      "name": "Name",
+      "email": "Email",
+      "plan": "Plan",
+      "notSet": "Not set"
+    },
+    "account": {
+      "title": "Account",
+      "signOut": "Sign out",
+      "signOutDesc": "Sign out of your account on this device.",
+      "signingOut": "Signing out..."
+    },
+    "dangerZone": {
+      "title": "Danger Zone",
+      "deleteAccount": "Delete account",
+      "deleteAccountDesc": "Schedule your account for permanent deletion in 30 days. Signing in with the same email before then will fully restore it.",
+      "confirmTitle": "Delete your account?",
+      "confirmMessage": "Your account will be hidden immediately and permanently deleted after 30 days. During that window, signing in with the same email restores everything below:",
+      "confirmItem1": "Your account and profile information",
+      "confirmItem2": "All your policies, executions, and API keys",
+      "confirmItem3": "Any teams you own and their data",
+      "confirmDelete": "Yes, schedule deletion",
+      "deleting": "Scheduling...",
+      "cancel": "Cancel"
+    },
+    "language": {
+      "title": "Language Preferences",
+      "autoDetect": "Auto-detect language",
+      "autoDetectDesc": "Automatically detect your preferred language from browser settings.",
+      "enabled": "Enabled",
+      "disabled": "Disabled"
+    },
+    "aiKeys": {
+      "title": "AI Keys",
+      "subtitle": "Bring your own OpenAI / Anthropic / Vertex AI key. AI calls use your quota and bypass the platform monthly limit.",
+      "manageKeys": "Manage AI Keys"
+    }
+  },
+  "security": {
+    "title": "Security Monitoring",
+    "description": "Monitor security events, audit logs, and system health."
+  },
+  "admin": {
+    "aiCircuitBreaker": {
+      "title": "AI circuit breaker"
+    },
+    "vocab": {
+      "title": "Domain vocabularies (admin)",
+      "subtitle": "Aggregate counters across all users; top consumers + recent bulk job stats.",
+      "openUserSurface": "Open user-facing view →",
+      "overviewError": "Some panels failed to load. Refresh to retry.",
+      "overview": {
+        "heading": "At-a-glance",
+        "activeLinks": "Active links",
+        "globalTerms": "Global terms",
+        "snapshots": "Snapshots",
+        "uniqueUsersHint": "{n} unique users",
+        "archivedHint": "{n} archived",
+        "archivedSnapshotsHint": "{n} archived"
+      },
+      "topUsers": {
+        "title": "Top users by active links",
+        "email": "User",
+        "plan": "Plan",
+        "activeLinks": "Active",
+        "emptyTitle": "No users yet",
+        "emptyDescription": "No active vocabulary links across the platform."
+      },
+      "jobs": {
+        "title": "Bulk job stats (last 24h)",
+        "status": "Status",
+        "count": "Jobs",
+        "totalRows": "Total rows",
+        "emptyTitle": "No bulk jobs in the last 24h",
+        "emptyDescription": "Job activity will appear here once users start importing."
+      }
+    },
+    "riskTier": {
+      "title": "Risk-tier Triage",
+      "subtitle": "Users with non-zero registration risk. Verify the reason before reducing tier; every override is logged.",
+      "total": "Total",
+      "loading": "Loading…",
+      "empty": "No users above the selected tier.",
+      "refresh": "Refresh",
+      "filters": {
+        "minTier": "Min tier",
+        "sortBy": "Sort by",
+        "byTier": "Tier (high → low)",
+        "byCreated": "Created (new → old)",
+        "byPurges": "Prior purges"
+      },
+      "table": {
+        "tier": "Tier",
+        "email": "Email",
+        "plan": "Plan",
+        "priorPurges": "Prior purges",
+        "reactivations": "Reactivations",
+        "reason": "Reason",
+        "created": "Created",
+        "actions": "Actions",
+        "tombstoned": "Tombstoned",
+        "override": "Override"
+      },
+      "override": {
+        "title": "Override risk tier",
+        "currentTier": "Current tier",
+        "newTier": "New tier",
+        "ticketId": "Ticket ID",
+        "ticketIdHint": "(support ticket reference, recorded in audit log)",
+        "note": "Note",
+        "notePlaceholder": "Brief justification (max ~200 chars). Visible in audit log only.",
+        "cancel": "Cancel",
+        "submit": "Apply override",
+        "submitting": "Applying…"
+      }
+    },
+    "console": {
+      "badge": "ADMIN CONSOLE",
+      "modeSaas": "SaaS",
+      "modeOnPrem": "On-Prem",
+      "modeLabel": "Deployment mode",
+      "scope": "Privileged operations — all actions are logged.",
+      "returnToDashboard": "Return to dashboard"
+    },
+    "nav": {
+      "overview": "Overview",
+      "aiBreaker": "AI circuit breaker",
+      "riskTier": "Risk-tier triage",
+      "license": "License",
+      "sso": "Single sign-on",
+      "sidebarLabel": "Admin navigation",
+      "licenseRevoke": "License Revocation",
+      "issuedLicenses": "Issued licenses"
+    },
+    "overview": {
+      "title": "Admin overview",
+      "subtitle": "Cross-cutting operational controls for the platform.",
+      "cardsHeading": "Operational tools",
+      "aiBreakerCard": {
+        "title": "AI circuit breaker",
+        "description": "Halt LLM spend platform-wide when costs spike.",
+        "cta": "Open breaker"
+      },
+      "vocabCard": {
+        "title": "Domain vocabularies",
+        "description": "Aggregate counters, top consumers, recent bulk job stats.",
+        "cta": "Open dashboard"
+      },
+      "riskTierCard": {
+        "title": "Risk-tier triage",
+        "description": "Review and override registration risk classifications.",
+        "cta": "Open triage"
+      },
+      "licenseCard": {
+        "title": "License",
+        "description": "View enterprise license status, seat count, expiry.",
+        "cta": "View license",
+        "comingSoon": "Coming soon"
+      },
+      "licenseRevokeCard": {
+        "title": "License revocation",
+        "description": "Revoke compromised licenses and publish the signed revocation list.",
+        "cta": "Open revocation"
+      },
+      "issuedLicensesCard": {
+        "title": "Issued licenses",
+        "description": "Browse all licenses ever signed, with renewal lineage and telemetry.",
+        "cta": "Open ledger"
+      },
+      "ssoCard": {
+        "title": "Single sign-on",
+        "description": "Configure SAML / OIDC for your organization.",
+        "cta": "Configure SSO",
+        "comingSoon": "Coming soon"
+      }
+    },
+    "license": {
+      "title": "License",
+      "subtitle": "Enterprise license status, signature trust, and revocation freshness for this on-prem deployment.",
+      "status": {
+        "missing": {
+          "title": "License key not configured",
+          "body": "Set the LICENSE_KEY environment variable. The deployment will remain in limited mode until a valid license is available.",
+          "cta": "Required environment variable:"
+        },
+        "malformed": {
+          "title": "License key is malformed",
+          "body": "The configured license cannot be parsed. Contact sales for a replacement license key."
+        },
+        "signatureInvalid": {
+          "title": "License signature is invalid",
+          "body": "The license payload does not match its signature. Treat this as a tampered key or a key signed for another payload."
+        },
+        "signatureUntrustedKey": {
+          "title": "License signing key is not trusted",
+          "body": "The license was signed by a key that is not in this build's trust bundle. Contact sales for a reissued key."
+        },
+        "bindingMismatch": {
+          "title": "License is bound to a different deployment",
+          "body": "This license signature is valid, but its deploymentBinding does not match the ASTER_DEPLOYMENT_ID configured on this instance. Either you are running the license on the wrong cluster, or the ASTER_DEPLOYMENT_ID env var is missing or misconfigured. Contact sales for a reissued license bound to this deployment."
+        },
+        "legacyUnsigned": {
+          "title": "Unsigned legacy license",
+          "body": "This v1 license is accepted only during the migration window. Upgrade to a signed v2 license before the deadline.",
+          "deadline": "Upgrade to v2 signing before the compatibility window closes."
+        },
+        "verifiedRevoked": {
+          "title": "License revoked",
+          "body": "This license is cryptographically valid but appears on the revocation list. Contact sales or support."
+        },
+        "verifiedExpired": {
+          "title": "License expired",
+          "body": "{days, plural, one {Expired # day ago} other {Expired # days ago}}"
+        },
+        "networkGraceExpired": {
+          "title": "Revocation grace period ended",
+          "body": "The license signature is valid, but this deployment has not reached the revocation endpoint within the allowed grace period."
+        },
+        "verifiedExpiringSoon": {
+          "title": "License expires soon",
+          "body": "{days, plural, one {# day remaining} other {# days remaining}}"
+        },
+        "networkGrace": {
+          "title": "Revocation check temporarily stale",
+          "body": "Temporary connectivity issue. Last successful check was {minutes, plural, one {# minute ago} other {# minutes ago}}."
+        },
+        "verifiedActive": {
+          "title": "License verified active",
+          "body": "Signature, entitlement, and revocation freshness are valid."
+        }
+      },
+      "advisory": {
+        "heading": "Advisories",
+        "expiringSoon": "License renewal is approaching: {days, plural, one {# day remaining} other {# days remaining}}.",
+        "revocationStale": "The latest revocation fetch failed; the last known-good result is still being used.",
+        "networkGrace": "Revocation status is in grace. Last successful check was {minutes, plural, one {# minute ago} other {# minutes ago}}.",
+        "legacyUnsignedActive": "This unsigned v1 license should be replaced with a signed v2 license."
+      },
+      "details": {
+        "heading": "License Details",
+        "customer": "Customer",
+        "tier": "Tier",
+        "sku": "SKU",
+        "licenseTerm": "Term",
+        "seatLimit": "Seat Limit",
+        "seatUnlimited": "Unlimited",
+        "issuedAt": "Issued",
+        "expiresAt": "Expires",
+        "notBefore": "Not before",
+        "daysRemaining": "Days remaining",
+        "features": "Features",
+        "noFeatures": "No optional features enabled",
+        "licenseId": "License ID",
+        "keyPreview": "Key preview",
+        "deploymentLabel": "Deployment",
+        "deploymentId": "Deployment ID",
+        "deploymentUrl": "Deployment URL",
+        "copy": "Copy",
+        "copied": "Copied",
+        "copyValue": "Copy {label}"
+      },
+      "revocation": {
+        "heading": "Revocation Status",
+        "endpoint": "Endpoint",
+        "lastSuccess": "Last successful check",
+        "lastAttempt": "Last attempt",
+        "version": "Revocation list version",
+        "fresh": "Up to date",
+        "grace": "Temporary connectivity issue — grace period active",
+        "graceExpired": "Connectivity restored required — grace period ended",
+        "error": "Last fetch failed",
+        "notApplicable": "Not applicable",
+        "airGappedPolicy": "Revocation check disabled (air-gapped SKU)"
+      },
+      "actions": {
+        "heading": "Actions",
+        "refresh": "Refresh now",
+        "refreshing": "Refreshing…",
+        "refreshSuccess": "Cache updated",
+        "refreshError": "Refresh failed — see diagnostics",
+        "contactRenewal": "Contact renewal team",
+        "renewNow": "Renew now",
+        "downloadDiagnostics": "Download diagnostics bundle"
+      },
+      "telemetry": {
+        "heading": "Usage telemetry (opt-in)",
+        "optedOut": "Telemetry is disabled. Nothing leaves this deployment.",
+        "optedInNoUpload": "Telemetry is enabled. No upload has been sent yet.",
+        "lastAttempt": "Last attempt:",
+        "viewSentBody": "View payload sent to Aster",
+        "unknownError": "Unknown error",
+        "dataRegion": "Data region",
+        "customerHeader": "Customer field",
+        "customerMaskedYes": "masked (anonymous token)",
+        "customerMaskedNo": "literal name",
+        "schemaVersionUpgradeRequired": "This build sends an outdated schema version. SaaS currently accepts: v{versions}. Upgrade aster-cloud to resume telemetry.",
+        "outcome": {
+          "accepted": "Accepted",
+          "deduped": "Deduped (same window already received)",
+          "failed": "Failed"
+        }
+      },
+      "time": {
+        "minutesAgo": "{minutes, plural, one {# minute ago} other {# minutes ago}}",
+        "hoursAgo": "{hours, plural, one {# hour ago} other {# hours ago}}",
+        "daysAgo": "{days, plural, one {# day ago} other {# days ago}}",
+        "neverChecked": "Never checked"
+      },
+      "diagnostics": {
+        "heading": "Support diagnostics",
+        "signingKeyId": "Signing key ID",
+        "fingerprint": "Public key fingerprint",
+        "reasonCode": "Reason code",
+        "lastError": "Last error",
+        "trustBundleVersion": "Trust bundle entries",
+        "schemaVersion": "Schema version"
+      }
+    },
+    "sso": {
+      "title": "Single sign-on",
+      "subtitle": "Configure how your team signs in. Set the SSO_PROVIDER environment variable to enable SAML or OIDC.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyValue": "Copy {label} to clipboard",
+      "incomplete": {
+        "title": "SSO configuration is incomplete",
+        "body": "The following environment variables must be set before SSO can authenticate users:"
+      },
+      "none": {
+        "title": "SSO is not enabled",
+        "body": "Users currently sign in via the default credentials / OAuth flow. To enable SAML or OIDC, set the SSO_PROVIDER environment variable and restart the deployment.",
+        "docsHint": "See the on-prem deployment guide for the full list of required env vars per provider."
+      },
+      "saml": {
+        "spHeading": "Service Provider (Aster) — values for your IdP",
+        "spHint": "Configure these values in your identity provider when registering Aster as a service provider.",
+        "idpHeading": "Identity Provider — values Aster reads from your env",
+        "idpHint": "Provide one of: SAML_IDP_METADATA_URL (recommended) or SAML_IDP_CERT_FINGERPRINT. SLO is optional.",
+        "entityId": "Entity ID",
+        "acsUrl": "ACS URL (Assertion Consumer Service)",
+        "metadataUrl": "IdP metadata URL",
+        "certFingerprint": "IdP X.509 fingerprint",
+        "sloUrl": "Single logout URL",
+        "notConfigured": "Not configured"
+      },
+      "oidc": {
+        "appHeading": "Application — values for your IdP",
+        "appHint": "Configure these values in your OpenID Connect provider when registering Aster as a relying party.",
+        "idpHeading": "Identity Provider — values Aster reads from your env",
+        "idpHint": "Provide the issuer URL, client ID, and client secret. Scopes default to openid email profile.",
+        "callbackUrl": "Callback URL",
+        "issuer": "Issuer URL",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "scopes": "Requested scopes",
+        "secretConfigured": "Configured",
+        "secretMissing": "Not configured",
+        "notConfigured": "Not configured"
+      }
+    },
+    "issuedLicenses": {
+      "title": "Issued licenses",
+      "subtitle": "All licenses ever signed by Aster, with renewal lineage and latest telemetry.",
+      "searchPlaceholder": "Search by customer or license id…",
+      "searchButton": "Search",
+      "emptyMatching": "No licenses match.",
+      "shownCount": "Showing {n, plural, one {# row} other {# rows}}.",
+      "cols": {
+        "customer": "Customer",
+        "licenseId": "License ID",
+        "tier": "Tier",
+        "term": "Term",
+        "signedAt": "Signed",
+        "expiresAt": "Expires",
+        "phase": "Phase",
+        "lineage": "Lineage",
+        "telemetry": "Telemetry"
+      },
+      "phase": {
+        "active": "Active",
+        "expiring-soon": "Expiring soon",
+        "expired": "Expired",
+        "superseded": "Superseded",
+        "pending-renewal": "Pending renewal"
+      },
+      "lineage": {
+        "renewedFrom": "← renewed from {id}…",
+        "supersededBy": "→ superseded by {id}…"
+      },
+      "telemetry": {
+        "recent": "Reported within 1 day",
+        "daysAgo": "Reported {days} days ago",
+        "stale": "Stale ({days}d)",
+        "silent": "Opted-in, silent",
+        "notOptedIn": "Not opted in"
+      }
+    },
+    "licenseRevoke": {
+      "title": "License Revocation",
+      "subtitle": "Manage active license revocations and publish the signed revocation list.",
+      "currentPublication": {
+        "heading": "Current Revocation List",
+        "version": "Version",
+        "publishedAt": "Published",
+        "validUntil": "Valid until",
+        "revokedCount": "{count, plural, one {# revoked license} other {# revoked licenses}}",
+        "republish": "Republish manifest",
+        "republishing": "Republishing…",
+        "republishSuccess": "Manifest republished",
+        "republishError": "Republish failed",
+        "unavailable": "No manifest has been published yet."
+      },
+      "newForm": {
+        "heading": "Revoke a license",
+        "licenseIdLabel": "License ID",
+        "licenseIdPlaceholder": "lic_01J5N7K8Z3Q9...",
+        "licenseIdInvalid": "License ID must match lic_<22-30 uppercase alphanumeric chars>",
+        "reasonLabel": "Reason",
+        "reasonRequired": "Select a reason.",
+        "reasonPlaceholder": "Select a reason…",
+        "reasonOptions": {
+          "non-payment": "Non-payment",
+          "security": "Security incident",
+          "renewal-superseded": "Replaced by renewal",
+          "contract-terminated": "Contract terminated",
+          "fraud": "Fraud"
+        },
+        "notesLabel": "Internal notes (optional)",
+        "customerRefLabel": "Customer reference (optional)",
+        "dryRun": "Dry run (preview without revoking)",
+        "submit": "Revoke license",
+        "submitting": "Revoking…",
+        "confirmTitle": "Confirm revocation",
+        "confirm": "Revoke license {licenseId} for reason \"{reason}\"? Customers will lose access within ~6 hours.",
+        "confirmCta": "Yes, revoke",
+        "cancel": "Cancel",
+        "success": "License {licenseId} revoked. Revocation list version is now {version}.",
+        "dryRunSuccess": "Dry run for {licenseId} completed — no changes made.",
+        "dryRunNotice": "Dry run: nothing will be revoked.",
+        "error": "Revocation failed: {error}"
+      },
+      "table": {
+        "heading": "Revoked licenses",
+        "empty": "No active revocations.",
+        "licenseId": "License ID",
+        "reason": "Reason",
+        "revokedAt": "Revoked",
+        "revokedBy": "By",
+        "notes": "Notes",
+        "customerRef": "Customer ref",
+        "undo": "Undo",
+        "revokedHoursAgo": "{hours, plural, one {# hour ago} other {# hours ago}}",
+        "undoExpired": "Expired",
+        "undoConfirm": "Undo revocation for {licenseId}?",
+        "undoSuccess": "Revocation undone for {licenseId}",
+        "undoError": "Undo failed: {error}",
+        "undoCountdown": "{hours, plural, one {Undo (# hour)} other {Undo (# hours)}}",
+        "undoAriaLabel": "Undo revocation for {licenseId}, {hours, plural, one {# hour remaining} other {# hours remaining}}",
+        "undoExpiredAriaLabel": "Undo window expired for {licenseId}"
+      }
+    },
+    "readOnly": {
+      "heading": "READ-ONLY MODE",
+      "subheading": "Administrative write operations are disabled.",
+      "reason": {
+        "grace-expired": "Revocation check grace period has ended. Restore connectivity to the revocation endpoint.",
+        "revoked": "This license has been revoked. Contact Aster sales to resolve.",
+        "expired": "This license has expired. Renew to restore admin operations.",
+        "malformed": "License key is malformed. Restore a valid LICENSE_KEY environment variable.",
+        "binding-mismatch": "This license is bound to a different deployment, or ASTER_DEPLOYMENT_ID is missing/misconfigured. Restore the correct env value or contact sales for a reissued license.",
+        "missing": "No LICENSE_KEY configured. Set the environment variable to restore admin operations.",
+        "clock-rollback": "The system clock appears to have moved backwards beyond the safety tolerance. Restore correct time via NTP — license verification has been suspended to prevent expired-license replay."
+      },
+      "viewLicense": "View license status"
+    },
+    "errorBoundary": {
+      "title": "Admin tool unavailable",
+      "body": "This admin control could not load. The failure has been logged for triage.",
+      "backToOverview": "Back to Admin Overview"
+    },
+    "pulse": {
+      "heading": "Admin Pulse",
+      "circuit": {
+        "title": "AI Circuit Breaker",
+        "healthy": "Healthy",
+        "tripped": "Tripped",
+        "error": "Unavailable",
+        "spendToday": "Spend today"
+      },
+      "riskTier": {
+        "title": "Risk-tier queue",
+        "empty": "No risky accounts",
+        "count": "flagged accounts",
+        "error": "Lookup failed"
+      },
+      "audit": {
+        "title": "Recent admin events",
+        "empty": "No recent admin events.",
+        "error": "Could not load audit log."
+      }
+    },
+    "flags": {
+      "flagsHeading": "Feature flags",
+      "policySharingTitle": "Policy sharing across teams",
+      "policySharingDesc": "When enabled, policy owners can share a policy with additional teams (read + execute). Default OFF.",
+      "on": "On",
+      "off": "Off",
+      "enable": "Enable",
+      "disable": "Disable",
+      "saving": "Saving…"
+    }
+  },
+  "renewal": {
+    "portal": {
+      "valid": {
+        "title": "Renew your Aster license",
+        "subtitle": "One click to continue your subscription.",
+        "footer": "By renewing you agree to Aster's standard enterprise terms."
+      },
+      "summary": {
+        "customer": "Customer",
+        "licenseId": "Current license ID",
+        "deployment": "Deployment",
+        "currentExpiry": "Current expiry"
+      },
+      "checkout": {
+        "continue": "Continue to checkout",
+        "starting": "Opening Stripe…",
+        "genericError": "Could not start checkout. Please try again or contact support."
+      },
+      "invalid": {
+        "title": "Renewal link not recognised",
+        "body": "This link is invalid. If you copy-pasted it from email, double check it isn't truncated."
+      },
+      "expired": {
+        "title": "Renewal link expired",
+        "body": "Renewal links are valid for 14 days. Please request a fresh link."
+      },
+      "alreadyConsumed": {
+        "title": "Renewal already in progress",
+        "body": "This link was already used. If you completed payment, check your email for the new license key. Otherwise contact support."
+      }
+    }
+  },
+  "decisionTrace": {
+    "title": "Decision Trace",
+    "empty": "No trace data",
+    "ariaLabel": "Decision trace",
+    "node": {
+      "rule": "Rule",
+      "if": "If",
+      "match": "Match",
+      "branch": "Branch",
+      "expr": "Expression"
+    },
+    "outcome": {
+      "true": "True",
+      "false": "False",
+      "matched": "Matched",
+      "notMatched": "Not matched",
+      "unknown": "Unknown"
+    },
+    "duration": "{ms}ms"
+  },
+  "diagnostics": {
+    "errors": "{count, plural, one {# error} other {# errors}}",
+    "warnings": "{count, plural, one {# warning} other {# warnings}}",
+    "noIssues": "No issues",
+    "viewProblems": "View problems",
+    "hideProblems": "Hide problems"
+  },
+  "ai": {
+    "panelTitle": "AI Assistant",
+    "promptPlaceholder": "Describe the policy you want to generate...",
+    "generate": "Generate",
+    "stop": "Stop",
+    "apply": "Apply",
+    "reject": "Discard",
+    "retry": "Retry",
+    "close": "Close",
+    "generating": "Generating...",
+    "validationPassed": "Compilation passed",
+    "autoApplied": "Compilation passed — applied to editor",
+    "repairing": "Repairing",
+    "validationFailed": "Compilation failed, repairing",
+    "errorGeneric": "AI service temporarily unavailable",
+    "shortcutHint": "Ctrl+Enter to generate",
+    "toggleAI": "AI Assistant",
+    "suggest": "Suggest Optimizations",
+    "suggesting": "Analyzing...",
+    "suggestPlaceholder": "AI will analyze your policy and suggest improvements",
+    "diffPreview": "Preview Changes",
+    "diffOriginal": "Original",
+    "diffGenerated": "Generated",
+    "acceptDiff": "Accept Changes",
+    "rejectDiff": "Reject Changes",
+    "inlineCompletionLoading": "Fetching AI completion..."
+  },
+  "upgradeBlocker": {
+    "viewPlans": "View plans",
+    "dismiss": "Not now",
+    "published_rules": {
+      "title": "Free plan is limited to {limit} published rules",
+      "body": "Upgrade to Pro to publish up to 100 rules per project, with team review and audit history."
+    },
+    "evaluations": {
+      "title": "Monthly evaluation limit reached",
+      "body": "Free includes {limit} evaluations / month. Pro raises this to 50,000, with overage billing."
+    },
+    "audit_retention": {
+      "title": "Free retains audit logs for 7 days",
+      "body": "Enterprise gives you unlimited retention with hash-chained audit and digital signatures, suitable for SOX / HIPAA / PCI."
+    },
+    "sso": {
+      "title": "SSO is an Enterprise feature",
+      "body": "SAML 2.0, OIDC, and Authentik integration are part of the Enterprise plan."
+    },
+    "data_residency": {
+      "title": "Data residency requires Enterprise",
+      "body": "Choose your jurisdiction (EU / US / China / custom) on the Enterprise plan via VPC or self-hosted K3S deployment."
+    },
+    "reviewer_required": {
+      "title": "Approval requires a 2-person team",
+      "body": "Pro enables SOX Segregation of Duties: the author and reviewer must be different. Upgrade to Pro to invite a reviewer."
+    },
+    "team_member_invite": {
+      "title": "Free is single-seat",
+      "body": "Pro lets you invite teammates with role-based access. Upgrade to add a member."
+    },
+    "contactAdmin": "Contact your administrator"
+  },
+  "demoPage": {
+    "seo": {
+      "title": "Replay a credit decision — Aster Lang demo",
+      "description": "See it end to end: a real loan-approval rule, a sample applicant, the decision, and a byte-for-byte replay you'd show a regulator. No signup."
+    },
+    "eyebrow": "Live demo · credit risk",
+    "title": "Replay a credit decision",
+    "subtitle": "Pick an applicant, see the decision, then replay exactly how it was reached — the answer you give a regulator, not a guess.",
+    "step1": {
+      "title": "The credit rule",
+      "hint": "Written in plain, controlled English — readable by risk and compliance, not just engineers. This is the rule that decides every application."
+    },
+    "step2": {
+      "title": "Pick an applicant",
+      "hint": "Three real-world cases: a clean approval, a borderline referral, and a decline."
+    },
+    "step3": {
+      "title": "Tune the thresholds",
+      "hint": "These cut-offs ARE the rule — edit them and the rule above rewrites itself. This is the policy change a credit officer would actually make."
+    },
+    "step4": {
+      "title": "Replay this decision",
+      "auditorNote": "This is what you hand an auditor. Every step that led to the decision, recomputed from the exact rule and inputs — not a log entry, the real path."
+    },
+    "scenarios": {
+      "approved": {
+        "label": "Strong applicant"
+      },
+      "refer": {
+        "label": "Borderline case"
+      },
+      "declined": {
+        "label": "Below threshold"
+      }
+    },
+    "fields": {
+      "creditScore": "Credit score",
+      "monthlyIncome": "Monthly income",
+      "monthlyDebt": "Monthly debt",
+      "requestedAmount": "Requested amount"
+    },
+    "adverse": {
+      "label": "Adverse-action reason",
+      "reasons": {
+        "creditScore": "Credit score of {actual} is below the {threshold} minimum required for approval.",
+        "tierMiss": "Credit score of {actual} did not meet the {threshold} threshold for automatic approval; sent to manual review.",
+        "overCap": "Requested amount of {actual} exceeds the affordability cap of {threshold} (income-based); sent to manual review for an oversized loan."
+      },
+      "note": "This is the disclosable reason required for adverse credit decisions — and the replay below is its step-by-step proof, recomputed from the exact rule and inputs."
+    },
+    "decisionLabel": "Decision",
+    "cta": {
+      "title": "Bring your own credit rules",
+      "subtitle": "Run a real loan-approval or limit rule through Aster and replay any decision. Free to start.",
+      "button": "Get started — free"
+    },
+    "thresholds": {
+      "premiumScore": "Premium score",
+      "premiumDti": "Premium DTI cap",
+      "standardScore": "Standard score",
+      "standardDti": "Standard DTI cap",
+      "minScore": "Minimum score",
+      "reset": "Reset to defaults",
+      "maxLti": "Max loan-to-income"
+    },
+    "runButton": "Run the rule",
+    "runHint": "Edit any input or threshold above, then run — the decision is computed live by the same engine that runs in production.",
+    "replayTitle": "Replay this decision",
+    "explanation": {
+      "heading": "Why this decision",
+      "sub": "Computed directly from the rule and the inputs — every value is exact, not generated.",
+      "overviewHeading": "Overview",
+      "module": "Module",
+      "rule": "Rule",
+      "decision": "Decision",
+      "fieldsHeading": "Applicant fields",
+      "colField": "Field",
+      "colType": "Type",
+      "colValue": "Value",
+      "colPurpose": "Used for",
+      "metricsHeading": "Intermediate values",
+      "stepsHeading": "Decision steps",
+      "matched": "matched",
+      "notMatched": "not matched",
+      "skipped": "not evaluated",
+      "reasonHeading": "In one line",
+      "aiNarrative": "AI summary",
+      "aiNarrativeHint": "Optional plain-language read of the facts above."
+    }
+  },
+  "equivalencePage": {
+    "seo": {
+      "title": "Dual-Engine Parity — Aster Lang",
+      "description": "Track how Aster Lang's Java and TypeScript engines agree, layer by layer. Parse parity (both engines accept the same source) and runtime eval parity (both produce identical output) are both measured nightly and published openly, with a ledger of resolved divergences."
+    },
+    "hero": {
+      "title": "Dual-Engine Parity",
+      "subtitle": "Aster Lang ships two production engines (Java and TypeScript). We test them against a shared corpus every night and publish layered evidence — parse acceptance and runtime output equality — plus an open ledger of the divergences we've already closed."
+    },
+    "unavailable": "Live data unavailable right now. See the repository for the latest measurement.",
+    "currentRate": "Parse parity rate",
+    "measuredOn": "{equivalent} / {total} Tier 1 samples accepted by both engines — measured {date}",
+    "qualifier": "Parse-level: this measures whether both engines accept the same source. Runtime output equality is measured separately as eval parity (below). Both layers are tracked openly.",
+    "chips": {
+      "parse": "Parse parity",
+      "eval": "Runtime eval parity",
+      "ir": "IR field-level parity",
+      "evalCoverage": "Eval coverage",
+      "featureCoverage": "Feature coverage"
+    },
+    "stats": {
+      "equivalent": "Accepted by both",
+      "equivalentDesc": "parse-level; runtime shown separately below",
+      "divergent": "Parse divergence",
+      "divergentDesc": "one engine fails to parse",
+      "total": "Tier 1 corpus",
+      "totalDesc": "parse-parity samples (tier2/tier3 excluded)"
+    },
+    "trend": {
+      "heading": "Consistency trend",
+      "date": "Date",
+      "ratio": "Accepted / Total",
+      "rate": "Rate",
+      "delta": "Δ",
+      "parseSeries": "Parse parity",
+      "evalSeries": "Runtime eval parity",
+      "irSeries": "IR field-level parity",
+      "evalCoverageSeries": "Eval coverage",
+      "featureCoverageSeries": "Feature coverage",
+      "range": {
+        "week": "Week",
+        "month": "Month",
+        "year": "Year",
+        "all": "All"
+      },
+      "tooltipRatio": "%value% / %total% accepted",
+      "detailsToggle": "Show data table",
+      "empty": "No trend data yet."
+    },
+    "progress": "Parse parity improved from {initial} on {date} by +{delta} percentage points across {count} measurements, under the current Tier 1 parse denominator (tier2 divergent samples are tracked separately, not in this denominator).",
+    "evalParity": {
+      "heading": "Runtime eval parity",
+      "intro": "The stronger metric: both engines evaluate the same inputs and must produce identical output (not just accept the source). Measured nightly over the golden cases.",
+      "rateLabel": "Runtime eval parity",
+      "measuredOn": "{identical} / {total} golden cases produce identical output across both engines — measured {date}"
+    },
+    "resolvedDivergences": {
+      "heading": "Resolved runtime divergences",
+      "intro": "Cases both engines once accepted but evaluated differently — now fixed and locked by golden tests. We publish the closed ledger because tracking divergences to resolution is the trust signal, not hiding that they existed.",
+      "colCase": "Case",
+      "colWas": "Was (TS → Java)",
+      "colResolution": "Resolution",
+      "rows": [
+        {
+          "case": "06-string-concat",
+          "ts": "\"Hello, Alice\"",
+          "java": "\"Hello, \" (dropped name)",
+          "resolution": "int/double numeric promotion; string-concat keeps both operands"
+        },
+        {
+          "case": "08-arithmetic-divide",
+          "ts": "7 / 2 → 3.5",
+          "java": "7 / 2 → 3",
+          "resolution": "/ is float division on both engines (byte-identical)"
+        },
+        {
+          "case": "09-arithmetic-modulo",
+          "ts": "even-check → true",
+          "java": "→ false",
+          "resolution": "added real modulo operator; 09 restored to a genuine even-check"
+        }
+      ]
+    },
+    "footer": {
+      "heading": "What this measures (and what it doesn't)",
+      "items": [
+        "Source corpus: aster-cloud/aster-lang-test, Tier 1 parity samples only (tier2 divergent and tier3 single-engine fixtures are excluded from these denominators).",
+        "Parse parity: a sample passes only if both engines parse/accept it. Eval parity: both engines must produce identical runtime output on the golden cases. Eval parity is the stronger guarantee.",
+        "Not yet covered by these rates: Core IR field-level parity, type-checking, and error-diagnostic parity (tracked separately).",
+        "Both rates are re-measured nightly at 02:00 UTC via the nightly-equivalence GitHub Action; history committed back to equivalence-history.csv and eval-history.csv.",
+        "See the dual-engine syntax baseline RFC and DIVERGENT-MANIFEST.md for the full methodology and the resolved-divergence ledger."
+      ]
+    },
+    "whitepaperCta": {
+      "heading": "The white paper",
+      "body": "A plain-language explanation of dual-engine equivalence for risk & compliance — with the evidence, a worked credit example, and an honest scope. Read it online or download as PDF.",
+      "link": "Read the white paper →"
+    }
+  },
+  "pricingPage": {
+    "seo": {
+      "title": "Pricing — Aster Lang",
+      "description": "Policy-as-Code in plain English (and 中文 / Deutsch). Free for individuals. Pro for teams. Enterprise for regulated industries."
+    },
+    "hero": {
+      "title": "Simple pricing for serious policy work",
+      "subtitle": "Free to try. Pay when your team needs separation of duties."
+    },
+    "toggle": {
+      "monthly": "Monthly",
+      "yearly": "Yearly (-20%)"
+    },
+    "tiers": {
+      "free": {
+        "name": "Free",
+        "tagline": "Self-write, self-publish",
+        "priceSuffix": "/forever",
+        "cta": "Start free",
+        "features": [
+          "1 user",
+          "5 published rules",
+          "1,000 evaluations / month",
+          "20 AI drafts / month (gpt-4o-mini)",
+          "All language packs (en / zh / de)",
+          "7-day audit log",
+          "✗ No reviewer role",
+          "✗ Not SOX-compliant"
+        ]
+      },
+      "pro": {
+        "name": "Pro",
+        "tagline": "Approval and separation of duties",
+        "priceSuffix": "/seat / month",
+        "priceSuffixYearly": "/seat / year",
+        "cta": "Start free",
+        "highlight": "Most popular",
+        "features": [
+          "Unlimited team members",
+          "100 published rules",
+          "50,000 evaluations / month",
+          "500 AI drafts / seat / month (gpt-5.2)",
+          "All language packs (en / zh / de)",
+          "90-day audit log",
+          "Invite reviewers — each seat ¥299 / month",
+          "Reviewer ≠ author (enforced for ≥ 2 seats)",
+          "Meets SOX Segregation of Duties",
+          "Stripe billing, monthly or yearly"
+        ]
+      },
+      "enterprise": {
+        "name": "Enterprise",
+        "tagline": "Multi-team, multi-stage approval",
+        "priceSuffix": "Contact us",
+        "cta": "Talk to sales",
+        "features": [
+          "Multi-team, custom approval groups",
+          "Unlimited rules and evaluations",
+          "Unlimited AI drafts via BYOK (your OpenAI / Anthropic / Vertex key)",
+          "Custom industry lexicons",
+          "Hash-chained audit + digital signature",
+          "SSO (SAML / OIDC / Authentik)",
+          "Data residency: EU / US / China / custom",
+          "K3S self-hosted, ArgoCD GitOps",
+          "Meets SOX, PCI, HIPAA, GDPR"
+        ]
+      }
+    },
+    "comparison": {
+      "title": "What changes between plans",
+      "rows": {
+        "users": "Users",
+        "rules": "Published rules",
+        "evaluations": "Monthly evaluations",
+        "aiDrafts": "AI drafts",
+        "lexicon": "Language packs",
+        "audit": "Audit retention",
+        "approval": "Approval workflow",
+        "sso": "SSO",
+        "residency": "Data residency",
+        "deployment": "Deployment"
+      }
+    }
+  },
+  "adminLaunchpad": {
+    "title": "Set Aster up in 60 seconds",
+    "body": "You’re signed in as an admin. Tick these five boxes to take the platform from empty to ready-for-production.",
+    "progress": "{done} of {total} done",
+    "steps": {
+      "createPolicy": {
+        "label": "Create your first policy",
+        "desc": "Write a CNL rule + decision schema. Aster compiles and runs it from the browser.",
+        "cta": "Open policy editor"
+      },
+      "addApiKey": {
+        "label": "Issue an API key",
+        "desc": "Programmatic access to /api/v1/policies/evaluate from your stack.",
+        "cta": "Manage API keys"
+      },
+      "addAiKey": {
+        "label": "Connect an AI key (BYOK)",
+        "desc": "Bring your own OpenAI / Anthropic / Vertex AI key so AI drafts bypass the platform monthly cap.",
+        "cta": "Bind AI key"
+      },
+      "inviteTeam": {
+        "label": "Invite a teammate",
+        "desc": "Set up reviewers and approvers so policy changes flow through your existing process.",
+        "cta": "Invite members"
+      },
+      "reviewBilling": {
+        "label": "Review billing & seats",
+        "desc": "Check trial days left, add a payment method, see what each plan unlocks.",
+        "cta": "Open billing"
+      }
+    },
+    "dismiss": "Hide this checklist"
+  },
+  "notifications": {
+    "label": "Notifications",
+    "empty": "No new notifications.",
+    "viewAll": "View all",
+    "invitationReceived": "You were invited to join {teamName} as {role}.",
+    "invitationAccepted": "{memberName} joined {teamName}.",
+    "timeAgoNow": "just now",
+    "timeAgoMin": "{n} min ago",
+    "timeAgoHour": "{n} h ago",
+    "timeAgoDay": "{n} d ago",
+    "policyShared": "Policy {policyName} was shared with {teamName} ({permission}).",
+    "permissionView": "view only",
+    "permissionExecute": "view + execute"
+  },
+  "domainVocabularies": {
+    "title": "Domain Vocabularies",
+    "subtitle": "Curate the structs, fields, functions, and enum values your policies use.",
+    "newTerm": "Add term",
+    "bulkUpload": "Bulk upload",
+    "snapshots": "Snapshots",
+    "quota": {
+      "label": "Quota",
+      "used": "{used} / {total}",
+      "unlimited": "Unlimited",
+      "remaining": "{n} remaining",
+      "atLimit": "Quota reached"
+    },
+    "stats": {
+      "visible": "Visible",
+      "archived": "Archived"
+    },
+    "filters": {
+      "domain": "Domain",
+      "locale": "Locale",
+      "kind": "Kind",
+      "all": "All",
+      "includeArchived": "Show archived",
+      "search": "Filter by canonical or localized name"
+    },
+    "kinds": {
+      "struct": "Struct",
+      "field": "Field",
+      "function": "Function",
+      "enum_value": "Enum value"
+    },
+    "table": {
+      "canonical": "Canonical",
+      "localized": "Localized",
+      "domain": "Domain",
+      "locale": "Locale",
+      "kind": "Kind",
+      "parent": "Parent",
+      "source": "Source",
+      "updatedAt": "Updated",
+      "actions": "Actions"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "restore": "Restore"
+    },
+    "empty": {
+      "title": "No terms yet",
+      "description": "Add your first term to extend the built-in vocabulary."
+    },
+    "needsUpgrade": {
+      "title": "Domain vocabularies are a Pro feature",
+      "description": "Upgrade to Pro to manage your own struct / field / function / enum_value catalog.",
+      "trialEndedTitle": "Your Pro trial ended",
+      "trialEndedDescription": "Your trial ended on {date}. Upgrade to keep the vocabulary surface available.",
+      "featureCatalog": "Curate structs, fields, functions, enum values per locale",
+      "featureBulk": "Bulk import up to 10,000 rows per job",
+      "featureSnapshots": "Pin a snapshot to every policy version with one-click rollback",
+      "upgrade": "Upgrade plan",
+      "contactAdmin": "Ask your administrator for a plan upgrade"
+    },
+    "downgrade": {
+      "trialEndedTitle": "Your Pro trial ended",
+      "trialEndedDescription": "Trial ended on {date}. Some Pro features are now read-only.",
+      "cta": "Upgrade"
+    },
+    "bulk": {
+      "title": "Bulk import vocabulary",
+      "description": "Paste CSV (with a header row) or a JSON array. Aliases are pipe-separated in CSV (e.g. amount|amt) or a JSON array.",
+      "chooseFile": "Choose file",
+      "orPaste": "or paste below",
+      "rawLabel": "Paste CSV or JSON",
+      "placeholder": "domain,locale,kind,canonical,localized,parentCanonical\\nfinance,en,struct,Loan,Loan,,",
+      "previewTitle": "Preview ({shown} of {total})",
+      "rowsValid": "Sync up to {syncLimit}; async up to {asyncLimit}",
+      "tooManySync": "Switch to async — exceeds {syncLimit} rows",
+      "tooManyAsync": "Exceeds the {asyncLimit}-row async limit",
+      "parseErrorsTitle": "Some rows could not be parsed",
+      "moreErrors": "+{n} more",
+      "col": {
+        "kind": "Kind",
+        "canonical": "Canonical",
+        "localized": "Localized",
+        "domain": "Domain",
+        "locale": "Locale"
+      },
+      "modeLabel": "Mode",
+      "syncTitle": "Sync",
+      "syncDescription": "Apply immediately. Up to {limit} rows per request.",
+      "asyncTitle": "Async (background job)",
+      "asyncDescription": "Queue a worker. Up to {limit} rows; poll the progress card.",
+      "asyncProRequired": "Async jobs require a Pro plan or higher.",
+      "submit": "Import",
+      "submitting": "Importing…",
+      "cancel": "Cancel",
+      "syncCompleted": "Imported {count} rows",
+      "asyncEnqueued": "Bulk job enqueued",
+      "errorGeneric": "Could not start the import. Please retry.",
+      "errorReadFile": "Could not read the selected file."
+    },
+    "snapshotsView": {
+      "title": "Vocabulary snapshots",
+      "subtitle": "Every published policy version pins a snapshot. Roll back to any unarchived snapshot to restore that point-in-time vocabulary.",
+      "searchPlaceholder": "Filter by domain, locale or hash",
+      "refreshFailed": "Could not refresh snapshots.",
+      "rollbackFailed": "Rollback failed.",
+      "rollbackSuccess": "Rolled back: +{added} added · −{removed} removed · {unchanged} unchanged",
+      "archivedTooltip": "Archived snapshots cannot be applied",
+      "table": {
+        "scope": "Scope",
+        "version": "v{n}",
+        "termCount": "Terms",
+        "refCount": "Pinned by",
+        "hash": "Content hash",
+        "createdAt": "Created",
+        "status": "Status",
+        "archivedBadge": "Archived",
+        "activeBadge": "Active",
+        "actions": "Actions"
+      },
+      "actions": {
+        "view": "View diff",
+        "rollback": "Rollback"
+      },
+      "empty": {
+        "title": "No snapshots yet",
+        "description": "Snapshots are created automatically when a policy version is approved."
+      },
+      "rollback": {
+        "title": "Apply this snapshot?",
+        "description": "Roll back your active vocabulary for {domain} · {locale} to snapshot v{version}. Links not present in the snapshot will be soft-deleted; missing ones will be re-added.",
+        "confirm": "Rollback",
+        "cancel": "Cancel"
+      },
+      "diff": {
+        "title": "{domain} · {locale} · v{version}",
+        "subtitle": "{termCount} terms",
+        "summary": "Change summary",
+        "bucket": {
+          "added": "Added on rollback",
+          "removed": "Removed on rollback",
+          "unchanged": "Unchanged",
+          "all": "Show all snapshot terms ({n})"
+        },
+        "removedNotice": "{n} of your current terms would be soft-deleted on rollback. They can still be restored within 90 days.",
+        "emptyBucket": "No terms in this bucket.",
+        "iconAdded": "Added",
+        "iconRemoved": "Removed",
+        "iconUnchanged": "Unchanged",
+        "rollback": "Rollback to this snapshot",
+        "close": "Close",
+        "loading": "Loading snapshot…",
+        "loadFailed": "Could not load snapshot."
+      }
+    },
+    "jobProgress": {
+      "status": {
+        "queued": "Queued — waiting for worker",
+        "running": "Running",
+        "completed": "Completed",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      },
+      "progressSummary": "{processed} of {total} rows processed",
+      "rollup": {
+        "added": "Added",
+        "reused": "Reused",
+        "modified": "Modified",
+        "skipped": "Skipped",
+        "errors": "Errors"
+      },
+      "cancel": "Cancel job",
+      "cancelling": "Cancelling…",
+      "cancelled": "Job cancelled",
+      "dismiss": "Dismiss",
+      "loading": "Loading job…",
+      "fetchFailed": "Could not load job state. Will retry.",
+      "notFound": "Bulk job not found."
+    },
+    "dialog": {
+      "createTitle": "Add vocabulary term",
+      "editTitle": "Edit vocabulary term",
+      "domain": "Domain",
+      "domainHelp": "Lowercase identifier, e.g. finance, healthcare.",
+      "locale": "Locale",
+      "localeHelp": "BCP-47 tag, e.g. en, zh-CN, de.",
+      "kind": "Kind",
+      "canonical": "Canonical name",
+      "canonicalHelp": "The English-style identifier used by the engine.",
+      "localized": "Localized display",
+      "parentCanonical": "Parent struct (optional)",
+      "parentCanonicalHelp": "Required for fields; ignored for other kinds.",
+      "description": "Description",
+      "aliases": "Aliases",
+      "aliasesHelp": "Comma-separated alternative names.",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saving": "Saving…",
+      "errorGeneric": "Could not save. Please retry."
+    },
+    "delete": {
+      "title": "Delete vocabulary term?",
+      "description": "The term \"{name}\" will be soft-deleted and retained for 90 days. You can restore it from the archive within that window.",
+      "confirm": "Delete",
+      "cancel": "Cancel"
+    },
+    "errors": {
+      "quota_exceeded": "You have reached your plan's vocabulary quota.",
+      "duplicate_link": "You already have this term linked.",
+      "validation_failed": "Please correct the highlighted fields.",
+      "not_found": "Term not found.",
+      "plan_gate_required": "Domain vocabularies require a Pro plan.",
+      "internal_error": "Something went wrong. Please retry."
+    }
+  },
+  "docs": {
+    "nav": {
+      "suffix": "Docs",
+      "openConsole": "Open Console",
+      "signIn": "Sign in",
+      "dashboard": "Dashboard",
+      "userMenu": {
+        "label": "Account menu",
+        "dashboard": "Go to dashboard",
+        "settings": "Account settings",
+        "signOut": "Sign out"
+      }
+    },
+    "session": {
+      "probing": "Loading account state"
+    },
+    "quickstart": {
+      "stepPrefix": "Step {step}: ",
+      "steps": {
+        "tenantId": {
+          "title": "Locate your tenant ID",
+          "description": "Open the API keys page and copy the tenant identifier into a safe place. You'll send it with every request as the X-Tenant-Id header.",
+          "cta": "Open API keys"
+        },
+        "apiKey": {
+          "title": "Create your first API key",
+          "description": "Issue an API key with at least the MEMBER role so the policy evaluation endpoints accept your requests.",
+          "cta": "Create API key"
+        },
+        "playground": {
+          "title": "Run an evaluation in the Playground",
+          "description": "The Playground loads a minimal sample policy and lets you tweak the source before evaluating it against test inputs.",
+          "cta": "Open Playground"
+        },
+        "viewTraces": {
+          "title": "Inspect your first decision trace",
+          "description": "After the first evaluation lands, the policies page lists every recent run and lets you drill into each decision trace.",
+          "cta": "View my policies"
+        }
+      }
+    },
+    "trustFooter": {
+      "ariaLabel": "Page metadata and feedback",
+      "lastUpdated": "Last updated",
+      "apiVersion": "API version",
+      "compatibility": "Compatible with engine",
+      "changelog": "Changelog",
+      "suggestEdit": "Suggest an edit",
+      "yourTenantVersion": "This page documents API version"
+    },
+    "search": {
+      "placeholder": "Search docs…",
+      "inputPlaceholder": "Type a page name, heading, or keyword",
+      "noResults": "No matching pages",
+      "resultsLabel": "Search results",
+      "openShortcut": "⌘K",
+      "matchedIn": {
+        "title": "Matched in title",
+        "heading": "Matched in heading",
+        "description": "Matched in description",
+        "slug": "Matched in path"
+      }
+    },
+    "tasks": {
+      "buildFirstPolicy": {
+        "title": "Build my first policy",
+        "description": "Tenant ID, API key, and your first evaluation in under five minutes."
+      },
+      "evaluatePolicy": {
+        "title": "Evaluate a policy in three ways",
+        "description": "Source, JSON, and batch — pick the request shape that fits your client."
+      },
+      "debugWithTrace": {
+        "title": "Debug with Decision Trace",
+        "description": "Trace a failed evaluation through the audit log and the chain verifier."
+      },
+      "auditDecision": {
+        "title": "Audit a compliance decision",
+        "description": "Inspect logs, version usage, and anomalies for a deployed policy."
+      },
+      "manageVersions": {
+        "title": "Manage policy versions",
+        "description": "Roll back, replay, and clear caches without downtime."
+      },
+      "setUpProductionAuth": {
+        "title": "Set up production API auth",
+        "description": "HMAC signing, tenant routing, and the error envelope you should expect."
+      }
+    },
+    "home": {
+      "ariaLabel": "Personalized documentation home",
+      "loadingAriaLabel": "Loading docs home",
+      "heading": "Pick up where you left off",
+      "headingFirstTime": "Welcome to the docs",
+      "subheading": "Your recent docs, plus a suggestion for what to read next.",
+      "subheadingFirstTime": "A few suggestions to get you moving. Visited pages will show up here next time.",
+      "resume": {
+        "title": "Resume reading"
+      },
+      "recent": {
+        "title": "Recent docs"
+      },
+      "suggested": {
+        "heading": "Suggested next step",
+        "tryPlayground": {
+          "title": "Try a policy in the Playground",
+          "description": "Run a self-contained example against the public preview tenant.",
+          "cta": "Open Playground"
+        },
+        "createTeam": {
+          "title": "Create a team to collaborate",
+          "description": "Teams let you share policies and audit history with collaborators.",
+          "cta": "Create a team"
+        },
+        "editPolicy": {
+          "title": "Author your first policy",
+          "description": "Start from a CNL template in the editor and iterate with live evaluation.",
+          "cta": "Open the editor"
+        }
+      },
+      "quickLinks": {
+        "heading": "Quick links",
+        "playground": "Playground",
+        "newPolicy": "New policy",
+        "apiKeys": "API keys",
+        "recentTraces": "Recent traces"
+      }
+    },
+    "codeBlock": {
+      "toolbarLabel": "Code snippet actions",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Copy failed",
+      "copyAriaLabel": "Copy code to clipboard",
+      "openInPlayground": "Open in Playground"
+    },
+    "actions": {
+      "ariaLabel": "Page actions",
+      "tryInPlayground": "Try in Playground",
+      "openInEditor": "Open in Editor",
+      "viewMyAuditLogs": "View my audit logs",
+      "viewMyTraces": "View my recent decision traces",
+      "goToApiKeys": "Manage API keys",
+      "openDashboard": "Open Dashboard",
+      "more": "More",
+      "moreLabel": "More page actions"
+    },
+    "breadcrumb": {
+      "root": "Docs",
+      "ariaLabel": "Breadcrumb"
+    },
+    "sidebar": {
+      "ariaLabel": "Documentation sections",
+      "tasksLabel": "Tasks",
+      "modeToggleLabel": "Sidebar browse mode",
+      "modeReference": "Reference",
+      "modeTasks": "By task",
+      "gettingStarted": {
+        "title": "Getting Started",
+        "overview": "Overview",
+        "authentication": "Authentication",
+        "quickstart": "Quick Start",
+        "errors": "Error Handling"
+      },
+      "apiPolicies": {
+        "title": "Policy Evaluation",
+        "evaluate": "Evaluate Policy",
+        "evaluateSource": "Evaluate Source",
+        "evaluateJson": "Evaluate JSON",
+        "batch": "Batch Evaluate",
+        "schema": "Extract Schema",
+        "validate": "Validate Policy",
+        "versions": "Version History",
+        "rollback": "Rollback",
+        "cache": "Cache Management"
+      },
+      "apiWorkflows": {
+        "title": "Workflows",
+        "events": "Workflow Events",
+        "state": "Workflow State",
+        "metrics": "Metrics"
+      },
+      "apiAudit": {
+        "title": "Audit",
+        "logs": "Audit Logs",
+        "verifyChain": "Hash Chain Verification",
+        "versionUsage": "Version Usage",
+        "anomalies": "Anomaly Detection",
+        "compare": "Version Comparison"
+      },
+      "apiGraphql": {
+        "title": "GraphQL",
+        "overview": "Overview",
+        "queries": "Queries",
+        "mutations": "Mutations"
+      },
+      "apiWebsocket": {
+        "title": "WebSocket",
+        "preview": "Preview Endpoint"
+      }
+    },
+    "toc": {
+      "ariaLabel": "On this page",
+      "title": "On this page"
+    },
+    "langSwitcher": {
+      "ariaLabel": "Change language"
+    },
+    "fallbackBanner": {
+      "title": "Translation in progress",
+      "body": "This page has not been translated yet. The English original is shown below."
+    }
+  },
+  "vocabDemoPage": {
+    "seo": {
+      "title": "Write rules in your own industry terms — Aster Lang demo",
+      "description": "Healthcare, insurance, logistics: write the rule in your domain's vocabulary and the engine compiles and runs it. No signup."
+    },
+    "eyebrow": "Live demo · domain vocabulary",
+    "title": "Your words. The same engine.",
+    "subtitle": "Write rules in your industry's own vocabulary — the engine maps your terms to its canonical form, compiles, and runs them. One language, every domain.",
+    "step1": {
+      "title": "Pick a domain",
+      "hint": "Three industries, three vocabularies — the same engine underneath."
+    },
+    "step2": {
+      "title": "Your domain vocabulary",
+      "hint": "These are your industry words. The engine knows what each maps to internally."
+    },
+    "step3": {
+      "title": "The rule, in your words",
+      "hint": "Written entirely in the industry vocabulary above — readable by the people who own the policy.",
+      "legendTerm": "Highlighted",
+      "legend": "= your industry vocabulary (the engine translates these to its canonical form)."
+    },
+    "step4": {
+      "title": "Run a case",
+      "hint": "Pick a case; the browser engine injects your vocabulary, compiles, and computes the decision live."
+    },
+    "terms": {
+      "colIndustry": "Industry term",
+      "colCanonical": "Engine term",
+      "colKind": "Kind",
+      "colGloss": "Meaning",
+      "kind": {
+        "struct": "type",
+        "field": "field"
+      },
+      "note": "The industry term is what you write; the engine term is what it compiles to. Same logic, your words."
+    },
+    "result": {
+      "label": "Decision",
+      "note": "Computed live by the same engine that runs in production — your vocabulary translated to canonical form, then executed."
+    },
+    "cta": {
+      "title": "Bring your own vocabulary",
+      "subtitle": "Define your domain's terms once; your whole team writes rules in words they already use."
+    },
+    "domains": {
+      "healthcare": {
+        "name": "Healthcare",
+        "tagline": "Clinical triage",
+        "cases": {
+          "emergency": "Critical vitals",
+          "refer": "Borderline case",
+          "routine": "Stable patient"
+        }
+      },
+      "insurance": {
+        "name": "Insurance",
+        "tagline": "Claims intake",
+        "cases": {
+          "approve": "Clean claim",
+          "refer": "Large claim",
+          "declined": "Below deductible"
+        }
+      },
+      "logistics": {
+        "name": "Logistics",
+        "tagline": "Order routing",
+        "cases": {
+          "air": "Urgent shipment",
+          "freight": "Heavy / long-haul",
+          "courier": "Standard parcel"
+        }
+      }
+    },
+    "glosses": {
+      "Patient": "Patient visit case",
+      "systolic": "Systolic BP (mmHg)",
+      "heartRate": "Heart rate (bpm)",
+      "age": "Age",
+      "Claim": "Insurance claim",
+      "claimAmount": "Claimed amount",
+      "deductible": "Deductible",
+      "priorClaims": "Prior claims count",
+      "Shipment": "Shipment / parcel",
+      "weightKg": "Gross weight (kg)",
+      "distanceKm": "Distance (km)",
+      "priority": "SLA tier (1-3)"
+    },
+    "replay": {
+      "title": "Decision replay",
+      "matched": "matched",
+      "notMatched": "not matched",
+      "skipped": "not evaluated"
+    }
+  },
+  "catMoodPage": {
+    "seo": {
+      "title": "The Cat Mood Engine — a poetic Aster Lang demo",
+      "description": "Write a rule in cat-whisperer vocabulary, run it through the real engine, and watch a 5-second sketch cat react. Domain vocabulary, but make it whiskers."
+    },
+    "eyebrow": "Fun demo · cat vocabulary",
+    "title": "The Cat Mood Engine",
+    "subtitle": "A rule written in the sacred vocabulary of cat-whisperers — compiled and run by the very same engine that decides loans. The cat does not care, but it will react.",
+    "poem": "Where the sunbeam pools and the bowl is full,\nthe small god decides what mood to rule.\nNo intruder? Then warmth, or a purr, or — pfft —\nthe slow blink of judgment, exquisitely cool.",
+    "ruleTitle": "The rule (in fluent cat)",
+    "legendTerm": "Highlighted",
+    "legend": "= cat vocabulary the engine learned for this demo.",
+    "sceneTitle": "Set the scene",
+    "scenes": {
+      "perch": {
+        "label": "Claim High Ground"
+      },
+      "purr": {
+        "label": "Well-fed"
+      },
+      "loaf": {
+        "label": "Sunbeam o’clock"
+      },
+      "floof": {
+        "label": "Stranger!"
+      },
+      "judge": {
+        "label": "Unimpressed"
+      }
+    },
+    "moods": {
+      "perch": {
+        "name": "🐈 Perch",
+        "quip": "High ground secured. From this throne the whole domain is under surveillance. As it should be."
+      },
+      "purr": {
+        "name": "😌 Purr",
+        "quip": "Belly full, world forgiven. The motor is running. You may continue to exist."
+      },
+      "loaf": {
+        "name": "🍞 Loaf",
+        "quip": "Warmth detected. Bones now optional. The cat has become bread."
+      },
+      "floof": {
+        "name": "🙀 Floof",
+        "quip": "A STRANGER. Double in size, triple in suspicion. This is fine. (It is not fine.)"
+      },
+      "judge": {
+        "name": "😼 Judgment",
+        "quip": "No sun, no snacks, no patience. You are being evaluated. You did not pass."
+      }
+    },
+    "footer": "Silly vocabulary, serious engine: this cat rule compiled and ran on the same Aster Lang runtime as a credit policy. Your words — even these — become an auditable decision.",
+    "idleHint": "The cat is doing its own thing. Pick a scene below to see how it reacts."
+  },
+  "languageSettings": {
+    "title": "Language availability",
+    "description": "Choose which languages are available to your team's users. Disabled languages will not appear in the language switcher.",
+    "enabledLabel": "Enabled",
+    "disabledLabel": "Disabled",
+    "defaultLocaleNote": "The default language cannot be disabled.",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "permissionDenied": "Only team owners or admins can change languages.",
+    "save": "Save",
+    "backendUnavailable": "lexicon not loaded on backend"
+  },
+  "platformLanguageSettings": {
+    "title": "Platform language availability",
+    "description": "Choose which languages are available across the entire platform. Team-level language settings are a subset of this — teams cannot enable a language disabled here.",
+    "enabledLabel": "Enabled",
+    "disabledLabel": "Disabled",
+    "defaultLocaleNote": "The default language cannot be disabled.",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "save": "Save",
+    "saveFailed": "Could not save. Please try again.",
+    "loadFailed": "Could not load platform language settings.",
+    "backendUnavailable": "lexicon not loaded on backend"
+  }
+}

@@ -59,26 +59,30 @@ class ReplayDeterministicRandomTest {
     void testNextDouble() {
         ReplayDeterministicRandom recorder = new ReplayDeterministicRandom();
         String recordSource = "DoubleRecord";
-        recorder.nextDouble(recordSource);
+        // nextDouble 现在返回 [0,1) 区间内均匀的 double（(bits >>> 11) * 2^-53）。
+        double recorded = recorder.nextDouble(recordSource);
+        assertThat(recorded).isGreaterThanOrEqualTo(0.0).isLessThan(1.0);
         assertThat(recorder.getRecordedRandoms().get(recordSource)).hasSize(1);
 
+        // 重放：对记录的 long 应用同一公式，确定且落在 [0,1)。
+        long bitsA = 0x1234_5678_9ABC_DEF0L;
+        long bitsB = 0x7FFF_FFFF_FFFF_FFFFL;
         Map<String, List<Long>> payload = Map.of(
-                "DoubleReplay", List.of(
-                        Double.doubleToLongBits(0.25d),
-                        Double.doubleToLongBits(-1.5d))
+                "DoubleReplay", List.of(bitsA, bitsB)
         );
         ReplayDeterministicRandom replay = new ReplayDeterministicRandom();
         replay.enterReplayMode(payload);
 
-        assertThat(replay.nextDouble("DoubleReplay")).isEqualTo(0.25d);
-        assertThat(replay.nextDouble("DoubleReplay")).isEqualTo(-1.5d);
+        assertThat(replay.nextDouble("DoubleReplay")).isEqualTo((bitsA >>> 11) * 0x1.0p-53);
+        assertThat(replay.nextDouble("DoubleReplay")).isEqualTo((bitsB >>> 11) * 0x1.0p-53);
     }
 
     @Test
     void testReplayWithMultipleSources() {
         Map<String, List<Long>> payload = new LinkedHashMap<>();
+        long betaBits = 1L << 60;
         payload.put("Alpha:10", List.of(10L, 11L, 12L));
-        payload.put("Beta:20", List.of(20L));
+        payload.put("Beta:20", List.of(betaBits));
         payload.put("PolicyEvaluationService:113", List.of(30L, 31L));
 
         ReplayDeterministicRandom generator = new ReplayDeterministicRandom();
@@ -86,7 +90,7 @@ class ReplayDeterministicRandomTest {
 
         assertThat(generator.nextLong("Alpha:10")).isEqualTo(10L);
         assertThat(generator.nextInt("Alpha:10")).isEqualTo((int) 11L);
-        assertThat(generator.nextDouble("Beta:20")).isEqualTo(Double.longBitsToDouble(20L));
+        assertThat(generator.nextDouble("Beta:20")).isEqualTo((betaBits >>> 11) * 0x1.0p-53);
         assertThat(generator.nextInt("PolicyEvaluationService:113")).isEqualTo((int) 30L);
         assertThat(generator.nextLong("PolicyEvaluationService:113")).isEqualTo(31L);
     }

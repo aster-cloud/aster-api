@@ -1,0 +1,3003 @@
+{
+  "common": {
+    "signIn": "Anmelden",
+    "signUp": "Registrieren",
+    "startFreeTrial": "Kostenlos starten",
+    "getStarted": "Kostenlos starten",
+    "contactSales": "Vertrieb sprechen",
+    "learnMore": "Mehr erfahren",
+    "languageUnavailable": "{name} ist nicht mehr verfügbar",
+    "switchedTo": "auf {name} gewechselt",
+    "selectLanguage": "Sprache wählen",
+    "loading": "Lädt…",
+    "retry": "Erneut versuchen",
+    "somethingWrong": "Etwas ist schiefgelaufen",
+    "notFoundTitle": "Seite nicht gefunden",
+    "notFoundBody": "Die gesuchte Seite existiert nicht oder wurde verschoben.",
+    "backToDashboard": "Zurück zum Dashboard",
+    "cancel": "Abbrechen",
+    "searchPlaceholder": "Suchen…",
+    "themeLight": "Helles Thema",
+    "themeDark": "Dunkles Thema",
+    "themeSystem": "Systemthema",
+    "skipToContent": "Zum Hauptinhalt springen",
+    "somethingWrongBody": "Diese Seite konnte nicht geladen werden. Das Problem wurde protokolliert.",
+    "tryAgain": "Erneut versuchen",
+    "errorId": "Fehler-ID",
+    "contactSupport": "Support kontaktieren",
+    "loadFailed": "Diese Ansicht konnte nicht geladen werden.",
+    "confirm": "Bestätigen"
+  },
+  "pagination": {
+    "label": "Seitennavigation",
+    "previous": "Zurück",
+    "next": "Weiter",
+    "page": "Seite",
+    "pageOf": "Seite {page} von {totalPages}",
+    "goToPage": "Zu Seite {page}",
+    "showing": "{start}-{end} von {total, plural, one {# {noun}} other {# {noun}}}",
+    "showingEmpty": "Keine Einträge",
+    "itemNoun": "Einträge",
+    "itemsPerPage": "Einträge pro Seite",
+    "perPage": "{count} pro Seite",
+    "ellipsis": "Weitere Seiten"
+  },
+  "nav": {
+    "brand": "Aster Cloud",
+    "pricing": "Preise",
+    "docs": "Docs"
+  },
+  "hero": {
+    "title": "Jede Entscheidung abspielen.",
+    "titleHighlight": "{locales}",
+    "description": "Wenn eine Aufsichtsbehörde oder ein Kunde fragt, wie eine Entscheidung zustande kam, holen Sie die exakten Regeln und Daten von damals zurück und berechnen das identische Ergebnis erneut — kein Log-Eintrag, die echte Antwort. Zwei unabhängige Engines beweisen die Ausführung Byte für Byte, ein hash-verkettetes Audit macht sie manipulationssicher, und KI entwirft, während Menschen genehmigen. Für Kreditzusagen, KYC-Ausnahmen, Schadensfälle und Zugriffsrichtlinien.",
+    "builtOnAsterLang": "Aufgebaut auf der Open-Source-Engine Aster Lang. Sprach-Dokumentation lesen →",
+    "tryDemo": "Eine echte Kreditentscheidung abspielen",
+    "noCreditCard": "Keine Kreditkarte erforderlich."
+  },
+  "cnlDemo": {
+    "loanEligibility": "Kreditwürdigkeit",
+    "complianceCheck": "Compliance-Prüfung",
+    "workflowGuard": "Release-Freigabe"
+  },
+  "trust": {
+    "eyebrow": "Für den Produktivbetrieb",
+    "items": {
+      "compiled": {
+        "title": "Kompiliert, nicht interpretiert",
+        "description": "Truffle auf GraalVM führt Ihre Regeln mit JVM-Geschwindigkeit aus. Identische .class-Ausgabe auf jeder Maschine."
+      },
+      "audited": {
+        "title": "Audit-Trail von Haus aus",
+        "description": "Jede Entscheidung wird an eine SHA-256-Hashkette gebunden. Jede historische Auswertung lässt sich byte-genau wiedergeben."
+      },
+      "multilang": {
+        "title": "Drei Lexika ab Werk",
+        "description": "English, 中文, Deutsch in jedem Plan enthalten (EN kanonisch; ZH/DE community-gepflegt). Branchen-spezifische Lexika auf Enterprise-Tarifen."
+      }
+    }
+  },
+  "features": {
+    "title": "Gemacht für Kreditrisiko-Entscheidungen",
+    "nativeLanguage": {
+      "title": "CNL in Muttersprache",
+      "description": "Regeln auf English, 中文 oder Deutsch — identische Semantik über alle drei Lexikon-Pakete."
+    },
+    "aiDraftHumanReview": {
+      "title": "KI entwirft, Menschen genehmigen",
+      "description": "KI erstellt den Erstentwurf; jede veröffentlichte Version benötigt eine Freigabe durch einen Reviewer (≠ Autor)."
+    },
+    "hashChainAudit": {
+      "title": "Manipulationssicheres Audit",
+      "description": "SHA-256-Hash-Kette über jede Entscheidung. Jede historische Auswertung byte-genau wiederholbar."
+    },
+    "dualEngineSemantics": {
+      "title": "Zwei Engines, eine Semantik",
+      "description": "Truffle-Backend und Browser-TypeScript-Engine liefern identische Ergebnisse — kein semantisches Drift."
+    },
+    "multiLanguagePacks": {
+      "title": "Mehrsprachige Lexikon-Pakete",
+      "description": "English / 中文 / Deutsch in jedem Plan; branchenspezifische Lexika auf Enterprise."
+    },
+    "selfHostable": {
+      "title": "Selbst hosten auf K3S",
+      "description": "Helm-Chart, K3S, ArgoCD GitOps. Ihre Daten bleiben in Ihrem Perimeter."
+    }
+  },
+  "pricing": {
+    "title": "Einfache, transparente Preise",
+    "subtitle": "Kostenlos starten, bei Bedarf upgraden",
+    "perMonth": "/Monat",
+    "perUser": "/Benutzer",
+    "minUsers": "min. {count} Benutzer",
+    "free": {
+      "name": "Kostenlos",
+      "features": {
+        "executions": "100 Ausführungen/Monat",
+        "policies": "3 gespeicherte Richtlinien",
+        "pii": "Basis-PII-Erkennung"
+      }
+    },
+    "pro": {
+      "name": "Pro",
+      "badge": "Beliebteste",
+      "features": {
+        "executions": "Unbegrenzte Ausführungen",
+        "policies": "Unbegrenzte Richtlinien",
+        "compliance": "Compliance-Berichte",
+        "api": "API-Zugang"
+      }
+    },
+    "team": {
+      "name": "Team",
+      "features": {
+        "everything": "Alles aus Pro",
+        "collaboration": "Teamzusammenarbeit",
+        "rbac": "Rollenbasierter Zugriff",
+        "sso": "SSO (demnächst)"
+      }
+    }
+  },
+  "cta": {
+    "title": "Testen Sie Ihre Kreditregeln mit Aster — kostenlos",
+    "description": "Bringen Sie eine echte Kreditzusage- oder Limit-Regel mit. Wir zeigen Ihnen die komplette Kette: Regel genehmigen, Version festschreiben, ausführen und jede Entscheidung für einen Prüfer abspielen. Keine Kreditkarte."
+  },
+  "footer": {
+    "privacy": "Datenschutz",
+    "terms": "AGB",
+    "documentation": "Dokumentation",
+    "support": "Support",
+    "demo": "Live-Demo",
+    "equivalence": "Engine-Äquivalenz",
+    "copyright": "Alle Rechte vorbehalten.",
+    "whitepaper": "Whitepaper",
+    "vocabDemo": "Domänen-Vokabular",
+    "catMood": "Katzenlaune 🐱"
+  },
+  "legal": {
+    "terms": {
+      "title": "Nutzungsbedingungen",
+      "lastUpdated": "Zuletzt aktualisiert: {date}",
+      "sections": {
+        "acceptance": {
+          "title": "1. Zustimmung zu den Bedingungen",
+          "content": "Durch den Zugriff auf und die Nutzung von Aster Cloud akzeptieren Sie diese Bedingungen und erkennen die Bestimmungen dieser Vereinbarung an."
+        },
+        "services": {
+          "title": "2. Beschreibung der Dienste",
+          "content": "Aster Cloud bietet eine Richtlinienverwaltungsplattform, mit der Benutzer Geschäftsregeln erstellen, testen und ausführen können. Unsere Dienste umfassen Richtlinienerstellung und -verwaltung, PII-Erkennung, Compliance-Berichterstattung und API-Zugriff."
+        },
+        "accounts": {
+          "title": "3. Benutzerkonten",
+          "content": "Sie sind für die Vertraulichkeit Ihrer Kontozugangsdaten und für alle Aktivitäten verantwortlich, die in Ihrem Konto stattfinden. Benachrichtigen Sie uns umgehend über jede unbefugte Nutzung Ihres Kontos."
+        },
+        "usage": {
+          "title": "4. Zulässige Nutzung",
+          "content": "Sie dürfen unsere Dienste nicht für rechtswidrige Zwecke verwenden oder in einer Weise, die unsere Dienste beschädigen, deaktivieren oder beeinträchtigen könnte. Versuchen Sie nicht, unbefugten Zugriff auf Teile des Dienstes zu erlangen."
+        },
+        "payment": {
+          "title": "5. Zahlungsbedingungen",
+          "content": "Kostenpflichtige Abonnements werden monatlich oder jährlich im Voraus abgerechnet. Alle Gebühren sind nicht erstattungsfähig, sofern nicht ausdrücklich in unserer Rückerstattungsrichtlinie angegeben."
+        },
+        "termination": {
+          "title": "6. Kündigung",
+          "content": "Wir können Ihr Konto jederzeit wegen Verstößen gegen diese Bedingungen kündigen oder sperren. Sie können Ihr Abonnement jederzeit in den Kontoeinstellungen kündigen."
+        },
+        "liability": {
+          "title": "7. Haftungsbeschränkung",
+          "content": "Aster Cloud haftet nicht für indirekte, zufällige, besondere, Folge- oder Strafschäden, die durch die Nutzung unserer Dienste entstehen."
+        },
+        "changes": {
+          "title": "8. Änderungen der Bedingungen",
+          "content": "Wir behalten uns das Recht vor, diese Bedingungen jederzeit zu ändern. Über wesentliche Änderungen informieren wir die Benutzer per E-Mail oder direkt im Dienst."
+        }
+      }
+    },
+    "privacy": {
+      "title": "Datenschutzrichtlinie",
+      "lastUpdated": "Zuletzt aktualisiert: {date}",
+      "sections": {
+        "intro": {
+          "title": "Einleitung",
+          "content": "Aster bietet zwei Bereitstellungsmodelle: ein Multi-Tenant-SaaS unter aster-lang.cloud und eine selbstgehostete On-Prem-Variante, die Sie selbst betreiben. Diese Richtlinie deckt beide ab. Die On-Prem-Variante sendet außer der unten beschriebenen, freiwilligen Nutzungs-Telemetrie keine Daten an Aster — Ihre Richtlinieninhalte, Entscheidungsspuren und Endnutzerdaten verbleiben auf der von Ihnen kontrollierten Infrastruktur."
+        },
+        "collection": {
+          "title": "1. Welche Daten wir erheben",
+          "content": "SaaS-Konto: Name, E-Mail, Rechnungsadresse, Zahlungsmittel (Stripe-tokenisiert; wir sehen niemals Klartext-Kartendaten). Nutzungsdaten: Workspace-, Richtlinien- und API-Aufruf-Metadaten, die zum Betrieb des Dienstes erforderlich sind. On-Prem-Installationen senden nur, was Sie ausdrücklich aktiviert haben — siehe Abschnitt Telemetrie."
+        },
+        "usage": {
+          "title": "2. Wie wir Ihre Daten verwenden",
+          "content": "Betrieb des Dienstes (Provisionierung, Abrechnung, Authentifizierung), Missbrauchsabwehr (Rate-Limiting, Betrugserkennung), Kundensupport, Erfüllung gesetzlicher Pflichten und Kapazitätsplanung. Wir verkaufen keine personenbezogenen Daten und trainieren keine KI-Modelle mit Kundendaten."
+        },
+        "sharing": {
+          "title": "3. Weitergabe von Informationen",
+          "content": "Wir geben Daten an Auftragsverarbeiter weiter: Stripe (Zahlungsabwicklung), Resend (Transaktionsmails), Cloudflare (Edge-Schutz), Cloud-Anbieter (Hosting). Jeder ist durch einen schriftlichen Vertrag gebunden und verarbeitet ausschließlich nach unserer Weisung. Die aktuelle Liste finden Sie im Abschnitt Auftragsverarbeiter."
+        },
+        "telemetry": {
+          "title": "4. On-Prem-Nutzungstelemetrie (opt-in)",
+          "content": "Wenn Sie ASTER_TELEMETRY_OPT_IN=1 aktivieren, sendet Ihre On-Prem-Installation wöchentlich ein Bündel aggregierter Kennzahlen (aktive Sitze, Anzahl Richtlinien­ausführungen, genutzte Features) an unseren SaaS-Ingest-Endpoint. Jedes Feld ist eine ganze Zahl oder ein Boolean; keine Nutzer-IDs, keine Richtlinieninhalte, keine Entscheidungsspuren. Der maschinenlesbare Vertrag liegt unter /api/v1/telemetry/schema, die Begründung pro Feld in docs/on-prem/telemetry-fields.md."
+        },
+        "transfers": {
+          "title": "5. Internationale Datenübermittlung",
+          "content": "Aster SaaS wird derzeit in einer einzigen Region betrieben. Jede Telemetrie-Zeile wird mit der akzeptierenden SaaS-Region markiert (us / eu / apac / unknown), sichtbar im Admin-Transparenz-Panel und in DSAR-Antworten. Für Kunden in eingeschränkten Rechtsräumen bieten wir Standardvertragsklauseln (SCC) über unsere DPA-Vorlage an."
+        },
+        "subprocessors": {
+          "title": "6. Auftragsverarbeiter",
+          "content": "Stripe (Zahlungsabwicklung, USA), Resend (Transaktionsmails, USA), Cloudflare (Edge-Schutz, weltweit), Oracle Cloud (Hosting, US/EU je nach Vertrag). Neue Auftragsverarbeiter werden mindestens 30 Tage vor Verarbeitungsbeginn im Changelog angekündigt; Bestandskunden können innerhalb dieser Frist widersprechen."
+        },
+        "security": {
+          "title": "7. Datensicherheit",
+          "content": "TLS 1.3 bei der Übertragung. Datenbank im Ruhezustand mit AES-256 durch den Cloud-Anbieter verschlüsselt. Telemetrie-HMAC-Schlüssel zusätzlich mit AES-256-GCM-Umhüllung unter einem Schlüssel aus unserer Secret-Management-Lösung verschlüsselt — eine bloße Datenbank-Kompromittierung ergibt keinen verwendbaren Schlüssel. Zugriffe auf Produktionsdaten werden für SOC-2-Nachweise protokolliert; jeder Lesevorgang auf Telemetriezeilen erzeugt einen Audit-Eintrag."
+        },
+        "retention": {
+          "title": "8. Datenspeicherung",
+          "content": "SaaS-Kontodaten werden so lange aufbewahrt, wie das Konto aktiv ist, plus eine kurze Auslaufphase nach Kündigung. On-Prem-Telemetriezeilen werden 365 Tage nach Empfang durch einen nächtlichen Job automatisch gelöscht. Zugriffs-Audits 90 Tage; Lösch-Audits 7 Jahre als regulatorischer Nachweis. Konfigurierbar über TELEMETRY_RETENTION_DAYS."
+        },
+        "rights": {
+          "title": "9. Ihre Rechte",
+          "content": "Nach DSGVO / CCPA: Auskunft, Berichtigung, Löschung, Datenübertragbarkeit, Einschränkung, Widerspruch. SaaS-Kontodaten: privacy@aster-lang.cloud. Für On-Prem-Telemetrie nutzen Sie die unten beschriebene Self-Service-DSAR-API — kein Support-Ticket erforderlich."
+        },
+        "dsar": {
+          "title": "10. Self-Service-DSAR für Telemetrie",
+          "content": "POST /api/v1/dsar mit HMAC-signiertem Body, um Auskunft (action='access') oder Löschung (action='delete') anzufordern. dryRun=true zeigt die betroffene Zeilenanzahl ohne Commit. Beide Aktionen werden im unveränderlichen Audit-Log festgehalten, damit wir Erfüllung gegenüber Aufsichtsbehörden nachweisen können. Vollständige curl-Beispiele und Schema in docs/on-prem/dsar.md."
+        },
+        "cookies": {
+          "title": "11. Cookies und Tracking",
+          "content": "Wir verwenden First-Party-Cookies für Sitzungskontinuität (Auth, Präferenzen). Keine Werbe-Cookies Dritter. Mixpanel-Produktanalytik wird auf SaaS-Seiten ausschließlich mit anonymisierten Kennungen geladen und kann in den Kontoeinstellungen deaktiviert werden."
+        },
+        "contact": {
+          "title": "12. Kontakt",
+          "content": "Datenschutzfragen: privacy@aster-lang.cloud. Datenschutzbeauftragter: dpo@aster-lang.cloud. EU-Vertreter: siehe docs/on-prem/dpa-template.md. Beschwerden können bei der Aufsichtsbehörde Ihres Wohnsitzes eingereicht werden."
+        }
+      }
+    }
+  },
+  "changePassword": {
+    "title": "Neues Passwort festlegen",
+    "subtitle": "Dein Konto ({email}) wurde mit einem temporären Passwort bereitgestellt. Wähle ein neues, bevor du fortfährst.",
+    "currentLabel": "Temporäres Passwort",
+    "newLabel": "Neues Passwort",
+    "newHint": "Mindestens 8 Zeichen. Verwende es nirgendwo sonst.",
+    "confirmLabel": "Neues Passwort bestätigen",
+    "submit": "Passwort setzen",
+    "submitting": "Wird gesetzt…",
+    "success": "Passwort aktualisiert. Willkommen.",
+    "errorTooShort": "Neues Passwort muss mindestens 8 Zeichen lang sein.",
+    "errorMismatch": "Passwörter stimmen nicht überein.",
+    "errorSame": "Neues Passwort darf nicht dem temporären entsprechen.",
+    "errorGeneric": "Passwort konnte nicht aktualisiert werden. Erneut versuchen."
+  },
+  "auth": {
+    "signup": {
+      "title": "Starten Sie Ihre kostenlose Testversion",
+      "subtitle": "14 Tage Pro-Funktionen, keine Kreditkarte erforderlich",
+      "trialIncludes": "Ihre Testversion beinhaltet:",
+      "trialFeatures": {
+        "executions": "Unbegrenzte Richtlinienausführungen",
+        "pii": "Erweiterte PII-Erkennung",
+        "compliance": "Compliance-Berichte",
+        "api": "API-Zugang",
+        "support": "Prioritäts-Support"
+      },
+      "continueWithGithub": "Mit GitHub fortfahren",
+      "continueWithGoogle": "Mit Google fortfahren",
+      "termsAgreement": "Mit der Registrierung stimmen Sie unseren",
+      "termsOfService": "Nutzungsbedingungen",
+      "and": "und",
+      "privacyPolicy": "Datenschutzrichtlinien",
+      "alreadyHaveAccount": "Bereits ein Konto?",
+      "signIn": "Anmelden"
+    },
+    "login": {
+      "title": "Bei Ihrem Konto anmelden",
+      "subtitle": "Willkommen zurück! Bitte melden Sie sich an, um fortzufahren.",
+      "continueWithGithub": "Mit GitHub fortfahren",
+      "continueWithGoogle": "Mit Google fortfahren",
+      "orContinueWith": "Oder fortfahren mit",
+      "email": "E-Mail-Adresse",
+      "password": "Passwort",
+      "forgotPassword": "Passwort vergessen?",
+      "signIn": "Anmelden",
+      "noAccount": "Noch kein Konto?",
+      "startTrial": "Kostenlose Testversion starten",
+      "errors": {
+        "generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+        "rateLimited": "Zu viele Versuche. Bitte warten Sie {seconds} Sekunden.",
+        "accountLocked": "Konto gesperrt. Bitte versuchen Sie es in {minutes} Minuten erneut.",
+        "accountLockedGeneric": "Dieses Konto wurde temporär wegen zu vieler fehlgeschlagener Versuche gesperrt.",
+        "captchaFailed": "CAPTCHA-Verifizierung fehlgeschlagen. Bitte versuchen Sie es erneut.",
+        "verificationFailed": "Verifizierung fehlgeschlagen",
+        "invalidCredentials": "Ungültige E-Mail-Adresse oder Passwort",
+        "invalidCredentialsWithAttempts": "Ungültige E-Mail-Adresse oder Passwort. {attempts} Versuche verbleiben.",
+        "accessDenied": {
+          "signup_rate_limit": "Zu viele Registrierungsversuche von Ihrem Netzwerk in den letzten 24 Stunden. Bitte versuchen Sie es später erneut oder kontaktieren Sie den Support.",
+          "disposable_email": "Registrierung mit Einweg- oder temporären E-Mail-Anbietern wird nicht unterstützt. Bitte verwenden Sie eine dauerhafte E-Mail-Adresse.",
+          "account_deleted": "Dieses Konto wurde dauerhaft gelöscht und kann nicht wiederhergestellt werden. Bitte registrieren Sie sich für ein neues Konto.",
+          "oauth_link_blocked": "Dieser Anbieter konnte nicht mit Ihrem Konto verknüpft werden. Bitte melden Sie sich mit der ursprünglichen Methode an.",
+          "unknown": "Zugriff verweigert. Wenn dieses Problem weiterhin besteht, kontaktieren Sie bitte den Support."
+        },
+        "refSupport": "Referenz: {ref}"
+      }
+    },
+    "forgotPassword": {
+      "title": "Passwort zurücksetzen",
+      "subtitle": "Geben Sie Ihre E-Mail-Adresse ein und wir senden Ihnen einen Link zum Zurücksetzen Ihres Passworts.",
+      "email": "E-Mail-Adresse",
+      "sendResetLink": "Link senden",
+      "sending": "Wird gesendet...",
+      "successTitle": "Überprüfen Sie Ihre E-Mails",
+      "successMessage": "Wenn ein Konto mit dieser E-Mail existiert, haben wir Ihnen einen Link zum Zurücksetzen des Passworts gesendet.",
+      "backToLogin": "Zurück zur Anmeldung"
+    },
+    "resetPassword": {
+      "title": "Neues Passwort festlegen",
+      "subtitle": "Geben Sie unten Ihr neues Passwort ein.",
+      "newPassword": "Neues Passwort",
+      "confirmPassword": "Passwort bestätigen",
+      "resetPassword": "Passwort zurücksetzen",
+      "resetting": "Wird zurückgesetzt...",
+      "invalidToken": "Ungültiger oder abgelaufener Token",
+      "passwordMismatch": "Passwörter stimmen nicht überein",
+      "successTitle": "Passwort erfolgreich zurückgesetzt",
+      "successMessage": "Ihr Passwort wurde zurückgesetzt. Sie können sich jetzt mit Ihrem neuen Passwort anmelden.",
+      "signIn": "Anmelden"
+    },
+    "logout": {
+      "title": "Abmelden...",
+      "message": "Sie werden von Ihrem Konto abgemeldet."
+    },
+    "onboarding": {
+      "welcome": "Willkommen! Lassen Sie uns beginnen",
+      "industryQuestion": "In welcher Branche sind Sie tätig?",
+      "goalsQuestion": "Was sind Ihre Hauptziele mit Aster Cloud?",
+      "continue": "Weiter",
+      "back": "Zurück",
+      "getStarted": "Jetzt starten",
+      "starting": "Wird gestartet...",
+      "skipForNow": "Vorerst überspringen",
+      "useCases": {
+        "finance": "Finanzdienstleistungen",
+        "healthcare": "Gesundheitswesen",
+        "ecommerce": "E-Commerce",
+        "insurance": "Versicherung",
+        "legal": "Recht",
+        "other": "Sonstiges"
+      },
+      "goals": {
+        "pii": "PII-Erkennung & Schutz",
+        "compliance": "Compliance-Berichterstattung",
+        "automation": "Geschäftsregelautomatisierung",
+        "team": "Team-Richtlinien-Zusammenarbeit",
+        "integration": "API-Integration"
+      }
+    }
+  },
+  "dashboardNav": {
+    "dashboard": "Dashboard",
+    "policies": "Richtlinien",
+    "reports": "Berichte",
+    "teams": "Teams",
+    "domainVocabularies": "Domänen­vokabulare",
+    "security": "Sicherheit",
+    "billing": "Abrechnung",
+    "docs": "Docs",
+    "settings": "Einstellungen",
+    "mobile": {
+      "openMenu": "Menü öffnen",
+      "closeMenu": "Menü schließen"
+    },
+    "userMenu": {
+      "profile": "Benutzermenü"
+    },
+    "commandPalette": {
+      "placeholder": "Suchen oder springen…",
+      "noResults": "Keine Treffer.",
+      "groupNavigate": "Navigieren",
+      "groupCreate": "Neu",
+      "groupSettings": "Einstellungen",
+      "groupDocs": "Docs",
+      "hintOpen": "Befehlspalette öffnen (⌘K)",
+      "newPolicy": "Neue Richtlinie",
+      "apiKeys": "API-Schlüssel",
+      "aiKeys": "KI-Schlüssel",
+      "aiAssistant": "KI-Assistent"
+    },
+    "groupWorkspace": "Workspace",
+    "groupAdmin": "Admin",
+    "collapseSidebar": "Seitenleiste einklappen",
+    "expandSidebar": "Seitenleiste ausklappen",
+    "apiKeys": "API-Schlüssel",
+    "aiKeys": "KI-Schlüssel"
+  },
+  "teams": {
+    "title": "Teams",
+    "subtitle": "Verwalten Sie Ihre Team-Arbeitsbereiche und arbeiten Sie an Richtlinien zusammen",
+    "createTeam": {
+      "title": "Neues Team erstellen",
+      "subtitle": "Richten Sie einen Arbeitsbereich für die Zusammenarbeit ein.",
+      "nameLabel": "Team-Name",
+      "namePlaceholder": "z. B. Risiko-Team",
+      "nameHint": "Wählen Sie einen Namen, den Ihre Kolleginnen sofort erkennen.",
+      "slugLabel": "Team-URL",
+      "slugPlaceholder": "risk-team",
+      "slugHint": "Nur Kleinbuchstaben, Zahlen und Bindestriche.",
+      "submitButton": "Team erstellen"
+    },
+    "newTeam": "Neues Team",
+    "noTeams": "Noch keine Teams",
+    "noTeamsDesc": "Erstellen Sie ein Team, um mit anderen zusammenzuarbeiten",
+    "getStarted": "Erstellen Sie ein Team, um mit anderen zusammenzuarbeiten",
+    "failedToLoad": "Teams konnten nicht geladen werden",
+    "yourRole": "Ihre Rolle",
+    "members": {
+      "title": "Team-Mitglieder",
+      "inviteMember": "Mitglied einladen",
+      "inviteTitle": "Neues Mitglied einladen",
+      "emailLabel": "E-Mail-Adresse",
+      "emailPlaceholder": "kollege@beispiel.com",
+      "roleLabel": "Rolle",
+      "sending": "Wird gesendet...",
+      "sendInvite": "Einladung senden",
+      "inviteFailed": "Einladung konnte nicht gesendet werden",
+      "pendingInvitations": "Ausstehende Einladungen",
+      "noPending": "Keine ausstehenden Einladungen",
+      "noMembers": "Noch keine Mitglieder",
+      "currentMembers": "Aktuelle Mitglieder ({count})",
+      "joinedAt": "Beigetreten {date}",
+      "expiresAt": "Läuft ab {date}",
+      "revoke": "Widerrufen",
+      "remove": "Entfernen",
+      "leave": "Verlassen",
+      "changeRole": "Rolle ändern",
+      "confirmRemove": "Sind Sie sicher, dass Sie {name} entfernen möchten?",
+      "confirmRevokeInvitation": "Sind Sie sicher, dass Sie diese Einladung widerrufen möchten?",
+      "confirmLeave": "Sind Sie sicher, dass Sie dieses Team verlassen möchten?",
+      "removeFailed": "Mitglied konnte nicht entfernt werden",
+      "revokeFailed": "Einladung konnte nicht widerrufen werden",
+      "updateFailed": "Rolle konnte nicht aktualisiert werden",
+      "leaveFailed": "Team konnte nicht verlassen werden",
+      "loadFailed": "Mitglieder konnten nicht geladen werden",
+      "invitationsLoadFailed": "Einladungen konnten nicht geladen werden",
+      "showingPartial": "Zeige erste {shown} von {total} Mitgliedern",
+      "loadMore": "Mehr laden",
+      "loadingMore": "Wird geladen...",
+      "cannotRemoveOwner": "Team-Eigentümer kann nicht entfernt werden",
+      "cannotLeaveAsOwner": "Übertragen Sie die Eigentümerschaft, bevor Sie gehen"
+    },
+    "policies": {
+      "title": "Team-Richtlinien",
+      "noPolicies": "Noch keine Team-Richtlinien",
+      "assignPolicy": "Richtlinie zuweisen",
+      "createNew": "Neue Richtlinie erstellen",
+      "newPolicy": "Neue Richtlinie",
+      "createTitle": "Team-Richtlinie erstellen",
+      "create": "Richtlinie erstellen",
+      "createFailed": "Richtlinie konnte nicht erstellt werden",
+      "createdBy": "Erstellt von {name}",
+      "updatedAt": "Aktualisiert {date}",
+      "getStarted": "Fügen Sie eine Richtlinie hinzu, um zu starten",
+      "nameLabel": "Richtlinien-Name",
+      "namePlaceholder": "z. B. Kreditprüfung",
+      "descriptionLabel": "Beschreibung",
+      "descriptionPlaceholder": "Optionale kurze Beschreibung",
+      "contentLabel": "Richtlinien-Quelltext",
+      "contentPlaceholder": "Module example.policy.\\nRule decide given input:\\n  ..."
+    },
+    "sharedPolicies": {
+      "title": "Mit diesem Team geteilt",
+      "subtitle": "Policies, die von Eigentümern außerhalb dieses Teams hier geteilt wurden.",
+      "permissionView": "Nur lesen",
+      "permissionExecute": "Lesen + Ausführen",
+      "fromOwner": "Von {owner}",
+      "sharedOn": "geteilt am {date}"
+    },
+    "memberCount": "{count} Mitglieder",
+    "policyCount": "{count} Richtlinien",
+    "viewTeam": "Team anzeigen",
+    "upgradeRequired": {
+      "title": "Upgrade erforderlich",
+      "description": "Team-Funktionen erfordern ein Team-Abonnement",
+      "upgradeButton": "Plan upgraden",
+      "contactAdmin": "Administrator kontaktieren"
+    },
+    "roles": {
+      "owner": "Eigentümer",
+      "admin": "Administrator",
+      "member": "Mitglied",
+      "viewer": "Betrachter"
+    },
+    "create": {
+      "title": "Neues Team erstellen",
+      "subtitle": "Richten Sie einen Arbeitsbereich für Ihr Team ein",
+      "nameLabel": "Teamname",
+      "namePlaceholder": "z.B. Engineering-Team",
+      "slugLabel": "Team-URL",
+      "slugPlaceholder": "engineering-team",
+      "slugHint": "Wird in URLs verwendet. Nur Kleinbuchstaben, Zahlen und Bindestriche.",
+      "slugTaken": "Dieser Slug ist bereits vergeben",
+      "creating": "Wird erstellt...",
+      "create": "Team erstellen"
+    },
+    "dashboard": {
+      "overview": "Übersicht",
+      "members": "Mitglieder",
+      "policies": "Richtlinien",
+      "settings": "Einstellungen",
+      "recentActivity": "Letzte Aktivitäten",
+      "noActivity": "Keine aktuellen Aktivitäten",
+      "manageTeam": "Team verwalten",
+      "pendingInvitations": "Offene Einladungen",
+      "recentMembers": "Letzte Mitglieder",
+      "recentPolicies": "Letzte Richtlinien"
+    },
+    "invite": {
+      "title": "Team-Mitglied einladen",
+      "emailLabel": "E-Mail-Adresse",
+      "emailPlaceholder": "kollege@beispiel.com",
+      "roleLabel": "Rolle",
+      "sending": "Wird gesendet...",
+      "send": "Einladung senden",
+      "sent": "Einladung gesendet!",
+      "alreadyMember": "Dieser Benutzer ist bereits Team-Mitglied"
+    },
+    "settings": {
+      "general": "Allgemeine Einstellungen",
+      "dangerZone": "Gefahrenzone",
+      "transferOwnership": "Eigentümerschaft übertragen",
+      "transferDialogTitle": "Team-Eigentümerschaft übertragen",
+      "transferDialogBody": "Wähle das Teammitglied, das neuer Eigentümer werden soll. Du wirst danach Admin in diesem Team. Nur der neue Eigentümer kann die Übertragung rückgängig machen.",
+      "transferSelectLabel": "Neuer Eigentümer",
+      "transferSelectPlaceholder": "Mitglied auswählen…",
+      "transferConfirm": "Übertragen",
+      "transferCancel": "Abbrechen",
+      "transferSuccess": "Eigentümerschaft übertragen.",
+      "transferFailed": "Übertragung fehlgeschlagen: {error}",
+      "transferNoEligible": "Keine geeigneten Mitglieder. Lade zuerst einen Admin ein.",
+      "transferOwnershipDesc": "Übertragen Sie die Team-Eigentümerschaft an einen anderen Administrator",
+      "leaveTeam": "Team verlassen",
+      "leaveTeamDesc": "Sich selbst aus diesem Team entfernen",
+      "deleteTeam": "Team löschen",
+      "deleteTeamDesc": "Dieses Team und alle zugehörigen Daten dauerhaft löschen",
+      "confirmDelete": "Sind Sie sicher? Diese Aktion kann nicht rückgängig gemacht werden.",
+      "sso": "Single Sign-On (SSO)",
+      "ssoComingSoon": "SSO-Konfiguration demnächst verfügbar",
+      "auditLogs": "Prüfprotokolle",
+      "auditLogsComingSoon": "Prüfprotokolle demnächst verfügbar",
+      "title": "Team-Einstellungen",
+      "generalTitle": "Allgemein",
+      "generalSubtitle": "Team-Grunddaten und Bezeichner.",
+      "nameLabel": "Team-Name",
+      "slugLabel": "Team-URL",
+      "slugHint": "Nur Kleinbuchstaben, Zahlen und Bindestriche.",
+      "saveChanges": "Änderungen speichern",
+      "saveSuccess": "Einstellungen gespeichert.",
+      "saveFailed": "Einstellungen konnten nicht gespeichert werden",
+      "noPermission": "Sie haben keine Berechtigung, diese Einstellungen zu ändern.",
+      "typeToConfirm": "Tippen Sie {value} zur Bestätigung",
+      "ssoTitle": "Single Sign-On (SSO)",
+      "ssoDescription": "SSO-Konfiguration ist im Enterprise-Plan verfügbar.",
+      "auditLogsTitle": "Audit-Logs",
+      "auditLogsDescription": "Manipulationssicheres Audit-Log entspricht Ihrem Plan-Limit.",
+      "dangerZoneSubtitle": "Unwiderrufliche Aktionen, die das gesamte Team betreffen.",
+      "deleteTeamTitle": "Team löschen",
+      "deleteTeamDescription": "Das Team und alle Daten werden dauerhaft gelöscht.",
+      "deleteFailed": "Team konnte nicht gelöscht werden",
+      "confirmDeleteTitle": "Dieses Team löschen?",
+      "confirmDeleteWarning": "Diese Aktion ist unumkehrbar. Tippen Sie den Team-Namen zur Bestätigung.",
+      "deleteWarning1": "Alle Richtlinien, Mitglieder und Einladungen werden entfernt.",
+      "deleteWarning2": "Audit-Logs werden gemäß Plan aufbewahrt, sind aber nicht mehr von diesem Team erreichbar.",
+      "deleteWarning3": "Aktive Abo-Plätze werden freigegeben und zur nächsten Rechnung anteilig erstattet."
+    },
+    "acceptInvite": {
+      "title": "Team-Einladung",
+      "joining": "Sie wurden eingeladen beizutreten",
+      "accept": "Einladung annehmen",
+      "accepting": "Wird angenommen...",
+      "expired": "Diese Einladung ist abgelaufen",
+      "invalid": "Ungültige Einladung",
+      "alreadyMember": "Sie sind bereits Mitglied dieses Teams"
+    },
+    "backToTeam": "← Zum Team",
+    "backToTeams": "← Zu allen Teams",
+    "cancel": "Abbrechen",
+    "comingSoon": "Bald verfügbar",
+    "creating": "Wird erstellt...",
+    "deleting": "Wird gelöscht...",
+    "executions": "Auswertungen",
+    "failedToCreate": "Team konnte nicht erstellt werden",
+    "saving": "Wird gespeichert...",
+    "teamNotFound": "Team nicht gefunden",
+    "viewAll": "Alle ansehen",
+    "viewDetails": "Details ansehen",
+    "inbox": {
+      "title": "Offene Einladungen",
+      "subtitle": "Teams, die dich eingeladen haben. Annahme direkt in der App, ohne E-Mail-Link.",
+      "expiresOn": "Läuft am {date} ab",
+      "accept": "Annehmen",
+      "decline": "Ablehnen",
+      "accepting": "Wird angenommen…",
+      "declining": "Wird abgelehnt…",
+      "acceptFailed": "Einladung konnte nicht angenommen werden. Bitte erneut versuchen.",
+      "declineFailed": "Einladung konnte nicht abgelehnt werden. Bitte erneut versuchen.",
+      "rolePrefix": "Eingeladen als {role}"
+    }
+  },
+  "dashboard": {
+    "welcomeBack": "Willkommen zurück, {name}!",
+    "newPolicy": "Neue Richtlinie",
+    "trialActive": "Pro-Testversion aktiv",
+    "trialDaysLeft": "Sie haben noch {count} Tag in Ihrer Testversion.",
+    "trialDaysLeftPlural": "Sie haben noch {count} Tage in Ihrer Testversion.",
+    "upgradeNow": "Jetzt upgraden",
+    "toKeepProFeatures": "um alle Pro-Funktionen zu behalten.",
+    "planActive": "{plan}-Plan aktiv",
+    "stats": {
+      "totalPolicies": "Richtlinien gesamt",
+      "executionsThisMonth": "Ausführungen diesen Monat",
+      "piiFieldsDetected": "PII-Felder erkannt",
+      "apiCalls": "API-Aufrufe",
+      "limit": "Limit: {count}",
+      "reviewRecommended": "Überprüfung empfohlen",
+      "upgradeForApi": "Für API-Zugang upgraden"
+    },
+    "quickActions": {
+      "title": "Schnellaktionen",
+      "createPolicy": "Richtlinie erstellen",
+      "createPolicyDesc": "Neue Geschäftsregeln definieren",
+      "generateReport": "Bericht erstellen",
+      "generateReportDesc": "DSGVO, HIPAA, SOC2",
+      "apiKeys": "API-Schlüssel",
+      "apiKeysDesc": "API-Zugang verwalten"
+    },
+    "recentPolicies": {
+      "title": "Top-Richtlinien",
+      "viewAll": "Alle anzeigen",
+      "noPolicies": "Noch keine Richtlinien.",
+      "createFirst": "Erstellen Sie Ihre erste Richtlinie",
+      "noDescription": "Keine Beschreibung",
+      "runs": "{count} Ausführungen",
+      "deleted": "Gelöscht",
+      "restoreHint": "Diese Richtlinie wurde gelöscht. Bitte stellen Sie sie aus dem Papierkorb wieder her, um sie weiter zu verwenden."
+    },
+    "aiUsage": {
+      "title": "AI-Nutzung diesen Monat",
+      "byokActive": "Eigener API-Key aktiv",
+      "byokUsage": "{tokens} Tokens via eigenen Key verbraucht",
+      "manageKeys": "Keys verwalten",
+      "bannedTitle": "AI vorübergehend deaktiviert",
+      "bannedUntil": "Wird automatisch um {date} wiederhergestellt",
+      "costThisMonth": "Kosten: ${dollars}",
+      "plan": "{plan}-Plan",
+      "warningHighUsage": "{remaining} Aufrufe diesen Monat übrig.",
+      "upgrade": "Upgraden",
+      "or": "oder",
+      "byok": "Eigenen Key nutzen",
+      "emailUnverifiedTitle": "E-Mail bestätigen, um AI freizuschalten",
+      "emailUnverifiedHint": "Kostenlose Konten benötigen eine bestätigte E-Mail-Adresse für AI-Funktionen.",
+      "verifyNow": "Jetzt bestätigen"
+    },
+    "apiUsage": {
+      "title": "Policy Execution API",
+      "locked": "Nicht enthalten",
+      "lockedHint": "Policy Execution API ist im Free-Plan nicht enthalten. Auf Pro/Team upgraden oder 14-Tage-Trial starten.",
+      "latencyP50": "p50: {ms}ms",
+      "latencyP95": "p95: {ms}ms",
+      "plan": "{plan}-Plan",
+      "warningHighUsage": "{remaining} Aufrufe diesen Monat übrig.",
+      "warningOverage": "Über Quota ({percent}%) — Soft-Mode, Hart-Stopp bei 200%.",
+      "upgrade": "Upgraden"
+    },
+    "dunning": {
+      "paymentFailedTitle": "Zahlung fehlgeschlagen.",
+      "paymentFailedHint": "Konto wird in {days} Tagen auf Free herabgestuft, sofern nicht behoben.",
+      "downgradedTitle": "Konto auf Free herabgestuft.",
+      "downgradedHint": "Reaktivieren Sie innerhalb von {days} Tagen, um Pro/Team-Funktionen und Daten wiederherzustellen.",
+      "updatePayment": "Zahlungsmethode aktualisieren",
+      "reactivate": "Reaktivieren",
+      "opening": "Öffne..."
+    }
+  },
+  "billing": {
+    "title": "Abrechnung & Abonnement",
+    "subtitle": "Verwalten Sie Ihr Abonnement und Ihre Rechnungsdetails",
+    "currentPlan": "Aktueller Plan",
+    "trialEnds": "Testversion endet am {date}",
+    "executionsThisMonth": "Ausführungen diesen Monat",
+    "apiCallsThisMonth": "API-Aufrufe diesen Monat",
+    "savedPolicies": "Gespeicherte Richtlinien",
+    "monthly": "Monatlich",
+    "yearly": "Jährlich",
+    "year": "Jahr",
+    "month": "Monat",
+    "save20": "2 Monate gratis",
+    "mostPopular": "Beliebteste",
+    "currentPlanButton": "Aktueller Plan",
+    "upgradeTo": "Auf {plan} upgraden",
+    "loading": "Lädt...",
+    "freeTier": "Kostenlos",
+    "contactSales": "Vertrieb kontaktieren",
+    "perUser": "Benutzer",
+    "teamUsers": "Teammitglieder",
+    "minUsers": "Mindestens {count} Benutzer",
+    "subscriptionActivated": "Abonnement erfolgreich aktiviert!",
+    "checkoutCanceled": "Bezahlvorgang wurde abgebrochen.",
+    "faq": {
+      "title": "Häufig gestellte Fragen",
+      "productQuestions": "Produktfragen",
+      "billingQuestions": "Abrechnung & Konto",
+      "whatIsAster": {
+        "question": "Was ist Aster Cloud?",
+        "answer": "Aster Cloud ist eine Richtlinienverwaltungsplattform, mit der Sie Geschäftsregeln als Code definieren, testen und ausführen können. Sie eignet sich ideal für Compliance-Automatisierung, Entscheidungs-Engines und Geschäftslogik, die sich häufig ändert, ohne Code-Deployments zu erfordern."
+      },
+      "whatIsPolicy": {
+        "question": "Was ist eine Richtlinie und wie erstelle ich eine?",
+        "answer": "Eine Richtlinie ist eine Reihe von Geschäftsregeln, die in Asters menschenlesbarer Sprache geschrieben sind. Zum Beispiel: 'if credit_score >= 700 and income > 50000 then approve_loan'. Erstellen Sie Richtlinien über das Dashboard mit unserem visuellen Editor oder durch direktes Schreiben von Regeln."
+      },
+      "piiDetection": {
+        "question": "Wie funktioniert die PII-Erkennung?",
+        "answer": "Unsere KI scannt Ihre Richtlinien automatisch auf personenbezogene Daten (PII) wie E-Mail-Adressen, Telefonnummern, Sozialversicherungsnummern und Finanzdaten. Erkannte PII werden in Berichten markiert, um Ihnen bei der Einhaltung von DSGVO, HIPAA und anderen Vorschriften zu helfen."
+      },
+      "complianceStandards": {
+        "question": "Welche Compliance-Standards unterstützen Sie?",
+        "answer": "Wir erstellen Compliance-Berichte für DSGVO (Datenschutz), HIPAA (Gesundheitswesen), SOC 2 (Sicherheitskontrollen) und PCI-DSS (Zahlungsdaten). Die Berichte analysieren Ihre Richtlinien und geben umsetzbare Empfehlungen."
+      },
+      "integration": {
+        "question": "Kann ich Aster Cloud in meine Anwendungen integrieren?",
+        "answer": "Ja! Verwenden Sie unsere REST-API, um Richtlinien aus jeder Anwendung auszuführen. Wir bieten Code-Beispiele für JavaScript, Python, cURL und mehr. API-Schlüssel können unter Einstellungen > API-Schlüssel verwaltet werden."
+      },
+      "selfHosted": {
+        "question": "Gibt es eine selbst gehostete Option?",
+        "answer": "Enterprise-Kunden können eine On-Premise-Bereitstellung mit dediziertem Support, individuellen SLA-Garantien und Private-Cloud-Optionen anfordern. Kontaktieren Sie unser Vertriebsteam für Details."
+      },
+      "downgrade": {
+        "question": "Was passiert mit meinen Richtlinien, wenn ich downgrade?",
+        "answer": "Bei einem Downgrade auf einen niedrigeren Plan werden Richtlinien über Ihrem neuen Limit automatisch eingefroren (neueste Richtlinien bleiben aktiv). Eingefrorene Richtlinien können weiterhin angezeigt, aber nicht ausgeführt oder bearbeitet werden. Zum Auftauen können Sie entweder einige Richtlinien löschen oder Ihren Plan upgraden. Ihre Richtliniendaten werden beim Downgrade niemals gelöscht."
+      },
+      "cancelAnytime": {
+        "question": "Kann ich mein Abonnement jederzeit kündigen?",
+        "answer": "Ja, Sie können Ihr Abonnement jederzeit kündigen. Ihr Zugang bleibt bis zum Ende des aktuellen Abrechnungszeitraums bestehen."
+      },
+      "trialEnds": {
+        "question": "Was passiert, wenn meine Testversion endet?",
+        "answer": "Nach Ablauf Ihrer Testversion werden Sie automatisch auf den kostenlosen Plan herabgestuft. Sie können jederzeit auf Pro oder Team upgraden, um wieder Zugang zu Premium-Funktionen zu erhalten."
+      },
+      "refunds": {
+        "question": "Bieten Sie Rückerstattungen an?",
+        "answer": "Wir bieten eine 30-tägige Geld-zurück-Garantie. Wenn Sie mit Ihrem Abonnement nicht zufrieden sind, kontaktieren Sie uns innerhalb von 30 Tagen für eine vollständige Rückerstattung."
+      },
+      "apiVsExecutions": {
+        "question": "Was ist der Unterschied zwischen API-Aufrufen und Ausführungen?",
+        "answer": "Ausführungen zählen alle Richtlinien-Läufe (Web-UI + API). API-Aufrufe zählen nur Anfragen über die REST-API. Jede API-Anfrage verbraucht beide Kontingente. Web-UI-Nutzung verbraucht nur Ausführungen."
+      },
+      "upgradePlan": {
+        "question": "Wie kann ich meinen Plan upgraden oder downgraden?",
+        "answer": "Sie können jederzeit von dieser Seite aus upgraden. Ihr neuer Plan wird sofort wirksam. Zum Downgraden kündigen Sie Ihr aktuelles Abonnement und es wird am Ende des Abrechnungszeitraums auf Kostenlos zurückgesetzt."
+      },
+      "dataSecurity": {
+        "question": "Wie werden meine Daten gesichert?",
+        "answer": "Alle Daten werden bei der Übertragung (TLS 1.3) und im Ruhezustand (AES-256) verschlüsselt. Wir folgen SOC 2 Type II Praktiken und teilen Ihre Richtliniendaten niemals mit Dritten."
+      },
+      "invoices": {
+        "question": "Kann ich Rechnungen für mein Abonnement erhalten?",
+        "answer": "Ja, Rechnungen werden automatisch generiert und nach jeder Zahlung an Ihre E-Mail gesendet. Sie können auch frühere Rechnungen aus Ihrem Stripe-Kundenportal herunterladen."
+      },
+      "freeLimits": {
+        "question": "Was sind die Einschränkungen des kostenlosen Plans?",
+        "answer": "Der kostenlose Plan umfasst 3 gespeicherte Richtlinien, 100 Ausführungen/Monat und Basis-PII-Erkennung. API-Zugang und Compliance-Berichte erfordern einen Pro- oder Team-Plan."
+      },
+      "support": {
+        "question": "Wie kann ich den Support kontaktieren?",
+        "answer": "Kostenlose Benutzer können uns per E-Mail unter support(at)aster-lang.cloud erreichen. Pro-Benutzer erhalten Prioritäts-Support mit schnelleren Antwortzeiten."
+      }
+    },
+    "plans": {
+      "names": {
+        "free": "Kostenlos",
+        "trial": "Testversion",
+        "pro": "Pro",
+        "team": "Team",
+        "enterprise": "Enterprise"
+      },
+      "features": {
+        "rules5": "5 veröffentlichte Regeln",
+        "evaluations1k": "1.000 Auswertungen / Monat",
+        "aiDrafts20": "20 KI-Entwürfe / Monat (gpt-4o-mini)",
+        "allLanguagePacks": "Alle Sprachpakete (en / zh / de)",
+        "audit7days": "7-Tage-Audit-Log",
+        "unlimitedTeamMembers": "Unbegrenzte Team-Mitglieder",
+        "rules100": "100 veröffentlichte Regeln",
+        "evaluations50k": "50.000 Auswertungen / Monat",
+        "aiDrafts500": "500 KI-Entwürfe / Sitz / Monat (gpt-5.2)",
+        "audit90days": "90-Tage-Audit-Log",
+        "inviteReviewersPaidSeat": "Reviewer einladen — jeder Sitz ¥299 / Monat",
+        "reviewerNotAuthor": "Reviewer ≠ Autor (ab 2 Sitzen erzwungen)",
+        "soxCompliant": "SOX-konforme Funktionstrennung",
+        "stripeBilling": "Stripe-Abrechnung, monatlich oder jährlich",
+        "customDomainVocabulary": "Benutzerdefinierte Domänenvokabulare",
+        "multiTeamCustomApprovals": "Mehrere Teams, individuelle Freigabegruppen",
+        "unlimitedRulesEvaluations": "Unbegrenzte Regeln und Auswertungen",
+        "unlimitedAiDraftsByok": "Unbegrenzte KI-Entwürfe via BYOK (eigener OpenAI / Anthropic / Vertex Key)",
+        "customIndustryLexicons": "Branchenspezifische Lexika",
+        "hashChainAuditSignature": "Hash-Ketten-Audit + digitale Signatur",
+        "ssoSamlOidc": "SSO (SAML / OIDC / Authentik)",
+        "customDeployment": "Individuelle Bereitstellung",
+        "slaGuarantee": "SLA-Garantie",
+        "dedicatedSupport": "Dedizierter Support"
+      }
+    },
+    "overview": {
+      "overviewTitle": "Abrechnung",
+      "overviewSubtitle": "Plan, Nutzung, Sitzplätze, Rechnungen.",
+      "planCardTitle": "Plan",
+      "planTrial": "{plan} (Testphase)",
+      "planActive": "Aktiv",
+      "trialDaysLeft": "Noch {days} Tage",
+      "trialNoActive": "Keine aktive Testphase",
+      "nextInvoiceTitle": "Nächste Rechnung",
+      "nextInvoiceAmount": "{amount} am {date}",
+      "nextInvoicePending": "Zahlungsmittel noch nicht hinzugefügt.",
+      "seatsTitle": "Sitzplätze",
+      "seatsUsedTemplate": "{used} von {limit} belegt",
+      "seatsInvite": "Mitglied einladen",
+      "usageTitle": "Nutzung dieses Zyklus",
+      "invoicesTitle": "Rechnungen",
+      "invoicesEmpty": "Noch keine Rechnungen.",
+      "invoiceUnpaid": "unbezahlt",
+      "invoicePaid": "bezahlt",
+      "invoiceVoid": "storniert",
+      "invoiceViewReceipt": "Beleg ansehen",
+      "changePlan": "Plan ändern",
+      "managePayment": "Zahlungsmittel verwalten"
+    }
+  },
+  "policies": {
+    "title": "Richtlinien",
+    "subtitle": "Verwalten Sie Ihre Geschäftsrichtlinien und Regeln",
+    "newPolicy": "Neue Richtlinie",
+    "multiSelectClearedOnPaging": "Auswahl gelöscht, da die Seite oder der Filter gewechselt wurde.",
+    "noPolicies": "Keine Richtlinien",
+    "getStarted": "Beginnen Sie mit dem Erstellen einer neuen Richtlinie.",
+    "piiFields": "{count} PII-Felder",
+    "public": "Öffentlich",
+    "private": "Privat",
+    "executions": "{count} Ausführungen",
+    "executeAction": "Ausführen",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "updated": "Aktualisiert {date}",
+    "confirmDelete": "Möchten Sie diese Richtlinie wirklich löschen?",
+    "failedToLoad": "Richtlinien konnten nicht geladen werden",
+    "failedToDelete": "Richtlinie konnte nicht gelöscht werden",
+    "freeze": {
+      "title": "Richtlinienlimit überschritten",
+      "message": "{frozen} von {total} Richtlinien sind eingefroren. Ihr Plan erlaubt {limit} aktive Richtlinien.",
+      "upgradeLink": "Upgraden Sie Ihren Plan, um alle Richtlinien freizuschalten",
+      "badge": "Eingefroren",
+      "cannotExecute": "Eingefrorene Richtlinie kann nicht ausgeführt werden",
+      "cannotEdit": "Eingefrorene Richtlinie kann nicht bearbeitet werden"
+    },
+    "groups": {
+      "allPolicies": "Alle Richtlinien",
+      "ungrouped": "Nicht gruppiert",
+      "newGroup": "Neue Gruppe",
+      "newSubgroup": "Neue Untergruppe",
+      "edit": "Bearbeiten",
+      "delete": "Löschen",
+      "policiesCount": "{count} Richtlinien",
+      "createTitle": "Gruppe erstellen",
+      "editTitle": "Gruppe bearbeiten",
+      "nameLabel": "Gruppenname",
+      "namePlaceholder": "Gruppenname eingeben",
+      "descriptionLabel": "Beschreibung",
+      "descriptionPlaceholder": "Optionale Beschreibung",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "deleteConfirm": "Diese Gruppe löschen?",
+      "deleteWarning": "Richtlinien in dieser Gruppe werden in die übergeordnete Gruppe verschoben.",
+      "saving": "Speichern...",
+      "deleting": "Löschen..."
+    },
+    "form": {
+      "createTitle": "Neue Richtlinie erstellen",
+      "createSubtitle": "Definieren Sie Ihre Geschäftsregeln mit der Aster-Richtliniensprache",
+      "editTitle": "Richtlinie bearbeiten",
+      "editSubtitle": "Aktualisieren Sie Ihre Richtlinienregeln und Einstellungen",
+      "loadExample": "Beispiel laden",
+      "name": "Richtlinienname",
+      "namePlaceholder": "z.B. Kreditgenehmigungsrichtlinie",
+      "description": "Beschreibung (optional)",
+      "descriptionPlaceholder": "Kurze Beschreibung der Richtlinienfunktion",
+      "content": "Richtlinieninhalt",
+      "contentPlaceholder": "// Schreiben Sie hier Ihre Richtlinienregeln...",
+      "contentHelp": "Verwenden Sie die Aster-Richtliniensyntax. Format: if [Feld] [Bedingung] [Wert] then [Aktion]",
+      "isPublic": "Diese Richtlinie öffentlich machen (per Link teilbar)",
+      "cancel": "Abbrechen",
+      "create": "Richtlinie erstellen",
+      "creating": "Wird erstellt...",
+      "save": "Änderungen speichern",
+      "saving": "Wird gespeichert...",
+      "viewPlans": "Pläne anzeigen",
+      "failedToCreate": "Richtlinie konnte nicht erstellt werden",
+      "failedToUpdate": "Richtlinie konnte nicht aktualisiert werden",
+      "failedToLoad": "Richtlinie konnte nicht geladen werden",
+      "failedToMove": "Richtlinie konnte nicht verschoben werden",
+      "selectionSingle": "Einzeln",
+      "selectionMulti": "Mehrfach",
+      "deleteDialogTitle": "Richtlinie löschen",
+      "deleteDialogBody": "Soll \"{name}\" wirklich gelöscht werden? Kann aus dem Papierkorb wiederhergestellt werden.",
+      "deleteDialogConfirm": "Löschen",
+      "deleteDialogCancel": "Abbrechen",
+      "metaSection": "Details",
+      "metaSectionHint": "Name, Beschreibung, Gruppe, Sichtbarkeit",
+      "metaExpand": "Details einblenden",
+      "metaCollapse": "Details ausblenden",
+      "sidePanelAI": "KI",
+      "sidePanelSyntax": "Syntax",
+      "sidePanelTemplates": "Vorlagen",
+      "sidePanelToggle": "Seitenleiste umschalten",
+      "statusLines": "{count, plural, one {# Zeile} other {# Zeilen}}",
+      "statusLocale": "CNL {locale}",
+      "statusSaveHint": "⌘S zum Speichern",
+      "statusPaletteHint": "⌘K für Befehle",
+      "statusSavedAgo": "Gespeichert {time}",
+      "statusUnsaved": "Ungespeicherte Änderungen",
+      "compileChecking": "Wird geprüft…",
+      "compileOk": "Kompiliert",
+      "compileErrors": "{count, plural, one {# Fehler} other {# Fehler}}",
+      "compileWarnings": "{count, plural, one {# Warnung} other {# Warnungen}}",
+      "compileTransportError": "Compiler nicht erreichbar",
+      "decisionPreview": "Entscheidungsvorschau",
+      "decisionModule": "Modul",
+      "decisionFunctions": "Funktionen",
+      "decisionTypes": "Typen",
+      "decisionNone": "Noch kein kompiliertes Modul. Sobald du tippst, erscheinen hier die Ergebnisse.",
+      "paletteTitle": "Editor-Befehle",
+      "palettePlaceholder": "Befehl eingeben…",
+      "paletteNoResults": "Keine passenden Befehle.",
+      "paletteGroupAI": "KI",
+      "paletteGroupEdit": "Bearbeiten",
+      "paletteGroupNav": "Navigation",
+      "paletteCmdAskAI": "KI um eine Richtlinie bitten",
+      "paletteCmdInsertTemplate": "Vorlage an der Cursorposition einfügen…",
+      "paletteCmdConvertLocale": "CNL-Sprache umwandeln…",
+      "paletteCmdFormat": "Dokument formatieren",
+      "paletteCmdSave": "Speichern",
+      "paletteCmdSaveAndView": "Speichern und Detail anzeigen",
+      "paletteCmdTogglePanel": "Seitenleiste umschalten",
+      "paletteCmdShowSyntax": "Syntax-Referenz anzeigen",
+      "paletteCmdShowDecision": "Entscheidungsvorschau anzeigen",
+      "paletteSubBackToCommands": "← Zurück zu den Befehlen",
+      "templateInsertedAtCursor": "Vorlage an Cursorposition eingefügt.",
+      "draftRestoreTitle": "Ungespeicherten Entwurf wiederherstellen?",
+      "draftRestoreBody": "Du hast einen ungespeicherten Entwurf von {time}.",
+      "draftRestore": "Wiederherstellen",
+      "draftDiscard": "Verwerfen",
+      "unsavedLeaveWarning": "Es gibt ungespeicherte Änderungen. Trotzdem verlassen?",
+      "saveSuccess": "Richtlinie gespeichert",
+      "saveFailed": "Speichern fehlgeschlagen",
+      "shortcutsTitle": "Tastenkürzel",
+      "shortcutSave": "Speichern",
+      "shortcutSaveAndView": "Speichern und anzeigen",
+      "shortcutTogglePanel": "Seitenleiste umschalten",
+      "shortcutClose": "Panel schließen / Eingabe verlassen"
+    },
+    "detail": {
+      "version": "Version",
+      "executions": "Ausführungen",
+      "viewLogs": "Protokolle anzeigen",
+      "piiFields": "PII-Felder",
+      "status": "Status",
+      "piiWarning": "PII erkannt",
+      "piiWarningMessage": "Diese Richtlinie verweist auf potenziell sensible Daten:",
+      "policyContent": "Richtlinieninhalt",
+      "versionHistory": "Versionsverlauf",
+      "backToPolicies": "Zurück zu Richtlinien",
+      "policyNotFound": "Richtlinie nicht gefunden"
+    },
+    "versions": {
+      "title": "Versionen & Freigaben",
+      "subtitle": "Jedes Speichern erzeugt eine neue Version. Freigabe-Gates steuern, welche Versionen ausgeführt werden dürfen.",
+      "panelTitle": "Versionen",
+      "compare": "Versionen vergleichen",
+      "createdOn": "Erstellt {date}",
+      "viewSource": "Quelle anzeigen",
+      "submitForApproval": "Zur Freigabe einreichen",
+      "submitDialogTitle": "Version {n} zur Freigabe einreichen",
+      "submitDialogBody": "Möchten Sie v{n} wirklich zur Freigabe einreichen?",
+      "breadcrumb": "Versionen",
+      "newVersion": "Neue Version",
+      "noVersions": "Noch keine Versionen",
+      "noVersionsBody": "Speichern Sie die Richtlinie mindestens einmal, um v1 zu erzeugen.",
+      "table": {
+        "version": "Version",
+        "status": "Status",
+        "author": "Autor",
+        "approvals": "Freigaben",
+        "createdAt": "Erstellt",
+        "releaseNote": "Release-Notiz",
+        "actions": "Aktionen"
+      },
+      "status": {
+        "DRAFT": "Entwurf",
+        "PENDING_APPROVAL": "Freigabe ausstehend",
+        "APPROVED": "Freigegeben",
+        "REJECTED": "Abgelehnt",
+        "DEPRECATED": "Verworfen",
+        "ARCHIVED": "Archiviert"
+      },
+      "isDefault": "Standard",
+      "actions": {
+        "view": "Anzeigen",
+        "submit": "Zur Freigabe einreichen",
+        "approve": "Freigeben",
+        "reject": "Ablehnen",
+        "setDefault": "Als Standard festlegen",
+        "deprecate": "Verwerfen",
+        "archive": "Archivieren"
+      },
+      "submitDialog": {
+        "title": "Version {n} zur Freigabe einreichen?",
+        "body": "Der Quellcode wird gesperrt — weitere Änderungen landen in einem neuen Entwurf. Freigeber werden benachrichtigt.",
+        "confirm": "Einreichen",
+        "cancel": "Abbrechen",
+        "noteLabel": "Release-Notiz (optional)",
+        "notePlaceholder": "Was hat sich in dieser Version geändert?"
+      },
+      "approveDialog": {
+        "title": "Version {n} freigeben?",
+        "body": "Freigegebene Versionen sind ausführbar. Nach der Freigabe kannst du sie als Standard markieren.",
+        "confirm": "Freigeben",
+        "cancel": "Abbrechen",
+        "commentLabel": "Kommentar (optional)",
+        "commentPlaceholder": "Hinweise für andere Freigeber…"
+      },
+      "rejectDialog": {
+        "title": "Version {n} ablehnen?",
+        "body": "Der Autor sieht deinen Kommentar und kann ihn in einem neuen Entwurf adressieren.",
+        "confirm": "Ablehnen",
+        "cancel": "Abbrechen",
+        "commentLabel": "Begründung",
+        "commentPlaceholder": "Warum wird abgelehnt?"
+      },
+      "setDefaultDialog": {
+        "title": "Version {n} als Standard?",
+        "body": "Neue Ausführungen ohne expliziten Version-Pin verwenden v{n}. Bestehende gepinnte Ausführungen behalten ihre Version.",
+        "confirm": "Als Standard",
+        "cancel": "Abbrechen"
+      },
+      "deprecateDialog": {
+        "title": "Version {n} verwerfen?",
+        "body": "Verworfene Versionen können noch ausgeführt werden, wenn explizit angepinnt — der Standard wechselt jedoch weg.",
+        "confirm": "Verwerfen",
+        "cancel": "Abbrechen",
+        "reasonLabel": "Begründung (optional)"
+      },
+      "archiveDialog": {
+        "title": "Version {n} archivieren?",
+        "body": "Archivierte Versionen können nicht mehr ausgeführt werden und sind vom Standard ausgeschlossen. Dieser Schritt ist endgültig — Rückgängig nur per neuer Version.",
+        "confirm": "Archivieren",
+        "cancel": "Abbrechen",
+        "reasonLabel": "Begründung (optional)"
+      },
+      "sox": {
+        "selfApprovalNotAllowed": "Du kannst eine selbst erstellte Version nicht freigeben. Bitte ein anderes Teammitglied.",
+        "inviteReviewerRequired": "Dein Plan erfordert einen zweiten Freigeber. Lade ein Teammitglied ein und fahre fort."
+      },
+      "approvalHistory": "Freigabe-Verlauf",
+      "approvalDecision": {
+        "APPROVED": "Freigegeben",
+        "REJECTED": "Abgelehnt",
+        "REQUESTED_CHANGES": "Änderungen angefordert"
+      }
+    },
+    "deleteDialog": {
+      "title": "Richtlinie löschen",
+      "description": "Möchten Sie \"{name}\" wirklich löschen? Dies kann aus dem Papierkorb rückgängig gemacht werden.",
+      "confirm": "Löschen",
+      "cancel": "Abbrechen"
+    },
+    "example": {
+      "name": "Kreditgenehmigungsrichtlinie",
+      "description": "Regeln zur Bewertung von Kreditanträgen basierend auf Kreditwürdigkeit und Einkommen"
+    },
+    "ruleSelector": {
+      "label": "Rule",
+      "placeholder": "Rule auswählen",
+      "empty": "Keine Rules gefunden",
+      "entryOption": "{name} (entry)",
+      "ambiguousHint": "Diese Richtlinie hat mehrere Rules und keine @entry-Markierung. Wählen Sie die auszuführende Rule.",
+      "entryHover": "Haupt-Einstiegs-Rule"
+    },
+    "modules": {
+      "moduleNotFound": "Modul \"{moduleName}\" ist in diesem Mandanten nicht verfügbar.",
+      "versionNotFound": "Modul \"{moduleName}\" Version {version} ist nicht verfügbar. Verfügbare Versionen: {versions}.",
+      "moduleVersionRequired": "Pinnen Sie \"{moduleName}\" mit einer expliziten Version.",
+      "moduleCatalogLoadFailed": "Der Modulkatalog konnte nicht geladen werden. Use-Diagnosen sind vorübergehend nicht verfügbar.",
+      "moduleHoverSource": "Quellfunktion: {functionName}. Versionen: {versions}.",
+      "moduleHoverVersion": "Version {version}: veröffentlicht {publishedAt}",
+      "moduleCompletionDetail": "Quellfunktion: {functionName}",
+      "versionCompletionDetail": "{moduleName} auf eine veröffentlichte Version pinnen"
+    },
+    "execute": {
+      "title": "Ausführen: {name}",
+      "subtitle": "Testen Sie Ihre Richtlinie mit Beispieldaten",
+      "input": "Eingabe",
+      "generateSampleData": "Beispiel generieren",
+      "inputPlaceholder": "'{'\"key\": \"value\"'}'",
+      "executeButton": "Richtlinie ausführen",
+      "executing": "Wird ausgeführt...",
+      "result": "Ergebnis",
+      "status": "Status",
+      "success": "Erfolgreich",
+      "failed": "Fehlgeschlagen",
+      "duration": "Dauer",
+      "executedRule": "Ausgeführte Rule",
+      "decision": "Entscheidung",
+      "approved": "Genehmigt",
+      "rejected": "Abgelehnt",
+      "matchedRules": "Übereinstimmende Regeln:",
+      "actions": "Aktionen:",
+      "viewRawOutput": "Rohdaten anzeigen",
+      "emptyState": "Eingabe eingeben und Ausführen klicken",
+      "invalidJson": "Ungültige JSON-Eingabe",
+      "executionFailed": "Ausführung fehlgeschlagen",
+      "upgradePlan": "Plan upgraden",
+      "saveToMyPolicies": "Zu meinen Richtlinien speichern",
+      "saving": "Wird gespeichert...",
+      "savedSuccessfully": "Richtlinie erfolgreich gespeichert!",
+      "saveError": "Richtlinie konnte nicht gespeichert werden",
+      "policyLimitReached": "Richtlinienlimit erreicht. Bitte upgraden Sie.",
+      "schemaExtractionFailed": "Richtlinienparameter konnten nicht analysiert werden",
+      "schemaExtractionFailedHint": "Die Richtliniensyntax hat möglicherweise Probleme. Die Funktion \"Beispiel generieren\" ist nicht verfügbar. Sie können JSON-Daten manuell eingeben.",
+      "policyFetchFailed": "Richtlinie konnte nicht geladen werden",
+      "policyEmptyContent": "Richtlinie hat keinen Inhalt",
+      "entryAmbiguousTitle": "Rule zur Ausführung wählen",
+      "entryAmbiguousBody": "Die Richtlinie enthält mehrere Rules und keine Entry-Rule. Wählen Sie einen Kandidaten und führen Sie erneut aus.",
+      "viewDetails": "Details anzeigen"
+    },
+    "logs": {
+      "title": "Ausführungsprotokolle",
+      "backToPolicy": "Zurück zur Richtlinie",
+      "noLogs": "Noch keine Ausführungsprotokolle",
+      "filter": "Status",
+      "all": "Alle",
+      "success": "Erfolgreich",
+      "failed": "Fehlgeschlagen",
+      "source": "Quelle",
+      "web": "Web",
+      "api": "API",
+      "cli": "CLI",
+      "dateRange": "Datumsbereich",
+      "from": "Von",
+      "to": "Bis",
+      "apply": "Anwenden",
+      "reset": "Zurücksetzen",
+      "executedAt": "Ausgeführt am",
+      "duration": "Dauer",
+      "version": "Version",
+      "input": "Eingabe",
+      "output": "Ausgabe",
+      "error": "Fehler",
+      "showMore": "Details anzeigen",
+      "showLess": "Details ausblenden",
+      "page": "Seite",
+      "of": "von",
+      "previous": "Zurück",
+      "next": "Weiter",
+      "stats": "Statistiken",
+      "totalExecutions": "Gesamtausführungen",
+      "successRate": "Erfolgsrate",
+      "avgDuration": "Durchschn. Dauer",
+      "recentActivity": "Letzte Aktivität",
+      "loadError": "Ausführungsprotokolle konnten nicht geladen werden"
+    },
+    "trash": {
+      "title": "Papierkorb",
+      "description": "Gelöschte Richtlinien werden 30 Tage aufbewahrt, bevor sie dauerhaft gelöscht werden",
+      "backToPolicies": "Zurück zu Richtlinien",
+      "empty": "Der Papierkorb ist leer",
+      "emptyTrash": "Papierkorb leeren",
+      "confirmEmptyTrash": "Möchten Sie wirklich alle Elemente im Papierkorb dauerhaft löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+      "restore": "Wiederherstellen",
+      "permanentDelete": "Endgültig löschen",
+      "confirmPermanentDelete": "Möchten Sie diese Richtlinie wirklich dauerhaft löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+      "deletedAt": "Gelöscht am",
+      "expiresAt": "Läuft ab",
+      "reason": "Grund",
+      "noReason": "Kein Grund angegeben",
+      "restoreSuccess": "Richtlinie erfolgreich wiederhergestellt",
+      "restoreWithNewName": "Richtlinie mit neuem Namen wiederhergestellt: {name}",
+      "deleteSuccess": "Richtlinie dauerhaft gelöscht",
+      "emptySuccess": "{count} Richtlinien dauerhaft gelöscht",
+      "loadError": "Papierkorb konnte nicht geladen werden",
+      "actionError": "Aktion fehlgeschlagen. Bitte erneut versuchen.",
+      "itemCount": "{count} Elemente im Papierkorb",
+      "daysRemaining": "{days} Tage verbleibend"
+    },
+    "share": {
+      "title": "Mit Teams teilen",
+      "subtitle": "Anderen Teams Zugriff auf diese Policy gewähren. Mitglieder können sehen; Ausführungsrechte erlauben das Ausführen.",
+      "selectTeam": "Team",
+      "placeholderSelect": "Team wählen…",
+      "noEligibleTeams": "Keine geeigneten Teams zum Teilen.",
+      "share": "Teilen",
+      "sharing": "Wird geteilt…",
+      "revoke": "Widerrufen",
+      "viewExecute": "Lesen + Ausführen",
+      "permissionLabel": "Zugriff",
+      "permissionView": "Nur lesen",
+      "permissionExecute": "Lesen + Ausführen",
+      "permissionHelp": "Ausführungsrechte beinhalten automatisch Lesezugriff. Erneutes Teilen mit anderer Stufe aktualisiert die bestehende Berechtigung.",
+      "addFailed": "Teilen fehlgeschlagen. Bitte erneut versuchen.",
+      "revokeFailed": "Widerruf fehlgeschlagen. Bitte erneut versuchen."
+    },
+    "sharedWithMe": {
+      "title": "Mit meinen Teams geteilt",
+      "subtitle": "Policies, die andere Eigentümer mit Ihren Teams geteilt haben.",
+      "permissionView": "Nur lesen",
+      "permissionExecute": "Lesen + Ausführen",
+      "viaTeam": "Geteilt mit {team}",
+      "fromOwner": "von {owner}",
+      "updated": "aktualisiert {date}"
+    }
+  },
+  "reports": {
+    "title": "Compliance-Berichte",
+    "subtitle": "Erstellen Sie Compliance-Berichte für Ihre Richtlinien",
+    "generateNew": "Neuen Bericht erstellen",
+    "noReports": "Noch keine Berichte",
+    "generateFirst": "Erstellen Sie oben Ihren ersten Compliance-Bericht.",
+    "upgradePlan": "Plan upgraden",
+    "generating": "Wird erstellt...",
+    "generate": "{type}-Bericht erstellen",
+    "status": {
+      "completed": "Abgeschlossen",
+      "generating": "Wird erstellt...",
+      "failed": "Fehlgeschlagen"
+    },
+    "type": "Typ: {type}",
+    "created": "Erstellt: {date}",
+    "policiesAnalyzed": "{count} Richtlinien analysiert",
+    "reportTypes": {
+      "gdpr": {
+        "name": "DSGVO",
+        "description": "Datenschutz-Grundverordnung"
+      },
+      "hipaa": {
+        "name": "HIPAA",
+        "description": "Health Insurance Portability and Accountability Act"
+      },
+      "soc2": {
+        "name": "SOC 2",
+        "description": "Service Organization Control 2"
+      },
+      "pci_dss": {
+        "name": "PCI-DSS",
+        "description": "Payment Card Industry Data Security Standard"
+      }
+    },
+    "detail": {
+      "failedToLoad": "Bericht konnte nicht geladen werden",
+      "reportNotFound": "Bericht nicht gefunden",
+      "backToReports": "Zurück zu Berichten",
+      "generatingMessage": "Dieser Bericht wird erstellt. Bitte schauen Sie in Kürze wieder vorbei.",
+      "failedMessage": "Dieser Bericht konnte nicht erstellt werden. Bitte versuchen Sie, einen neuen zu erstellen.",
+      "complianceScore": "Compliance-Bewertung",
+      "overallCompliance": "Gesamte Compliance-Bewertung basierend auf Ihren Richtlinien",
+      "categories": {
+        "dataProtection": "Datenschutz",
+        "accessControl": "Zugriffskontrolle",
+        "auditLogging": "Audit-Protokollierung"
+      },
+      "summary": {
+        "totalPolicies": "Richtlinien gesamt",
+        "policiesWithPII": "Richtlinien mit PII",
+        "totalExecutions": "Ausführungen gesamt",
+        "riskLevel": "Risikostufe"
+      },
+      "riskLevel": {
+        "low": "Niedriges Risiko",
+        "medium": "Mittleres Risiko",
+        "high": "Hohes Risiko"
+      },
+      "piiAnalysis": "PII-Analyse",
+      "detectedFields": "Erkannte PII-Felder",
+      "recommendations": "Empfehlungen",
+      "policiesAnalyzed": "Analysierte Richtlinien",
+      "executionCount": "{count} Ausführungen"
+    }
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "subtitle": "Verwalten Sie Ihre Kontoeinstellungen und Präferenzen.",
+    "dataCard": {
+      "title": "Deine Daten (DSGVO)",
+      "subtitle": "Lade die für dich gespeicherten KI-Konversationen herunter oder lösche sie.",
+      "open": "Daten verwalten"
+    },
+    "apiKeys": {
+      "title": "API-Schlüssel",
+      "subtitle": "Verwalten Sie API-Schlüssel für den programmatischen Zugriff auf Aster Cloud.",
+      "manageKeys": "Schlüssel verwalten",
+      "breadcrumb": "API-Schlüssel",
+      "createNew": "Neuen API-Schlüssel erstellen",
+      "keyPlaceholder": "Schlüsselname (z.B. Produktion, Entwicklung)",
+      "createKey": "Schlüssel erstellen",
+      "creating": "Wird erstellt...",
+      "yourKeys": "Ihre API-Schlüssel",
+      "noKeys": "Noch keine API-Schlüssel. Erstellen Sie oben einen, um zu beginnen.",
+      "name": "Name",
+      "key": "Schlüssel",
+      "lastUsed": "Zuletzt verwendet",
+      "created": "Erstellt",
+      "actions": "Aktionen",
+      "revoke": "Widerrufen",
+      "never": "Nie",
+      "keyCreated": "API-Schlüssel erstellt",
+      "copyWarning": "Kopieren Sie Ihren API-Schlüssel jetzt. Sie werden ihn nicht mehr sehen können!",
+      "copy": "Kopieren",
+      "dismiss": "Schließen",
+      "confirmRevoke": "Möchten Sie diesen API-Schlüssel wirklich widerrufen? Diese Aktion kann nicht rückgängig gemacht werden.",
+      "usageExample": "Verwendungsbeispiele",
+      "usageDescription": "Verwenden Sie Ihren API-Schlüssel, um Aster Cloud-Richtlinien in Ihre Anwendungen zu integrieren. Fügen Sie den Schlüssel im Authorization-Header ein.",
+      "enterName": "Bitte geben Sie einen Namen für Ihren API-Schlüssel ein",
+      "examples": {
+        "getPolicyId": "So finden Sie Modul- und Funktionsname einer Richtlinie",
+        "getPolicyIdDesc": "Öffnen Sie eine Richtlinie auf der Richtlinienseite; der Modulname (z.B. aster.finance.loan) und der Einstiegsfunktionsname (z.B. evaluateLoanEligibility) erscheinen oben im Editor. Beide werden an /api/v1/policies/evaluate übergeben.",
+        "executePolicy": "Richtlinie auswerten",
+        "executePolicyDesc": "Senden Sie Kontextdaten an eine veröffentlichte Richtlinie und erhalten Sie ihre Entscheidung.",
+        "listPolicies": "Versionsverlauf einer Richtlinie",
+        "listPoliciesDesc": "Liefert alle Versionen einer Richtlinie mit ihrem Veröffentlichungsstatus — nützlich für die Prüfung einer Entscheidung.",
+        "responseExample": "Antwortformat",
+        "responseExampleDesc": "Erfolgreiche Auswertung liefert { result, executionTimeMs, error }. result ist der Rückgabewert der Richtlinie; bei Erfolg ist error null.",
+        "errorHandling": "Fehlercodes",
+        "errorHandlingDesc": "Häufige HTTP-Statuscodes, die bei der API-Nutzung auftreten können.",
+        "error401": "Ungültiger oder fehlender API-Schlüssel",
+        "error403": "Unzureichende Berechtigungen oder Kontingent überschritten",
+        "error404": "Richtlinie nicht gefunden",
+        "error429": "Ratenlimit überschritten, bitte später erneut versuchen"
+      }
+    },
+    "dataPage": {
+      "breadcrumb": "Meine Daten",
+      "title": "Deine KI-Daten",
+      "subtitle": "Gemäß DSGVO Art. 15 und 17 hast du das Recht, die gespeicherten KI-Konversationen einzusehen und zu löschen. Verwende die Aktionen unten.",
+      "downloadCard": {
+        "title": "Kopie herunterladen",
+        "body": "Exportiert jeden gespeicherten KI-Aufruf (Prompt + Antwort + Sicherheits-Flags) als JSON-Datei. Nützlich für Compliance-Archive oder Migration.",
+        "action": "JSON herunterladen"
+      },
+      "deleteCard": {
+        "title": "KI-Konversationsinhalte löschen",
+        "body": "Löscht dauerhaft den verschlüsselten Prompt + die Antwort + den redigierten Text aller deiner KI-Aufrufe. Aggregierte Zähler (Tokens, Kosten, Status) bleiben für Abrechnung und Missbrauchserkennung erhalten — DSGVO-konform.",
+        "action": "Inhalte löschen",
+        "confirmTitle": "KI-Konversationsinhalte löschen?",
+        "confirmBody": "Löscht die ursprünglichen Prompts und Antworten von {count, plural, =0 {keinen Datensätzen} one {# Datensatz} other {# Datensätzen}}. Zähler und Abrechnungs-Metadaten bleiben erhalten.",
+        "confirmAction": "Löschen",
+        "confirmCancel": "Abbrechen",
+        "success": "{count, plural, =0 {Nichts zu löschen} one {# Datensatz gelöscht} other {# Datensätze gelöscht}}",
+        "failure": "Löschen fehlgeschlagen: {error}"
+      },
+      "downloadFailure": "Download fehlgeschlagen: {error}",
+      "lastUpdatedAt": "Erstellt am {iso}"
+    },
+    "aiCircuitBreakerPage": {
+      "breadcrumb": "KI-Schutzschalter",
+      "title": "KI-Schutzschalter",
+      "subtitle": "Manueller Override für den plattformweiten LLM-Notschalter. Nur verwenden, wenn ein Upstream-LLM-Anbieter dauerhaft gestört ist und neue Aufrufe gestoppt werden müssen.",
+      "todaySpend": "Heutige Plattform-Ausgaben",
+      "spendUsd": "${usd}",
+      "currentState": "Aktueller Zustand",
+      "stateOpen": "Offen (Aufrufe zugelassen)",
+      "stateClosedFree": "Geschlossen für Free-Plan",
+      "stateClosedTrial": "Geschlossen für Free + Trial",
+      "stateClosedAll": "Geschlossen für alle Pläne",
+      "thresholds": "Auto-Auslöse-Schwellen",
+      "thresholdFree": "Free-Stopp ${usd}",
+      "thresholdTrial": "Trial-Stopp ${usd}",
+      "release": "Schaltkreis freigeben",
+      "releaseConfirmTitle": "Schaltkreis freigeben?",
+      "releaseConfirmBody": "Neue KI-Aufrufe aller Pläne werden wieder zugelassen. Nur tun, wenn das Upstream-Problem behoben ist.",
+      "releaseConfirmAction": "Freigeben",
+      "releaseConfirmCancel": "Abbrechen",
+      "releaseSuccess": "Schaltkreis freigegeben.",
+      "releaseFailure": "Freigabe fehlgeschlagen: {error}",
+      "refresh": "Aktualisieren"
+    },
+    "aiKeysPage": {
+      "breadcrumb": "KI-Schlüssel (BYOK)",
+      "title": "KI-Schlüssel (Bring Your Own Key)",
+      "subtitle": "Binde deinen eigenen OpenAI- / Anthropic- / Vertex-AI-Schlüssel. KI-Aufrufe nutzen dein Kontingent und umgehen das Plattform-LLM-Monatslimit.",
+      "viewUsage": "KI-Nutzung anzeigen →",
+      "addTitle": "BYOK-Schlüssel hinzufügen",
+      "provider": "Anbieter",
+      "providerOpenai": "OpenAI (sk-...)",
+      "providerAnthropic": "Anthropic (sk-ant-...)",
+      "providerVertex": "Google Vertex AI",
+      "apiKey": "API-Schlüssel",
+      "apiKeyHint": "Verschlüsselt via pgcrypto gespeichert; der Klartext ist nicht wiederherstellbar.",
+      "keyTooShort": "API-Schlüssel zu kurz — mindestens 20 Zeichen erforderlich.",
+      "saveFailed": "Speichern fehlgeschlagen (HTTP {status})",
+      "saved": "{provider}-Schlüssel gespeichert.",
+      "saving": "Speichern…",
+      "save": "Schlüssel speichern",
+      "boundTitle": "Verbundene Schlüssel",
+      "noneBound": "Keine BYOK-Schlüssel verbunden. KI-Aufrufe nutzen das Plattform-Monatskontingent.",
+      "thProvider": "Anbieter",
+      "thKeyHint": "Schlüssel-Hinweis",
+      "thStatus": "Status",
+      "thLastUsed": "Zuletzt verwendet",
+      "thCreated": "Erstellt",
+      "thActions": "Aktionen",
+      "statusActive": "Aktiv",
+      "statusDisabled": "Deaktiviert",
+      "lastError": "Letzter Fehler",
+      "revoke": "Widerrufen",
+      "revokeFailed": "Widerruf fehlgeschlagen (HTTP {status})",
+      "never": "Nie",
+      "whyTitle": "Warum BYOK?",
+      "whyQuota": "Verbraucht das Plattform-KI-Monatskontingent nicht (Free 20 / Pro 500 / Team 500 pro Seat).",
+      "whyBilling": "Aufrufe werden direkt mit deinem Anbieter-Konto abgerechnet; deine Ratenlimits gelten.",
+      "whyCompliance": "Daten bleiben in Compliance-Szenarien außerhalb Dritter (Vertex läuft in deinem GCP-Projekt).",
+      "revokeDialogTitle": "BYOK-Schlüssel widerrufen",
+      "revokeDialogBody": "Den BYOK-Schlüssel von {provider} widerrufen? Künftige KI-Aufrufe nutzen wieder das Plattform-LLM-Kontingent.",
+      "revokeDialogConfirm": "Widerrufen",
+      "revokeDialogCancel": "Abbrechen"
+    },
+    "profile": {
+      "title": "Profil",
+      "name": "Name",
+      "email": "E-Mail",
+      "plan": "Plan",
+      "notSet": "Nicht festgelegt"
+    },
+    "account": {
+      "title": "Konto",
+      "signOut": "Abmelden",
+      "signOutDesc": "Von Ihrem Konto auf diesem Gerät abmelden.",
+      "signingOut": "Wird abgemeldet..."
+    },
+    "dangerZone": {
+      "title": "Gefahrenzone",
+      "deleteAccount": "Konto löschen",
+      "deleteAccountDesc": "Ihr Konto wird in 30 Tagen endgültig gelöscht. Bei einer Anmeldung mit derselben E-Mail innerhalb dieser Frist wird es vollständig wiederhergestellt.",
+      "confirmTitle": "Konto löschen?",
+      "confirmMessage": "Ihr Konto wird sofort verborgen und nach 30 Tagen endgültig gelöscht. Innerhalb dieser Frist stellt eine Anmeldung mit derselben E-Mail Folgendes wieder her:",
+      "confirmItem1": "Ihr Konto und Profilinformationen",
+      "confirmItem2": "Alle Richtlinien, Ausführungen und API-Schlüssel",
+      "confirmItem3": "Alle Teams, die Sie besitzen, und deren Daten",
+      "confirmDelete": "Ja, Löschung planen",
+      "deleting": "Wird geplant...",
+      "cancel": "Abbrechen"
+    },
+    "language": {
+      "title": "Spracheinstellungen",
+      "autoDetect": "Sprache automatisch erkennen",
+      "autoDetectDesc": "Erkennen Sie Ihre bevorzugte Sprache automatisch aus den Browsereinstellungen.",
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert"
+    },
+    "aiKeys": {
+      "title": "KI-Schlüssel",
+      "subtitle": "Eigenen OpenAI- / Anthropic- / Vertex-AI-Schlüssel binden. KI-Aufrufe nutzen dein Kontingent und umgehen das Plattform-Monatslimit.",
+      "manageKeys": "KI-Schlüssel verwalten"
+    }
+  },
+  "security": {
+    "title": "Sicherheitsüberwachung",
+    "description": "Überwachen Sie Sicherheitsereignisse, Prüfprotokolle und den Systemzustand."
+  },
+  "admin": {
+    "aiCircuitBreaker": {
+      "title": "KI-Schutzschalter"
+    },
+    "vocab": {
+      "title": "Domänenvokabulare (Admin)",
+      "subtitle": "Aggregierte Kennzahlen aller Nutzer; Top-Verbraucher + aktuelle Massen-Job-Statistik.",
+      "openUserSurface": "Nutzeransicht öffnen →",
+      "overviewError": "Einige Panels konnten nicht geladen werden. Bitte aktualisieren.",
+      "overview": {
+        "heading": "Auf einen Blick",
+        "activeLinks": "Aktive Verknüpfungen",
+        "globalTerms": "Globale Begriffe",
+        "snapshots": "Snapshots",
+        "uniqueUsersHint": "{n} unterschiedliche Nutzer",
+        "archivedHint": "{n} archiviert",
+        "archivedSnapshotsHint": "{n} archiviert"
+      },
+      "topUsers": {
+        "title": "Top-Nutzer nach aktiven Verknüpfungen",
+        "email": "Nutzer",
+        "plan": "Plan",
+        "activeLinks": "Aktiv",
+        "emptyTitle": "Noch keine Nutzer",
+        "emptyDescription": "Keine aktiven Vokabular-Verknüpfungen auf der Plattform."
+      },
+      "jobs": {
+        "title": "Massen-Job-Statistik (letzte 24 h)",
+        "status": "Status",
+        "count": "Jobs",
+        "totalRows": "Zeilen gesamt",
+        "emptyTitle": "Keine Massen-Jobs in den letzten 24 h",
+        "emptyDescription": "Sobald Nutzer importieren, erscheint die Statistik hier."
+      }
+    },
+    "riskTier": {
+      "title": "Risiko-Tier-Triage",
+      "subtitle": "Benutzer mit Registrierungs-Risiko ≥ 1. Vor dem Herabstufen den Grund prüfen; jede Übersteuerung wird im Audit-Log protokolliert.",
+      "total": "Gesamt",
+      "loading": "Lädt…",
+      "empty": "Keine Benutzer über der gewählten Stufe.",
+      "refresh": "Aktualisieren",
+      "filters": {
+        "minTier": "Min. Stufe",
+        "sortBy": "Sortieren nach",
+        "byTier": "Stufe (hoch → niedrig)",
+        "byCreated": "Erstellt (neu → alt)",
+        "byPurges": "Bereinigungen"
+      },
+      "table": {
+        "tier": "Stufe",
+        "email": "E-Mail",
+        "plan": "Plan",
+        "priorPurges": "Frühere Löschungen",
+        "reactivations": "Reaktivierungen",
+        "reason": "Grund",
+        "created": "Erstellt",
+        "actions": "Aktionen",
+        "tombstoned": "Soft-gelöscht",
+        "override": "Übersteuern"
+      },
+      "override": {
+        "title": "Risiko-Stufe übersteuern",
+        "currentTier": "Aktuelle Stufe",
+        "newTier": "Neue Stufe",
+        "ticketId": "Ticket-ID",
+        "ticketIdHint": "(Support-Ticket-Referenz, im Audit-Log gespeichert)",
+        "note": "Notiz",
+        "notePlaceholder": "Kurze Begründung (≤200 Zeichen). Nur im Audit-Log sichtbar.",
+        "cancel": "Abbrechen",
+        "submit": "Anwenden",
+        "submitting": "Wird angewendet…"
+      }
+    },
+    "console": {
+      "badge": "ADMIN-KONSOLE",
+      "modeSaas": "SaaS",
+      "modeOnPrem": "On-Premises",
+      "modeLabel": "Bereitstellungsmodus",
+      "scope": "Privilegierte Operationen — alle Aktionen werden protokolliert.",
+      "returnToDashboard": "Zurück zum Dashboard"
+    },
+    "nav": {
+      "overview": "Übersicht",
+      "aiBreaker": "KI-Schutzschalter",
+      "riskTier": "Risiko-Tier-Triage",
+      "license": "Lizenz",
+      "sso": "Single Sign-On",
+      "sidebarLabel": "Admin-Navigation",
+      "licenseRevoke": "Lizenzwiderruf",
+      "issuedLicenses": "Ausgestellte Lizenzen"
+    },
+    "overview": {
+      "title": "Admin-Übersicht",
+      "subtitle": "Übergreifende operative Steuerung der Plattform.",
+      "cardsHeading": "Operative Werkzeuge",
+      "aiBreakerCard": {
+        "title": "KI-Schutzschalter",
+        "description": "LLM-Kosten plattformweit anhalten, wenn die Ausgaben unerwartet steigen.",
+        "cta": "Schutzschalter öffnen"
+      },
+      "vocabCard": {
+        "title": "Domänenvokabulare",
+        "description": "Aggregierte Kennzahlen, Top-Verbraucher, aktuelle Massen-Job-Statistik.",
+        "cta": "Dashboard öffnen"
+      },
+      "riskTierCard": {
+        "title": "Risiko-Tier-Triage",
+        "description": "Registrierungs-Risikoklassifizierungen prüfen und überschreiben.",
+        "cta": "Triage öffnen"
+      },
+      "licenseCard": {
+        "title": "Lizenz",
+        "description": "Enterprise-Lizenzstatus, Sitzanzahl und Ablaufdatum anzeigen.",
+        "cta": "Lizenz anzeigen",
+        "comingSoon": "Demnächst verfügbar"
+      },
+      "licenseRevokeCard": {
+        "title": "Lizenzwiderruf",
+        "description": "Kompromittierte Lizenzen widerrufen und die signierte Widerrufsliste veröffentlichen.",
+        "cta": "Widerruf öffnen"
+      },
+      "issuedLicensesCard": {
+        "title": "Ausgestellte Lizenzen",
+        "description": "Alle jemals signierten Lizenzen mit Verlängerungskette und Telemetrie durchsuchen.",
+        "cta": "Hauptbuch öffnen"
+      },
+      "ssoCard": {
+        "title": "Single Sign-On",
+        "description": "SAML / OIDC für Ihre Organisation konfigurieren.",
+        "cta": "SSO konfigurieren",
+        "comingSoon": "Demnächst verfügbar"
+      }
+    },
+    "license": {
+      "title": "Lizenz",
+      "subtitle": "Enterprise-Lizenzstatus, Signaturvertrauen und Aktualität der Widerrufsprüfung für diese On-Prem-Bereitstellung.",
+      "status": {
+        "missing": {
+          "title": "Lizenzschlüssel nicht konfiguriert",
+          "body": "Setzen Sie die Umgebungsvariable LICENSE_KEY. Die Bereitstellung bleibt im eingeschränkten Modus, bis eine gültige Lizenz verfügbar ist.",
+          "cta": "Erforderliche Umgebungsvariable:"
+        },
+        "malformed": {
+          "title": "Lizenzschlüssel ist fehlerhaft",
+          "body": "Die konfigurierte Lizenz kann nicht analysiert werden. Kontaktieren Sie den Vertrieb für einen Ersatzschlüssel."
+        },
+        "signatureInvalid": {
+          "title": "Lizenzsignatur ist ungültig",
+          "body": "Der Lizenzinhalt passt nicht zur Signatur. Behandeln Sie dies als manipulierten Schlüssel oder als Schlüssel für eine andere Nutzlast."
+        },
+        "signatureUntrustedKey": {
+          "title": "Signaturschlüssel ist nicht vertrauenswürdig",
+          "body": "Die Lizenz wurde mit einem Schlüssel signiert, der nicht im Trust Bundle dieses Builds enthalten ist. Kontaktieren Sie den Vertrieb für eine Neuausstellung."
+        },
+        "bindingMismatch": {
+          "title": "Lizenz ist an ein anderes Deployment gebunden",
+          "body": "Die Signatur ist gültig, aber die deploymentBinding der Lizenz stimmt nicht mit ASTER_DEPLOYMENT_ID auf dieser Instanz überein. Entweder läuft die Lizenz auf dem falschen Cluster, oder die ASTER_DEPLOYMENT_ID-Umgebungsvariable fehlt bzw. ist falsch konfiguriert. Kontaktieren Sie den Vertrieb für eine an dieses Deployment gebundene Neuausstellung."
+        },
+        "legacyUnsigned": {
+          "title": "Unsigierte Legacy-Lizenz",
+          "body": "Diese v1-Lizenz wird nur während des Migrationsfensters akzeptiert. Stellen Sie vor Ablauf auf eine signierte v2-Lizenz um.",
+          "deadline": "Stellen Sie vor Ende des Kompatibilitätsfensters auf v2-Signaturen um."
+        },
+        "verifiedRevoked": {
+          "title": "Lizenz widerrufen",
+          "body": "Diese Lizenz ist kryptografisch gültig, steht aber auf der Widerrufsliste. Kontaktieren Sie Vertrieb oder Support."
+        },
+        "verifiedExpired": {
+          "title": "Lizenz abgelaufen",
+          "body": "{days, plural, one {Vor # Tag abgelaufen} other {Vor # Tagen abgelaufen}}"
+        },
+        "networkGraceExpired": {
+          "title": "Kulanzfrist für Widerrufsprüfung beendet",
+          "body": "Die Lizenzsignatur ist gültig, aber diese Bereitstellung hat den Widerrufsendpunkt nicht innerhalb der zulässigen Kulanzfrist erreicht."
+        },
+        "verifiedExpiringSoon": {
+          "title": "Lizenz läuft bald ab",
+          "body": "{days, plural, one {# Tag verbleibend} other {# Tage verbleibend}}"
+        },
+        "networkGrace": {
+          "title": "Widerrufsprüfung vorübergehend veraltet",
+          "body": "Vorübergehendes Verbindungsproblem. Die letzte erfolgreiche Prüfung war vor {minutes, plural, one {# Minute} other {# Minuten}}."
+        },
+        "verifiedActive": {
+          "title": "Lizenz verifiziert und aktiv",
+          "body": "Signatur, Berechtigung und Aktualität der Widerrufsprüfung sind gültig."
+        }
+      },
+      "advisory": {
+        "heading": "Hinweise",
+        "expiringSoon": "Die Lizenzverlängerung steht bevor: {days, plural, one {# Tag verbleibend} other {# Tage verbleibend}}.",
+        "revocationStale": "Der letzte Abruf der Widerrufsliste ist fehlgeschlagen; das letzte gültige Ergebnis wird weiterverwendet.",
+        "networkGrace": "Der Widerrufsstatus befindet sich in der Kulanzfrist. Die letzte erfolgreiche Prüfung war vor {minutes, plural, one {# Minute} other {# Minuten}}.",
+        "legacyUnsignedActive": "Diese unsignierte v1-Lizenz sollte durch eine signierte v2-Lizenz ersetzt werden."
+      },
+      "details": {
+        "heading": "Lizenzdetails",
+        "customer": "Kunde",
+        "tier": "Stufe",
+        "sku": "SKU",
+        "licenseTerm": "Laufzeit",
+        "seatLimit": "Sitzlimit",
+        "seatUnlimited": "Unbegrenzt",
+        "issuedAt": "Ausgestellt",
+        "expiresAt": "Läuft ab",
+        "notBefore": "Gültig ab",
+        "daysRemaining": "Verbleibende Tage",
+        "features": "Funktionen",
+        "noFeatures": "Keine optionalen Funktionen aktiviert",
+        "licenseId": "Lizenz-ID",
+        "keyPreview": "Schlüsselvorschau",
+        "deploymentLabel": "Deployment",
+        "deploymentId": "Deployment-ID",
+        "deploymentUrl": "Deployment-URL",
+        "copy": "Kopieren",
+        "copied": "Kopiert",
+        "copyValue": "{label} kopieren"
+      },
+      "revocation": {
+        "heading": "Widerrufsstatus",
+        "endpoint": "Endpunkt",
+        "lastSuccess": "Letzte erfolgreiche Prüfung",
+        "lastAttempt": "Letzter Versuch",
+        "version": "Version der Widerrufsliste",
+        "fresh": "Aktuell",
+        "grace": "Vorübergehendes Verbindungsproblem — Kulanzfrist aktiv",
+        "graceExpired": "Verbindung muss wiederhergestellt werden — Kulanzfrist beendet",
+        "error": "Letzter Abruf fehlgeschlagen",
+        "notApplicable": "Nicht zutreffend",
+        "airGappedPolicy": "Widerrufsprüfung deaktiviert (Air-Gapped-SKU)"
+      },
+      "actions": {
+        "heading": "Aktionen",
+        "refresh": "Jetzt aktualisieren",
+        "refreshing": "Aktualisierung läuft…",
+        "refreshSuccess": "Cache aktualisiert",
+        "refreshError": "Aktualisierung fehlgeschlagen — siehe Diagnosedaten",
+        "contactRenewal": "Verlängerungsteam kontaktieren",
+        "renewNow": "Jetzt verlängern",
+        "downloadDiagnostics": "Diagnosepaket herunterladen"
+      },
+      "telemetry": {
+        "heading": "Nutzungsdaten (Opt-in)",
+        "optedOut": "Telemetrie ist deaktiviert. Nichts verlässt dieses Deployment.",
+        "optedInNoUpload": "Telemetrie ist aktiviert. Es wurde noch nichts gesendet.",
+        "lastAttempt": "Letzter Versuch:",
+        "viewSentBody": "An Aster gesendeten Inhalt anzeigen",
+        "unknownError": "Unbekannter Fehler",
+        "dataRegion": "Datenregion",
+        "customerHeader": "Kundenfeld",
+        "customerMaskedYes": "maskiert (anonymes Token)",
+        "customerMaskedNo": "Klartext-Name",
+        "schemaVersionUpgradeRequired": "Dieses Build sendet eine veraltete Schema-Version. SaaS akzeptiert derzeit: v{versions}. Aktualisieren Sie aster-cloud, um die Telemetrie fortzusetzen.",
+        "outcome": {
+          "accepted": "Akzeptiert",
+          "deduped": "Dedupliziert (gleiches Fenster bereits empfangen)",
+          "failed": "Fehlgeschlagen"
+        }
+      },
+      "time": {
+        "minutesAgo": "{minutes, plural, one {vor # Minute} other {vor # Minuten}}",
+        "hoursAgo": "{hours, plural, one {vor # Stunde} other {vor # Stunden}}",
+        "daysAgo": "{days, plural, one {vor # Tag} other {vor # Tagen}}",
+        "neverChecked": "Nie geprüft"
+      },
+      "diagnostics": {
+        "heading": "Support-Diagnose",
+        "signingKeyId": "Signaturschlüssel-ID",
+        "fingerprint": "Fingerabdruck des öffentlichen Schlüssels",
+        "reasonCode": "Ursachencode",
+        "lastError": "Letzter Fehler",
+        "trustBundleVersion": "Trust-Bundle-Einträge",
+        "schemaVersion": "Schemaversion"
+      }
+    },
+    "sso": {
+      "title": "Single Sign-On",
+      "subtitle": "Konfigurieren Sie, wie sich Ihr Team anmeldet. Setzen Sie die Umgebungsvariable SSO_PROVIDER, um SAML oder OIDC zu aktivieren.",
+      "copy": "Kopieren",
+      "copied": "Kopiert",
+      "copyValue": "{label} in die Zwischenablage kopieren",
+      "incomplete": {
+        "title": "SSO-Konfiguration ist unvollständig",
+        "body": "Folgende Umgebungsvariablen müssen gesetzt werden, bevor SSO Benutzer authentifizieren kann:"
+      },
+      "none": {
+        "title": "SSO ist nicht aktiviert",
+        "body": "Benutzer melden sich derzeit über den Standard-Credentials- / OAuth-Flow an. Um SAML oder OIDC zu aktivieren, setzen Sie die Umgebungsvariable SSO_PROVIDER und starten Sie die Bereitstellung neu.",
+        "docsHint": "Siehe On-Prem-Bereitstellungshandbuch für die vollständige Liste der erforderlichen env vars pro Provider."
+      },
+      "saml": {
+        "spHeading": "Service Provider (Aster) — Werte für Ihren IdP",
+        "spHint": "Konfigurieren Sie diese Werte in Ihrem Identity Provider, wenn Sie Aster als Service Provider registrieren.",
+        "idpHeading": "Identity Provider — Werte, die Aster aus Ihrer env liest",
+        "idpHint": "Geben Sie eines an: SAML_IDP_METADATA_URL (empfohlen) oder SAML_IDP_CERT_FINGERPRINT. SLO ist optional.",
+        "entityId": "Entity-ID",
+        "acsUrl": "ACS URL (Assertion Consumer Service)",
+        "metadataUrl": "IdP-Metadaten-URL",
+        "certFingerprint": "IdP X.509-Fingerabdruck",
+        "sloUrl": "Single-Logout-URL",
+        "notConfigured": "Nicht konfiguriert"
+      },
+      "oidc": {
+        "appHeading": "Anwendung — Werte für Ihren IdP",
+        "appHint": "Konfigurieren Sie diese Werte in Ihrem OpenID Connect Provider, wenn Sie Aster als Relying Party registrieren.",
+        "idpHeading": "Identity Provider — Werte, die Aster aus Ihrer env liest",
+        "idpHint": "Geben Sie die Issuer-URL, Client-ID und Client-Secret an. Scopes sind standardmäßig openid email profile.",
+        "callbackUrl": "Callback-URL",
+        "issuer": "Issuer-URL",
+        "clientId": "Client-ID",
+        "clientSecret": "Client-Secret",
+        "scopes": "Angeforderte Scopes",
+        "secretConfigured": "Konfiguriert",
+        "secretMissing": "Nicht konfiguriert",
+        "notConfigured": "Nicht konfiguriert"
+      }
+    },
+    "issuedLicenses": {
+      "title": "Ausgestellte Lizenzen",
+      "subtitle": "Alle jemals von Aster signierten Lizenzen, mit Verlängerungs-Lineage und neuester Telemetrie.",
+      "searchPlaceholder": "Nach Kunde oder Lizenz-ID suchen…",
+      "searchButton": "Suchen",
+      "emptyMatching": "Keine Lizenz entspricht der Suche.",
+      "shownCount": "{n, plural, one {# Zeile} other {# Zeilen}} angezeigt.",
+      "cols": {
+        "customer": "Kunde",
+        "licenseId": "Lizenz-ID",
+        "tier": "Tier",
+        "term": "Laufzeit",
+        "signedAt": "Signiert",
+        "expiresAt": "Läuft ab",
+        "phase": "Phase",
+        "lineage": "Lineage",
+        "telemetry": "Telemetrie"
+      },
+      "phase": {
+        "active": "Aktiv",
+        "expiring-soon": "Läuft bald ab",
+        "expired": "Abgelaufen",
+        "superseded": "Ersetzt",
+        "pending-renewal": "Verlängerung ausstehend"
+      },
+      "lineage": {
+        "renewedFrom": "← verlängert aus {id}…",
+        "supersededBy": "→ ersetzt durch {id}…"
+      },
+      "telemetry": {
+        "recent": "Innerhalb 24h gemeldet",
+        "daysAgo": "Vor {days} Tagen gemeldet",
+        "stale": "Veraltet ({days}d)",
+        "silent": "Aktiviert, schweigt",
+        "notOptedIn": "Nicht aktiviert"
+      }
+    },
+    "licenseRevoke": {
+      "title": "Lizenzwiderruf",
+      "subtitle": "Aktive Lizenzwiderrufe verwalten und die signierte Widerrufsliste veröffentlichen.",
+      "currentPublication": {
+        "heading": "Aktuelle Widerrufsliste",
+        "version": "Version",
+        "publishedAt": "Veröffentlicht",
+        "validUntil": "Gültig bis",
+        "revokedCount": "{count, plural, one {# widerrufene Lizenz} other {# widerrufene Lizenzen}}",
+        "republish": "Manifest neu veröffentlichen",
+        "republishing": "Wird veröffentlicht…",
+        "republishSuccess": "Manifest neu veröffentlicht",
+        "republishError": "Veröffentlichung fehlgeschlagen",
+        "unavailable": "Es wurde noch kein Manifest veröffentlicht."
+      },
+      "newForm": {
+        "heading": "Lizenz widerrufen",
+        "licenseIdLabel": "Lizenz-ID",
+        "licenseIdPlaceholder": "lic_01J5N7K8Z3Q9...",
+        "licenseIdInvalid": "Lizenz-ID muss dem Muster lic_<22-30 alphanumerische Zeichen> entsprechen",
+        "reasonLabel": "Grund",
+        "reasonRequired": "Bitte einen Grund auswählen.",
+        "reasonPlaceholder": "Grund auswählen…",
+        "reasonOptions": {
+          "non-payment": "Nichtzahlung",
+          "security": "Sicherheitsvorfall",
+          "renewal-superseded": "Durch Verlängerung ersetzt",
+          "contract-terminated": "Vertrag beendet",
+          "fraud": "Betrug"
+        },
+        "notesLabel": "Interne Notizen (optional)",
+        "customerRefLabel": "Kundenreferenz (optional)",
+        "dryRun": "Probelauf (Vorschau ohne Widerruf)",
+        "submit": "Lizenz widerrufen",
+        "submitting": "Wird widerrufen…",
+        "confirmTitle": "Widerruf bestätigen",
+        "confirm": "Lizenz {licenseId} aus Grund \"{reason}\" widerrufen? Kunden verlieren in ca. 6 Stunden den Zugriff.",
+        "confirmCta": "Ja, widerrufen",
+        "cancel": "Abbrechen",
+        "success": "Lizenz {licenseId} widerrufen. Widerrufslistenversion ist jetzt {version}.",
+        "dryRunSuccess": "Probelauf für {licenseId} abgeschlossen — keine Änderungen.",
+        "dryRunNotice": "Probelauf: Es wird nichts widerrufen.",
+        "error": "Widerruf fehlgeschlagen: {error}"
+      },
+      "table": {
+        "heading": "Widerrufene Lizenzen",
+        "empty": "Keine aktiven Widerrufe.",
+        "licenseId": "Lizenz-ID",
+        "reason": "Grund",
+        "revokedAt": "Widerrufen",
+        "revokedBy": "Von",
+        "notes": "Notizen",
+        "customerRef": "Kundenreferenz",
+        "undo": "Rückgängig",
+        "revokedHoursAgo": "{hours, plural, one {vor # Stunde} other {vor # Stunden}}",
+        "undoExpired": "Abgelaufen",
+        "undoConfirm": "Widerruf für {licenseId} rückgängig machen?",
+        "undoSuccess": "Widerruf für {licenseId} rückgängig gemacht",
+        "undoError": "Rückgängig fehlgeschlagen: {error}",
+        "undoCountdown": "{hours, plural, one {Rückgängig (# Stunde)} other {Rückgängig (# Stunden)}}",
+        "undoAriaLabel": "Widerruf für {licenseId} rückgängig machen, noch {hours, plural, one {# Stunde} other {# Stunden}}",
+        "undoExpiredAriaLabel": "Rückgängig-Fenster für {licenseId} abgelaufen"
+      }
+    },
+    "readOnly": {
+      "heading": "NUR-LESEN-MODUS",
+      "subheading": "Administrative Schreiboperationen sind deaktiviert.",
+      "reason": {
+        "grace-expired": "Die Kulanzfrist der Widerrufsprüfung ist abgelaufen. Verbindung zum Widerrufsendpunkt wiederherstellen.",
+        "revoked": "Diese Lizenz wurde widerrufen. Kontaktieren Sie den Aster-Vertrieb.",
+        "expired": "Diese Lizenz ist abgelaufen. Verlängern Sie sie, um Admin-Operationen wiederherzustellen.",
+        "malformed": "Lizenzschlüssel ist fehlerhaft. Setzen Sie eine gültige LICENSE_KEY-Umgebungsvariable.",
+        "binding-mismatch": "Diese Lizenz ist an ein anderes Deployment gebunden, oder ASTER_DEPLOYMENT_ID fehlt/ist falsch konfiguriert. Setzen Sie den korrekten Wert oder kontaktieren Sie den Vertrieb für eine Neuausstellung.",
+        "missing": "Keine LICENSE_KEY konfiguriert. Setzen Sie die Umgebungsvariable, um Admin-Operationen wiederherzustellen.",
+        "clock-rollback": "Die Systemuhr scheint über die Sicherheitstoleranz hinaus zurückgesetzt worden zu sein. Korrekte Zeit per NTP wiederherstellen — die Lizenzprüfung wurde ausgesetzt, um den Replay einer abgelaufenen Lizenz zu verhindern."
+      },
+      "viewLicense": "Lizenzstatus anzeigen"
+    },
+    "errorBoundary": {
+      "title": "Admin-Werkzeug nicht verfügbar",
+      "body": "Diese Admin-Steuerung konnte nicht geladen werden. Der Fehler wurde zur Analyse protokolliert.",
+      "backToOverview": "Zurück zur Admin-Übersicht"
+    },
+    "pulse": {
+      "heading": "Admin-Pulse",
+      "circuit": {
+        "title": "KI-Schutzschalter",
+        "healthy": "Gesund",
+        "tripped": "Ausgelöst",
+        "error": "Nicht verfügbar",
+        "spendToday": "Heute ausgegeben"
+      },
+      "riskTier": {
+        "title": "Risiko-Warteschlange",
+        "empty": "Keine riskanten Konten",
+        "count": "markierte Konten",
+        "error": "Abfrage fehlgeschlagen"
+      },
+      "audit": {
+        "title": "Letzte Admin-Ereignisse",
+        "empty": "Keine kürzlichen Admin-Ereignisse.",
+        "error": "Audit-Log konnte nicht geladen werden."
+      }
+    },
+    "flags": {
+      "flagsHeading": "Feature-Flags",
+      "policySharingTitle": "Policy-Sharing über Teams",
+      "policySharingDesc": "Wenn aktiviert, können Policy-Besitzer eine Policy mit weiteren Teams teilen (lesen + ausführen). Standard AUS.",
+      "on": "An",
+      "off": "Aus",
+      "enable": "Aktivieren",
+      "disable": "Deaktivieren",
+      "saving": "Wird gespeichert…"
+    }
+  },
+  "renewal": {
+    "portal": {
+      "valid": {
+        "title": "Aster-Lizenz verlängern",
+        "subtitle": "Ein Klick zur Verlängerung Ihres Abonnements.",
+        "footer": "Mit der Verlängerung akzeptieren Sie die Aster-Enterprise-Bedingungen."
+      },
+      "summary": {
+        "customer": "Kunde",
+        "licenseId": "Aktuelle Lizenz-ID",
+        "deployment": "Deployment",
+        "currentExpiry": "Aktuelles Ablaufdatum"
+      },
+      "checkout": {
+        "continue": "Weiter zur Kasse",
+        "starting": "Stripe wird geöffnet…",
+        "genericError": "Kasse konnte nicht gestartet werden. Bitte erneut versuchen oder Support kontaktieren."
+      },
+      "invalid": {
+        "title": "Verlängerungslink ungültig",
+        "body": "Dieser Link ist ungültig. Falls Sie ihn aus einer E-Mail kopiert haben, prüfen Sie auf Abschnitte."
+      },
+      "expired": {
+        "title": "Verlängerungslink abgelaufen",
+        "body": "Verlängerungslinks sind 14 Tage gültig. Kontaktieren Sie den Vertrieb für einen neuen Link."
+      },
+      "alreadyConsumed": {
+        "title": "Verlängerung läuft bereits",
+        "body": "Dieser Link wurde bereits genutzt. Falls Sie die Zahlung abgeschlossen haben, prüfen Sie Ihre E-Mails. Andernfalls kontaktieren Sie den Support."
+      }
+    }
+  },
+  "decisionTrace": {
+    "title": "Entscheidungsprotokoll",
+    "empty": "Keine Trace-Daten",
+    "ariaLabel": "Entscheidungsprotokoll",
+    "node": {
+      "rule": "Regel",
+      "if": "Wenn",
+      "match": "Abgleich",
+      "branch": "Zweig",
+      "expr": "Ausdruck"
+    },
+    "outcome": {
+      "true": "Wahr",
+      "false": "Falsch",
+      "matched": "Getroffen",
+      "notMatched": "Nicht getroffen",
+      "unknown": "Unbekannt"
+    },
+    "duration": "{ms} ms"
+  },
+  "diagnostics": {
+    "errors": "{count, plural, one {# Fehler} other {# Fehler}}",
+    "warnings": "{count, plural, one {# Warnung} other {# Warnungen}}",
+    "noIssues": "Keine Probleme",
+    "viewProblems": "Probleme anzeigen",
+    "hideProblems": "Probleme ausblenden"
+  },
+  "ai": {
+    "panelTitle": "KI-Assistent",
+    "promptPlaceholder": "Beschreiben Sie die gewuenschte Richtlinie...",
+    "generate": "Generieren",
+    "stop": "Stopp",
+    "apply": "Anwenden",
+    "reject": "Verwerfen",
+    "retry": "Wiederholen",
+    "close": "Schliessen",
+    "generating": "Wird generiert...",
+    "autoApplied": "Kompilierung bestanden — im Editor angewendet",
+    "repairing": "Wird repariert",
+    "validationPassed": "Kompilierung bestanden",
+    "validationFailed": "Kompilierung fehlgeschlagen, wird repariert",
+    "errorGeneric": "KI-Dienst voruebergehend nicht verfuegbar",
+    "shortcutHint": "Strg+Enter zum Generieren",
+    "toggleAI": "KI-Assistent",
+    "suggest": "Optimierungsvorschlaege",
+    "suggesting": "Analyse laeuft...",
+    "suggestPlaceholder": "KI analysiert Ihre Richtlinie und schlaegt Verbesserungen vor",
+    "diffPreview": "Aenderungen anzeigen",
+    "diffOriginal": "Original",
+    "diffGenerated": "Generiert",
+    "acceptDiff": "Aenderungen uebernehmen",
+    "rejectDiff": "Aenderungen verwerfen",
+    "inlineCompletionLoading": "KI-Vervollstaendigung wird geladen..."
+  },
+  "upgradeBlocker": {
+    "viewPlans": "Pläne ansehen",
+    "dismiss": "Später",
+    "published_rules": {
+      "title": "Free ist auf {limit} veröffentlichte Regeln begrenzt",
+      "body": "Mit Pro veröffentlichen Sie bis zu 100 Regeln pro Projekt, inklusive Team-Review und Audit-Historie."
+    },
+    "evaluations": {
+      "title": "Monatliches Auswertungslimit erreicht",
+      "body": "Free umfasst {limit} Auswertungen/Monat. Pro hebt das auf 50.000 mit Überlauf-Abrechnung an."
+    },
+    "audit_retention": {
+      "title": "Free behält Audit-Logs 7 Tage",
+      "body": "Enterprise bietet unbegrenzte Aufbewahrung mit Hash-Ketten-Audit und digitalen Signaturen — geeignet für SOX / HIPAA / PCI."
+    },
+    "sso": {
+      "title": "SSO ist eine Enterprise-Funktion",
+      "body": "SAML 2.0, OIDC und Authentik-Integration sind Teil des Enterprise-Plans."
+    },
+    "data_residency": {
+      "title": "Daten-Residenz erfordert Enterprise",
+      "body": "Wählen Sie Ihre Region (EU / US / China / individuell) im Enterprise-Plan via VPC oder selbst gehostetem K3S."
+    },
+    "reviewer_required": {
+      "title": "Freigabe benötigt ein 2-Personen-Team",
+      "body": "Pro aktiviert SOX-konforme Funktionstrennung: Autor und Prüfer müssen unterschiedlich sein. Upgrade auf Pro, um einen Prüfer einzuladen."
+    },
+    "team_member_invite": {
+      "title": "Free ist Einzelplatz",
+      "body": "Pro ermöglicht das Einladen von Teamkollegen mit rollenbasierter Zugriffskontrolle. Upgraden Sie, um Mitglieder hinzuzufügen."
+    },
+    "contactAdmin": "Administrator kontaktieren"
+  },
+  "demoPage": {
+    "seo": {
+      "title": "Eine Kreditentscheidung abspielen — Aster-Lang-Demo",
+      "description": "End-to-end: eine echte Kreditzusage-Regel, ein Beispielantragsteller, die Entscheidung und eine Byte-für-Byte-Wiederholung, die Sie einer Aufsichtsbehörde zeigen können. Ohne Anmeldung."
+    },
+    "eyebrow": "Live-Demo · Kreditrisiko",
+    "title": "Eine Kreditentscheidung abspielen",
+    "subtitle": "Wählen Sie einen Antragsteller, sehen Sie die Entscheidung und spielen Sie dann genau ab, wie sie zustande kam — die Antwort für eine Aufsichtsbehörde, kein Raten.",
+    "step1": {
+      "title": "Die Kreditregel",
+      "hint": "In kontrolliertem Klartext geschrieben — lesbar für Risk und Compliance, nicht nur für Entwickler. Diese Regel entscheidet über jeden Antrag."
+    },
+    "step2": {
+      "title": "Antragsteller wählen",
+      "hint": "Drei reale Fälle: eine klare Zusage, ein Grenzfall zur manuellen Prüfung und eine Ablehnung."
+    },
+    "step3": {
+      "title": "Schwellenwerte anpassen",
+      "hint": "Diese Grenzwerte SIND die Regel — ändern Sie sie, und die Regel oben schreibt sich neu. Genau diese Richtlinienänderung würde ein Kreditsachbearbeiter vornehmen."
+    },
+    "step4": {
+      "title": "Diese Entscheidung abspielen",
+      "auditorNote": "Das übergeben Sie einem Prüfer. Jeder Schritt, der zur Entscheidung führte, neu berechnet aus der exakten Regel und den Eingaben — kein Log-Eintrag, der echte Pfad."
+    },
+    "scenarios": {
+      "approved": {
+        "label": "Starker Antragsteller"
+      },
+      "refer": {
+        "label": "Grenzfall"
+      },
+      "declined": {
+        "label": "Unter dem Schwellenwert"
+      }
+    },
+    "fields": {
+      "creditScore": "Kreditwürdigkeit",
+      "monthlyIncome": "Monatliches Einkommen",
+      "monthlyDebt": "Monatliche Schulden",
+      "requestedAmount": "Beantragter Betrag"
+    },
+    "adverse": {
+      "label": "Begründung der Ablehnung",
+      "reasons": {
+        "creditScore": "Bonität von {actual} liegt unter dem für die Genehmigung erforderlichen Mindestwert von {threshold}.",
+        "tierMiss": "Bonität von {actual} erreichte den Schwellenwert {threshold} für die automatische Genehmigung nicht; zur manuellen Prüfung weitergeleitet.",
+        "overCap": "Beantragter Betrag von {actual} überschreitet das Leistbarkeitslimit von {threshold} (einkommensbasiert); übergroßer Kredit zur manuellen Prüfung weitergeleitet."
+      },
+      "note": "Dies ist die offenlegungspflichtige Begründung für nachteilige Kreditentscheidungen — und die Wiederholung unten ist ihr schrittweiser Nachweis, neu berechnet aus der exakten Regel und den Eingaben."
+    },
+    "decisionLabel": "Entscheidung",
+    "cta": {
+      "title": "Bringen Sie Ihre eigenen Kreditregeln mit",
+      "subtitle": "Führen Sie eine echte Kreditzusage- oder Limit-Regel durch Aster und spielen Sie jede Entscheidung ab. Kostenlos starten.",
+      "button": "Kostenlos starten"
+    },
+    "thresholds": {
+      "premiumScore": "Vorzugs-Score",
+      "premiumDti": "Vorzugs-DTI-Grenze",
+      "standardScore": "Standard-Score",
+      "standardDti": "Standard-DTI-Grenze",
+      "minScore": "Mindest-Score",
+      "reset": "Auf Standard zurücksetzen",
+      "maxLti": "Max. Kredit-Einkommen-Verhältnis"
+    },
+    "runButton": "Regel ausführen",
+    "runHint": "Ändern Sie oben eine Eingabe oder einen Schwellenwert und führen Sie aus — die Entscheidung wird live von derselben Engine berechnet, die in der Produktion läuft.",
+    "replayTitle": "Diese Entscheidung abspielen",
+    "explanation": {
+      "heading": "Warum diese Entscheidung",
+      "sub": "Direkt aus der Regel und den Eingaben berechnet — jeder Wert ist exakt, nicht generiert.",
+      "overviewHeading": "Überblick",
+      "module": "Modul",
+      "rule": "Regel",
+      "decision": "Entscheidung",
+      "fieldsHeading": "Antragsteller-Felder",
+      "colField": "Feld",
+      "colType": "Typ",
+      "colValue": "Wert",
+      "colPurpose": "Verwendet für",
+      "metricsHeading": "Zwischenwerte",
+      "stepsHeading": "Entscheidungsschritte",
+      "matched": "erfüllt",
+      "notMatched": "nicht erfüllt",
+      "skipped": "nicht ausgewertet",
+      "reasonHeading": "In einem Satz",
+      "aiNarrative": "KI-Zusammenfassung",
+      "aiNarrativeHint": "Optional: eine Klartext-Lesart der obigen Fakten."
+    }
+  },
+  "equivalencePage": {
+    "seo": {
+      "title": "Dual-Engine-Parität — Aster Lang",
+      "description": "Verfolgen Sie Schicht für Schicht, wie übereinstimmend die Java- und TypeScript-Engines von Aster Lang sind. Parse-Parität (beide Engines akzeptieren denselben Quelltext) und Laufzeit-Auswertungsparität (beide erzeugen identische Ausgabe) werden nächtlich gemessen und offen veröffentlicht, mit einem Register behobener Divergenzen."
+    },
+    "hero": {
+      "title": "Dual-Engine-Parität",
+      "subtitle": "Aster Lang betreibt zwei Produktions-Engines (Java und TypeScript). Wir testen sie jede Nacht gegen ein gemeinsames Corpus und veröffentlichen geschichtete Belege — Parse-Akzeptanz und Gleichheit der Laufzeit-Ausgabe — sowie ein offenes Register der bereits geschlossenen Divergenzen."
+    },
+    "unavailable": "Live-Daten derzeit nicht verfügbar. Aktuelle Messung im Repository einsehen.",
+    "currentRate": "Parse-Paritätsrate",
+    "measuredOn": "{equivalent} / {total} Tier-1-Samples, von beiden Engines akzeptiert — gemessen am {date}",
+    "qualifier": "Parse-Ebene: Dies misst, ob beide Engines denselben Quelltext akzeptieren. Die Gleichheit der Laufzeit-Ausgabe wird separat als Auswertungsparität gemessen (unten). Beide Ebenen werden offen verfolgt.",
+    "chips": {
+      "parse": "Parse-Parität",
+      "eval": "Laufzeit-Eval-Parität",
+      "ir": "IR-Feldgleichheit",
+      "evalCoverage": "Eval-Abdeckung",
+      "featureCoverage": "Feature-Abdeckung"
+    },
+    "stats": {
+      "equivalent": "Von beiden akzeptiert",
+      "equivalentDesc": "nur Parse-Ebene; Laufzeit separat unten",
+      "divergent": "Parse-Divergenz",
+      "divergentDesc": "eine Engine kann nicht parsen",
+      "total": "Tier-1-Corpus",
+      "totalDesc": "Parse-Paritäts-Samples (ohne tier2/tier3)"
+    },
+    "trend": {
+      "heading": "Konsistenzverlauf",
+      "date": "Datum",
+      "ratio": "Akzeptiert / Gesamt",
+      "rate": "Rate",
+      "delta": "Δ",
+      "parseSeries": "Parse-Parität",
+      "evalSeries": "Laufzeit-Auswertungsparität",
+      "irSeries": "IR-Feldgleichheit",
+      "evalCoverageSeries": "Eval-Abdeckung",
+      "featureCoverageSeries": "Feature-Abdeckung",
+      "range": {
+        "week": "Woche",
+        "month": "Monat",
+        "year": "Jahr",
+        "all": "Alle"
+      },
+      "tooltipRatio": "%value% / %total% akzeptiert",
+      "detailsToggle": "Datentabelle anzeigen",
+      "empty": "Noch keine Verlaufsdaten."
+    },
+    "progress": "Die Parse-Parität verbesserte sich von {initial} am {date} um +{delta} Prozentpunkte über {count} Messungen, bezogen auf den aktuellen Tier-1-Parse-Nenner (tier2-Divergenz-Samples werden separat verfolgt, nicht in diesem Nenner).",
+    "evalParity": {
+      "heading": "Laufzeit-Auswertungsparität",
+      "intro": "Die stärkere Metrik: Beide Engines werten dieselben Eingaben aus und müssen identische Ausgaben erzeugen (nicht nur den Quelltext akzeptieren). Nächtlich über die Golden-Cases gemessen.",
+      "rateLabel": "Laufzeit-Auswertungsparität",
+      "measuredOn": "{identical} / {total} Golden-Cases erzeugen identische Ausgabe auf beiden Engines — gemessen am {date}"
+    },
+    "resolvedDivergences": {
+      "heading": "Behobene Laufzeit-Divergenzen",
+      "intro": "Fälle, die beide Engines einst akzeptierten, aber unterschiedlich auswerteten — jetzt behoben und durch Golden-Tests fixiert. Wir veröffentlichen das geschlossene Register, weil das Verfolgen von Divergenzen bis zur Behebung das Vertrauenssignal ist — nicht das Verbergen, dass sie existierten.",
+      "colCase": "Fall",
+      "colWas": "Vorher (TS → Java)",
+      "colResolution": "Behebung",
+      "rows": [
+        {
+          "case": "06-string-concat",
+          "ts": "\"Hello, Alice\"",
+          "java": "\"Hello, \" (name verloren)",
+          "resolution": "int/double-Zahlenpromotion; String-Verkettung behält beide Operanden"
+        },
+        {
+          "case": "08-arithmetic-divide",
+          "ts": "7 / 2 → 3.5",
+          "java": "7 / 2 → 3",
+          "resolution": "/ ist Float-Division auf beiden Engines (byte-identisch)"
+        },
+        {
+          "case": "09-arithmetic-modulo",
+          "ts": "Gerade-Prüfung → true",
+          "java": "→ false",
+          "resolution": "echter modulo-Operator ergänzt; 09 als echte Gerade-Prüfung wiederhergestellt"
+        }
+      ]
+    },
+    "footer": {
+      "heading": "Was dies misst (und was nicht)",
+      "items": [
+        "Quell-Corpus: aster-cloud/aster-lang-test, nur Tier-1-Paritäts-Samples (tier2-Divergenz und tier3-Einzel-Engine-Fixtures sind aus diesen Nennern ausgeschlossen).",
+        "Parse-Parität: Ein Sample besteht nur, wenn beide Engines es parsen/akzeptieren. Auswertungsparität: Beide Engines müssen auf den Golden-Cases identische Laufzeit-Ausgabe erzeugen. Die Auswertungsparität ist die stärkere Garantie.",
+        "Von diesen Raten noch nicht abgedeckt: Core-IR-Parität auf Feldebene, Typprüfung und Fehlerdiagnostik-Parität (separat verfolgt).",
+        "Beide Raten werden täglich um 02:00 UTC via GitHub Action nightly-equivalence neu gemessen; Verlauf wird in equivalence-history.csv und eval-history.csv zurückgeschrieben.",
+        "Methodik und Register behobener Divergenzen siehe RFC „dual-engine syntax baseline“ und DIVERGENT-MANIFEST.md."
+      ]
+    },
+    "whitepaperCta": {
+      "heading": "Das Whitepaper",
+      "body": "Eine Klartext-Erklärung der Dual-Engine-Äquivalenz für Risk & Compliance — mit den Belegen, einem durchgerechneten Kreditbeispiel und einem ehrlichen Geltungsbereich. Online lesen oder als PDF herunterladen.",
+      "link": "Whitepaper lesen →"
+    }
+  },
+  "pricingPage": {
+    "seo": {
+      "title": "Preise — Aster Lang",
+      "description": "Policy-as-Code auf Deutsch (auch English / 中文). Free für Einzelpersonen. Pro für Teams. Enterprise für regulierte Branchen."
+    },
+    "hero": {
+      "title": "Klare Preise für ernsthafte Policy-Arbeit",
+      "subtitle": "Kostenlos starten. Bezahlen, wenn Ihr Team Funktionstrennung braucht."
+    },
+    "toggle": {
+      "monthly": "Monatlich",
+      "yearly": "Jährlich (-20%)"
+    },
+    "tiers": {
+      "free": {
+        "name": "Free",
+        "tagline": "Selbst schreiben, selbst veröffentlichen",
+        "priceSuffix": "/für immer",
+        "cta": "Kostenlos starten",
+        "features": [
+          "1 Nutzer",
+          "5 veröffentlichte Regeln",
+          "1.000 Auswertungen / Monat",
+          "20 KI-Entwürfe / Monat (gpt-4o-mini)",
+          "Alle Sprachpakete (en / zh / de)",
+          "7-Tage-Audit-Log",
+          "✗ Keine Prüfer-Rolle",
+          "✗ Nicht SOX-konform"
+        ]
+      },
+      "pro": {
+        "name": "Pro",
+        "tagline": "Freigabe und Funktionstrennung",
+        "priceSuffix": "/Platz / Monat",
+        "priceSuffixYearly": "/Platz / Jahr",
+        "cta": "Kostenlos starten",
+        "highlight": "Beliebt",
+        "features": [
+          "Unbegrenzte Team-Mitglieder",
+          "100 veröffentlichte Regeln",
+          "50.000 Auswertungen / Monat",
+          "500 KI-Entwürfe / Sitz / Monat (gpt-5.2)",
+          "Alle Sprachpakete (en / zh / de)",
+          "90-Tage-Audit-Log",
+          "Reviewer einladen — jeder Sitz ¥299 / Monat",
+          "Prüfer ≠ Autor (ab 2 Sitzen erzwungen)",
+          "SOX-konforme Funktionstrennung",
+          "Stripe-Abrechnung, monatlich oder jährlich"
+        ]
+      },
+      "enterprise": {
+        "name": "Enterprise",
+        "tagline": "Multi-Team, mehrstufige Freigabe",
+        "priceSuffix": "Kontakt aufnehmen",
+        "cta": "Vertrieb kontaktieren",
+        "features": [
+          "Mehrere Teams, individuelle Freigabegruppen",
+          "Unbegrenzte Regeln und Auswertungen",
+          "Unbegrenzte KI-Entwürfe via BYOK (eigener OpenAI / Anthropic / Vertex Key)",
+          "Branchenspezifische Lexika",
+          "Hash-Ketten-Audit + digitale Signatur",
+          "SSO (SAML / OIDC / Authentik)",
+          "Daten-Residenz: EU / US / China / individuell",
+          "K3S selbst gehostet, ArgoCD GitOps",
+          "Erfüllt SOX, PCI, HIPAA, GDPR"
+        ]
+      }
+    },
+    "comparison": {
+      "title": "Was sich zwischen den Plänen ändert",
+      "rows": {
+        "users": "Nutzer",
+        "rules": "Veröffentlichte Regeln",
+        "evaluations": "Monatliche Auswertungen",
+        "aiDrafts": "KI-Entwurf-Kontingent",
+        "lexicon": "Sprachpakete",
+        "audit": "Audit-Aufbewahrung",
+        "approval": "Freigabe-Workflow",
+        "sso": "SSO",
+        "residency": "Daten-Residenz",
+        "deployment": "Bereitstellung"
+      }
+    }
+  },
+  "adminLaunchpad": {
+    "title": "Aster in 60 Sekunden einrichten",
+    "body": "Du bist als Admin angemeldet. Diese fünf Punkte bringen die Plattform vom leeren Start zur Produktionsreife.",
+    "progress": "{done} von {total} erledigt",
+    "steps": {
+      "createPolicy": {
+        "label": "Erste Policy erstellen",
+        "desc": "CNL-Regel + Decision Schema schreiben. Aster kompiliert und führt direkt im Browser aus.",
+        "cta": "Policy-Editor öffnen"
+      },
+      "addApiKey": {
+        "label": "API-Schlüssel ausstellen",
+        "desc": "Programmatischer Zugriff auf /api/v1/policies/evaluate von deinem Stack aus.",
+        "cta": "API-Schlüssel verwalten"
+      },
+      "addAiKey": {
+        "label": "KI-Schlüssel verbinden (BYOK)",
+        "desc": "Eigenen OpenAI- / Anthropic- / Vertex-AI-Schlüssel binden, damit KI-Entwürfe das Plattform-Monatslimit umgehen.",
+        "cta": "KI-Schlüssel binden"
+      },
+      "inviteTeam": {
+        "label": "Teammitglied einladen",
+        "desc": "Prüfer und Genehmiger einrichten, damit Policy-Änderungen deinem bestehenden Prozess folgen.",
+        "cta": "Mitglieder einladen"
+      },
+      "reviewBilling": {
+        "label": "Abrechnung & Sitzplätze prüfen",
+        "desc": "Verbleibende Testtage prüfen, Zahlungsmittel hinzufügen, Plan-Funktionen ansehen.",
+        "cta": "Abrechnung öffnen"
+      }
+    },
+    "dismiss": "Diese Checkliste ausblenden"
+  },
+  "notifications": {
+    "label": "Benachrichtigungen",
+    "empty": "Keine neuen Benachrichtigungen.",
+    "viewAll": "Alle anzeigen",
+    "invitationReceived": "Du wurdest in {teamName} als {role} eingeladen.",
+    "invitationAccepted": "{memberName} ist {teamName} beigetreten.",
+    "timeAgoNow": "gerade eben",
+    "timeAgoMin": "vor {n} Min.",
+    "timeAgoHour": "vor {n} Std.",
+    "timeAgoDay": "vor {n} T.",
+    "policyShared": "Policy {policyName} wurde mit {teamName} geteilt ({permission}).",
+    "permissionView": "nur lesen",
+    "permissionExecute": "lesen + ausführen"
+  },
+  "domainVocabularies": {
+    "title": "Domänenvokabulare",
+    "subtitle": "Verwalte die Structs, Felder, Funktionen und Enum-Werte deiner Policies.",
+    "newTerm": "Begriff hinzufügen",
+    "bulkUpload": "Massen-Upload",
+    "snapshots": "Snapshots",
+    "quota": {
+      "label": "Kontingent",
+      "used": "{used} / {total}",
+      "unlimited": "Unbegrenzt",
+      "remaining": "{n} verbleibend",
+      "atLimit": "Kontingent erreicht"
+    },
+    "stats": {
+      "visible": "Sichtbar",
+      "archived": "Archiviert"
+    },
+    "filters": {
+      "domain": "Domäne",
+      "locale": "Sprache",
+      "kind": "Typ",
+      "all": "Alle",
+      "includeArchived": "Archivierte anzeigen",
+      "search": "Nach kanonischem oder lokalisiertem Namen filtern"
+    },
+    "kinds": {
+      "struct": "Struct",
+      "field": "Feld",
+      "function": "Funktion",
+      "enum_value": "Enum-Wert"
+    },
+    "table": {
+      "canonical": "Kanonisch",
+      "localized": "Lokalisiert",
+      "domain": "Domäne",
+      "locale": "Sprache",
+      "kind": "Typ",
+      "parent": "Übergeordnet",
+      "source": "Quelle",
+      "updatedAt": "Aktualisiert",
+      "actions": "Aktionen"
+    },
+    "actions": {
+      "edit": "Bearbeiten",
+      "delete": "Löschen",
+      "restore": "Wiederherstellen"
+    },
+    "empty": {
+      "title": "Noch keine Begriffe",
+      "description": "Füge den ersten Begriff hinzu, um das eingebaute Vokabular zu erweitern."
+    },
+    "needsUpgrade": {
+      "title": "Domänenvokabulare sind ein Pro-Feature",
+      "description": "Wechsle zu Pro, um eigene Structs / Felder / Funktionen / Enum-Werte zu verwalten.",
+      "trialEndedTitle": "Deine Pro-Testphase ist abgelaufen",
+      "trialEndedDescription": "Die Testphase endete am {date}. Upgrade auf Pro, um diese Oberfläche weiter zu nutzen.",
+      "featureCatalog": "Verwalte Structs / Felder / Funktionen / Enum-Werte pro Sprache",
+      "featureBulk": "Massen-Import bis 10.000 Zeilen pro Job",
+      "featureSnapshots": "Snapshot pro Policy-Version, Rollback mit einem Klick",
+      "upgrade": "Plan upgraden",
+      "contactAdmin": "Bitte deinen Administrator um ein Plan-Upgrade"
+    },
+    "downgrade": {
+      "trialEndedTitle": "Pro-Testphase abgelaufen",
+      "trialEndedDescription": "Die Testphase endete am {date}; einige Pro-Funktionen sind jetzt schreibgeschützt.",
+      "cta": "Upgraden"
+    },
+    "bulk": {
+      "title": "Massen-Import von Vokabular",
+      "description": "Füge CSV (mit Header-Zeile) oder ein JSON-Array ein. Aliase werden in CSV mit | getrennt (z. B. amount|amt) oder als JSON-Array.",
+      "chooseFile": "Datei wählen",
+      "orPaste": "oder unten einfügen",
+      "rawLabel": "CSV oder JSON einfügen",
+      "placeholder": "domain,locale,kind,canonical,localized,parentCanonical\\nfinance,de,struct,Loan,Darlehen,,",
+      "previewTitle": "Vorschau ({shown} von {total})",
+      "rowsValid": "Sync bis {syncLimit}; Async bis {asyncLimit}",
+      "tooManySync": "Wechsle zu Async — überschreitet {syncLimit} Zeilen",
+      "tooManyAsync": "Überschreitet das Async-Limit von {asyncLimit} Zeilen",
+      "parseErrorsTitle": "Einige Zeilen konnten nicht geparst werden",
+      "moreErrors": "+{n} weitere",
+      "col": {
+        "kind": "Typ",
+        "canonical": "Kanonisch",
+        "localized": "Lokalisiert",
+        "domain": "Domäne",
+        "locale": "Sprache"
+      },
+      "modeLabel": "Modus",
+      "syncTitle": "Synchron",
+      "syncDescription": "Sofort anwenden. Bis {limit} Zeilen pro Anfrage.",
+      "asyncTitle": "Asynchron (Hintergrund-Job)",
+      "asyncDescription": "Worker in die Warteschlange. Bis {limit} Zeilen; Fortschritt im Statusfeld.",
+      "asyncProRequired": "Async-Jobs erfordern einen Pro-Plan oder höher.",
+      "submit": "Importieren",
+      "submitting": "Importiere…",
+      "cancel": "Abbrechen",
+      "syncCompleted": "{count} Zeilen importiert",
+      "asyncEnqueued": "Massen-Job in die Warteschlange gestellt",
+      "errorGeneric": "Import konnte nicht gestartet werden. Bitte erneut versuchen.",
+      "errorReadFile": "Datei konnte nicht gelesen werden."
+    },
+    "snapshotsView": {
+      "title": "Vokabular-Snapshots",
+      "subtitle": "Jede freigegebene Policy-Version pinnt einen Snapshot. Rollbacks auf nicht-archivierte Snapshots stellen das damalige Vokabular wieder her.",
+      "searchPlaceholder": "Nach Domäne, Sprache oder Hash filtern",
+      "refreshFailed": "Snapshots konnten nicht aktualisiert werden.",
+      "rollbackFailed": "Rollback fehlgeschlagen.",
+      "rollbackSuccess": "Rollback: +{added} hinzugefügt · −{removed} entfernt · {unchanged} unverändert",
+      "archivedTooltip": "Archivierte Snapshots können nicht angewendet werden",
+      "table": {
+        "scope": "Bereich",
+        "version": "v{n}",
+        "termCount": "Begriffe",
+        "refCount": "Gepinnt von",
+        "hash": "Content-Hash",
+        "createdAt": "Erstellt",
+        "status": "Status",
+        "archivedBadge": "Archiviert",
+        "activeBadge": "Aktiv",
+        "actions": "Aktionen"
+      },
+      "actions": {
+        "view": "Diff anzeigen",
+        "rollback": "Rollback"
+      },
+      "empty": {
+        "title": "Noch keine Snapshots",
+        "description": "Snapshots werden automatisch beim Freigeben einer Policy-Version erzeugt."
+      },
+      "rollback": {
+        "title": "Diesen Snapshot anwenden?",
+        "description": "Rollback des aktiven Vokabulars für {domain} · {locale} auf Snapshot v{version}. Nicht im Snapshot enthaltene Begriffe werden soft-gelöscht; fehlende neu hinzugefügt.",
+        "confirm": "Rollback",
+        "cancel": "Abbrechen"
+      },
+      "diff": {
+        "title": "{domain} · {locale} · v{version}",
+        "subtitle": "{termCount} Begriffe",
+        "summary": "Änderungsübersicht",
+        "bucket": {
+          "added": "Beim Rollback hinzugefügt",
+          "removed": "Beim Rollback entfernt",
+          "unchanged": "Unverändert",
+          "all": "Alle Snapshot-Begriffe ({n})"
+        },
+        "removedNotice": "{n} deiner aktuellen Begriffe würden beim Rollback soft-gelöscht. Innerhalb von 90 Tagen wiederherstellbar.",
+        "emptyBucket": "Keine Begriffe in diesem Bereich.",
+        "iconAdded": "Hinzugefügt",
+        "iconRemoved": "Entfernt",
+        "iconUnchanged": "Unverändert",
+        "rollback": "Auf diesen Snapshot rollen zurück",
+        "close": "Schließen",
+        "loading": "Lade Snapshot…",
+        "loadFailed": "Snapshot konnte nicht geladen werden."
+      }
+    },
+    "jobProgress": {
+      "status": {
+        "queued": "In Warteschlange — wartet auf Worker",
+        "running": "Läuft",
+        "completed": "Abgeschlossen",
+        "failed": "Fehlgeschlagen",
+        "cancelled": "Abgebrochen"
+      },
+      "progressSummary": "{processed} von {total} Zeilen verarbeitet",
+      "rollup": {
+        "added": "Hinzugefügt",
+        "reused": "Wiederverwendet",
+        "modified": "Geändert",
+        "skipped": "Übersprungen",
+        "errors": "Fehler"
+      },
+      "cancel": "Job abbrechen",
+      "cancelling": "Abbrechen…",
+      "cancelled": "Job abgebrochen",
+      "dismiss": "Schließen",
+      "loading": "Lade Job…",
+      "fetchFailed": "Job-Status konnte nicht geladen werden, erneuter Versuch folgt.",
+      "notFound": "Massen-Job nicht gefunden."
+    },
+    "dialog": {
+      "createTitle": "Begriff hinzufügen",
+      "editTitle": "Begriff bearbeiten",
+      "domain": "Domäne",
+      "domainHelp": "Kleingeschriebener Identifier, z. B. finance, healthcare.",
+      "locale": "Sprache",
+      "localeHelp": "BCP-47-Tag, z. B. en, zh-CN, de.",
+      "kind": "Typ",
+      "canonical": "Kanonischer Name",
+      "canonicalHelp": "Englischsprachiger Identifier, den die Engine nutzt.",
+      "localized": "Lokalisierte Anzeige",
+      "parentCanonical": "Übergeordnetes Struct (optional)",
+      "parentCanonicalHelp": "Pflicht für Felder; sonst ignoriert.",
+      "description": "Beschreibung",
+      "aliases": "Aliase",
+      "aliasesHelp": "Kommagetrennte Alternativnamen.",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "saving": "Speichern…",
+      "errorGeneric": "Speichern fehlgeschlagen. Bitte erneut versuchen."
+    },
+    "delete": {
+      "title": "Begriff löschen?",
+      "description": "Der Begriff „{name}\" wird soft-gelöscht und 90 Tage aufbewahrt. Innerhalb dieser Frist kann er aus dem Archiv wiederhergestellt werden.",
+      "confirm": "Löschen",
+      "cancel": "Abbrechen"
+    },
+    "errors": {
+      "quota_exceeded": "Du hast das Vokabular-Kontingent deines Plans erreicht.",
+      "duplicate_link": "Dieser Begriff ist bereits verknüpft.",
+      "validation_failed": "Bitte prüfe die markierten Felder.",
+      "not_found": "Begriff nicht gefunden.",
+      "plan_gate_required": "Domänenvokabulare erfordern einen Pro-Plan.",
+      "internal_error": "Etwas ist schiefgelaufen. Bitte erneut versuchen."
+    }
+  },
+  "docs": {
+    "nav": {
+      "suffix": "Docs",
+      "openConsole": "Konsole öffnen",
+      "signIn": "Anmelden",
+      "dashboard": "Dashboard",
+      "userMenu": {
+        "label": "Kontomenü",
+        "dashboard": "Zum Dashboard",
+        "settings": "Kontoeinstellungen",
+        "signOut": "Abmelden"
+      }
+    },
+    "session": {
+      "probing": "Kontostatus wird geladen"
+    },
+    "quickstart": {
+      "stepPrefix": "Schritt {step}: ",
+      "steps": {
+        "tenantId": {
+          "title": "Mandanten-ID finden",
+          "description": "Öffnen Sie die API-Schlüssel-Seite und kopieren Sie die Mandantenkennung an einen sicheren Ort. Sie wird mit jedem Request im Header X-Tenant-Id mitgesendet.",
+          "cta": "API-Schlüssel öffnen"
+        },
+        "apiKey": {
+          "title": "Ersten API-Schlüssel anlegen",
+          "description": "Erstellen Sie einen API-Schlüssel mit mindestens der MEMBER-Rolle, damit die Endpunkte für die Policy-Evaluierung Ihre Anfragen akzeptieren.",
+          "cta": "API-Schlüssel anlegen"
+        },
+        "playground": {
+          "title": "Eine Evaluierung im Playground ausführen",
+          "description": "Der Playground lädt eine minimale Beispielrichtlinie und erlaubt Ihnen, den Quelltext vor der Auswertung mit Testdaten anzupassen.",
+          "cta": "Playground öffnen"
+        },
+        "viewTraces": {
+          "title": "Ersten Decision Trace prüfen",
+          "description": "Sobald die erste Evaluierung läuft, listet die Policies-Seite alle aktuellen Durchläufe auf und lässt Sie jeden Decision Trace im Detail prüfen.",
+          "cta": "Meine Policies anzeigen"
+        }
+      }
+    },
+    "trustFooter": {
+      "ariaLabel": "Seitenmetadaten und Feedback",
+      "lastUpdated": "Zuletzt aktualisiert",
+      "apiVersion": "API-Version",
+      "compatibility": "Kompatibel mit Engine",
+      "changelog": "Changelog",
+      "suggestEdit": "Änderung vorschlagen",
+      "yourTenantVersion": "Diese Seite dokumentiert API-Version"
+    },
+    "search": {
+      "placeholder": "Docs durchsuchen…",
+      "inputPlaceholder": "Seitenname, Überschrift oder Stichwort eingeben",
+      "noResults": "Keine passenden Seiten",
+      "resultsLabel": "Suchergebnisse",
+      "openShortcut": "⌘K",
+      "matchedIn": {
+        "title": "Treffer im Titel",
+        "heading": "Treffer in der Überschrift",
+        "description": "Treffer in der Beschreibung",
+        "slug": "Treffer im Pfad"
+      }
+    },
+    "tasks": {
+      "buildFirstPolicy": {
+        "title": "Meine erste Policy bauen",
+        "description": "Mandanten-ID, API-Schlüssel und erste Evaluierung in unter fünf Minuten."
+      },
+      "evaluatePolicy": {
+        "title": "Eine Policy auf drei Wegen auswerten",
+        "description": "Source, JSON und Batch – wählen Sie die Request-Form, die zu Ihrem Client passt."
+      },
+      "debugWithTrace": {
+        "title": "Mit Decision Trace debuggen",
+        "description": "Eine fehlgeschlagene Evaluierung über das Audit-Log und den Chain-Verifier nachvollziehen."
+      },
+      "auditDecision": {
+        "title": "Eine Compliance-Entscheidung auditieren",
+        "description": "Logs, Versionsverwendung und Anomalien für eine bereitgestellte Policy prüfen."
+      },
+      "manageVersions": {
+        "title": "Policy-Versionen verwalten",
+        "description": "Rollback, Replay und Cache-Leerung ohne Downtime."
+      },
+      "setUpProductionAuth": {
+        "title": "Produktions-API-Authentifizierung einrichten",
+        "description": "HMAC-Signierung, Mandantenrouting und der erwartete Error-Envelope."
+      }
+    },
+    "home": {
+      "ariaLabel": "Personalisierte Dokumentations-Startseite",
+      "loadingAriaLabel": "Docs-Startseite wird geladen",
+      "heading": "Dort weitermachen, wo Sie aufgehört haben",
+      "headingFirstTime": "Willkommen in der Dokumentation",
+      "subheading": "Ihre zuletzt besuchten Docs sowie ein Vorschlag, was als Nächstes zu lesen ist.",
+      "subheadingFirstTime": "Einige Vorschläge für den Einstieg. Besuchte Seiten erscheinen beim nächsten Besuch hier.",
+      "resume": {
+        "title": "Weiterlesen"
+      },
+      "recent": {
+        "title": "Zuletzt besucht"
+      },
+      "suggested": {
+        "heading": "Vorgeschlagener nächster Schritt",
+        "tryPlayground": {
+          "title": "Eine Policy im Playground ausprobieren",
+          "description": "Ein eigenständiges Beispiel gegen den öffentlichen Preview-Mandanten ausführen.",
+          "cta": "Playground öffnen"
+        },
+        "createTeam": {
+          "title": "Team anlegen, um zusammenzuarbeiten",
+          "description": "Mit Teams teilen Sie Policies und Audit-Verlauf mit Mitwirkenden.",
+          "cta": "Team anlegen"
+        },
+        "editPolicy": {
+          "title": "Ihre erste Policy schreiben",
+          "description": "Starten Sie mit einer CNL-Vorlage im Editor und iterieren Sie mit Live-Evaluierung.",
+          "cta": "Editor öffnen"
+        }
+      },
+      "quickLinks": {
+        "heading": "Schnellzugriffe",
+        "playground": "Playground",
+        "newPolicy": "Neue Policy",
+        "apiKeys": "API-Schlüssel",
+        "recentTraces": "Letzte Traces"
+      }
+    },
+    "codeBlock": {
+      "toolbarLabel": "Code-Snippet-Aktionen",
+      "copy": "Kopieren",
+      "copied": "Kopiert",
+      "copyFailed": "Kopieren fehlgeschlagen",
+      "copyAriaLabel": "Code in die Zwischenablage kopieren",
+      "openInPlayground": "Im Playground öffnen"
+    },
+    "actions": {
+      "ariaLabel": "Seitenaktionen",
+      "tryInPlayground": "Im Playground ausprobieren",
+      "openInEditor": "Im Editor öffnen",
+      "viewMyAuditLogs": "Meine Audit-Logs anzeigen",
+      "viewMyTraces": "Meine letzten Decision Traces anzeigen",
+      "goToApiKeys": "API-Schlüssel verwalten",
+      "openDashboard": "Dashboard öffnen",
+      "more": "Mehr",
+      "moreLabel": "Weitere Seitenaktionen"
+    },
+    "breadcrumb": {
+      "root": "Docs",
+      "ariaLabel": "Brotkrumen"
+    },
+    "sidebar": {
+      "ariaLabel": "Dokumentationsbereiche",
+      "tasksLabel": "Aufgaben",
+      "modeToggleLabel": "Sidebar-Anzeigemodus",
+      "modeReference": "Referenz",
+      "modeTasks": "Nach Aufgabe",
+      "gettingStarted": {
+        "title": "Erste Schritte",
+        "overview": "Übersicht",
+        "authentication": "Authentifizierung",
+        "quickstart": "Schnellstart",
+        "errors": "Fehlerbehandlung"
+      },
+      "apiPolicies": {
+        "title": "Policy-Evaluierung",
+        "evaluate": "Policy Evaluieren",
+        "evaluateSource": "Quelle Evaluieren",
+        "evaluateJson": "JSON Evaluieren",
+        "batch": "Batch-Evaluierung",
+        "schema": "Schema Extrahieren",
+        "validate": "Policy Validieren",
+        "versions": "Versionsverlauf",
+        "rollback": "Zurücksetzen",
+        "cache": "Cache-Verwaltung"
+      },
+      "apiWorkflows": {
+        "title": "Workflows",
+        "events": "Workflow-Ereignisse",
+        "state": "Workflow-Status",
+        "metrics": "Metriken"
+      },
+      "apiAudit": {
+        "title": "Audit",
+        "logs": "Audit-Logs",
+        "verifyChain": "Hash-Kette Verifizieren",
+        "versionUsage": "Versionsnutzung",
+        "anomalies": "Anomalieerkennung",
+        "compare": "Versionsvergleich"
+      },
+      "apiGraphql": {
+        "title": "GraphQL",
+        "overview": "Übersicht",
+        "queries": "Abfragen",
+        "mutations": "Mutationen"
+      },
+      "apiWebsocket": {
+        "title": "WebSocket",
+        "preview": "Preview-Endpoint"
+      }
+    },
+    "toc": {
+      "ariaLabel": "Auf dieser Seite",
+      "title": "Auf dieser Seite"
+    },
+    "langSwitcher": {
+      "ariaLabel": "Sprache wechseln"
+    },
+    "fallbackBanner": {
+      "title": "Übersetzung in Arbeit",
+      "body": "Diese Seite ist noch nicht übersetzt. Unten ist die englische Originalfassung zu sehen."
+    }
+  },
+  "vocabDemoPage": {
+    "seo": {
+      "title": "Regeln in den Begriffen Ihrer Branche schreiben — Aster-Lang-Demo",
+      "description": "Gesundheit, Versicherung, Logistik: Schreiben Sie die Regel in der Fachsprache Ihrer Domäne, die Engine kompiliert und führt sie aus. Ohne Anmeldung."
+    },
+    "eyebrow": "Live-Demo · Domänen-Vokabular",
+    "title": "Ihre Begriffe. Dieselbe Engine.",
+    "subtitle": "Schreiben Sie Regeln im Vokabular Ihrer Branche — die Engine bildet Ihre Begriffe auf ihre kanonische Form ab, kompiliert und führt sie aus. Eine Sprache, jede Domäne.",
+    "step1": {
+      "title": "Domäne wählen",
+      "hint": "Drei Branchen, drei Vokabulare — dieselbe Engine darunter."
+    },
+    "step2": {
+      "title": "Ihr Domänen-Vokabular",
+      "hint": "Das sind die Begriffe Ihrer Branche. Die Engine weiß, worauf jeder intern abbildet."
+    },
+    "step3": {
+      "title": "Die Regel, in Ihren Worten",
+      "hint": "Vollständig im obigen Branchenvokabular geschrieben — lesbar für die, die die Richtlinie verantworten.",
+      "legendTerm": "Hervorgehoben",
+      "legend": "= Ihr Branchenvokabular (die Engine übersetzt es in die kanonische Form)."
+    },
+    "step4": {
+      "title": "Einen Fall ausführen",
+      "hint": "Wählen Sie einen Fall; die Browser-Engine injiziert Ihr Vokabular, kompiliert und berechnet die Entscheidung live."
+    },
+    "terms": {
+      "colIndustry": "Branchenbegriff",
+      "colCanonical": "Engine-Begriff",
+      "colKind": "Art",
+      "colGloss": "Bedeutung",
+      "kind": {
+        "struct": "Typ",
+        "field": "Feld"
+      },
+      "note": "Den Branchenbegriff schreiben Sie; der Engine-Begriff ist das Kompilat. Gleiche Logik, Ihre Worte."
+    },
+    "result": {
+      "label": "Entscheidung",
+      "note": "Live von derselben Engine berechnet, die in der Produktion läuft — Ihr Vokabular in die kanonische Form übersetzt und dann ausgeführt."
+    },
+    "cta": {
+      "title": "Bringen Sie Ihr eigenes Vokabular mit",
+      "subtitle": "Definieren Sie die Begriffe Ihrer Domäne einmal; Ihr ganzes Team schreibt Regeln in den Worten, die es ohnehin verwendet."
+    },
+    "domains": {
+      "healthcare": {
+        "name": "Gesundheit",
+        "tagline": "Klinische Triage",
+        "cases": {
+          "emergency": "Kritische Vitalwerte",
+          "refer": "Grenzfall",
+          "routine": "Stabiler Patient"
+        }
+      },
+      "insurance": {
+        "name": "Versicherung",
+        "tagline": "Schadenannahme",
+        "cases": {
+          "approve": "Klarer Schaden",
+          "refer": "Großschaden",
+          "declined": "Unter Selbstbehalt"
+        }
+      },
+      "logistics": {
+        "name": "Logistik",
+        "tagline": "Auftragsrouting",
+        "cases": {
+          "air": "Eilsendung",
+          "freight": "Schwer / Fernverkehr",
+          "courier": "Standardpaket"
+        }
+      }
+    },
+    "glosses": {
+      "Patient": "Patientenbesuch",
+      "systolic": "Systolischer Druck (mmHg)",
+      "heartRate": "Herzfrequenz (1/min)",
+      "age": "Alter",
+      "Claim": "Versicherungsfall",
+      "claimAmount": "Schadenhöhe",
+      "deductible": "Selbstbehalt",
+      "priorClaims": "Frühere Schäden",
+      "Shipment": "Sendung / Paket",
+      "weightKg": "Bruttogewicht (kg)",
+      "distanceKm": "Distanz (km)",
+      "priority": "SLA-Stufe (1-3)"
+    },
+    "replay": {
+      "title": "Entscheidungs-Wiederholung",
+      "matched": "erfüllt",
+      "notMatched": "nicht erfüllt",
+      "skipped": "nicht ausgewertet"
+    }
+  },
+  "catMoodPage": {
+    "seo": {
+      "title": "Die Katzen-Stimmungs-Engine — eine poetische Aster-Lang-Demo",
+      "description": "Schreiben Sie eine Regel im Katzenflüsterer-Vokabular, lassen Sie sie von der echten Engine ausführen und sehen Sie einer Strichkatze 5 Sekunden beim Reagieren zu."
+    },
+    "eyebrow": "Spaß-Demo · Katzen-Vokabular",
+    "title": "Die Katzen-Stimmungs-Engine",
+    "subtitle": "Eine Regel im heiligen Vokabular der Katzenflüsterer — kompiliert und ausgeführt von derselben Engine, die über Kredite entscheidet. Die Katze interessiert das nicht, aber sie wird reagieren.",
+    "poem": "Wo der Sonnenfleck liegt und der Napf ist voll,\nbeschließt der kleine Gott, welche Laune er will.\nKein Eindringling? Dann Wärme, ein Schnurren, oder — pfft —\nder langsame Blick des Urteils, exquisit kühl und still.",
+    "ruleTitle": "Die Regel (in fließendem Katzisch)",
+    "legendTerm": "Hervorgehoben",
+    "legend": "= Katzen-Vokabular, das die Engine für diese Demo gelernt hat.",
+    "sceneTitle": "Die Szene setzen",
+    "scenes": {
+      "perch": {
+        "label": "Höhe erobern"
+      },
+      "purr": {
+        "label": "Gut gefüttert"
+      },
+      "loaf": {
+        "label": "Sonnenfleck-Zeit"
+      },
+      "floof": {
+        "label": "Ein Fremder!"
+      },
+      "judge": {
+        "label": "Unbeeindruckt"
+      }
+    },
+    "moods": {
+      "perch": {
+        "name": "🐈 Hochsitz",
+        "quip": "Höhe gesichert. Von diesem Thron ist das ganze Reich unter Beobachtung. So gehört es sich."
+      },
+      "purr": {
+        "name": "😌 Schnurren",
+        "quip": "Bauch voll, Welt vergeben. Der Motor läuft. Du darfst weiter existieren."
+      },
+      "loaf": {
+        "name": "🍞 Laib",
+        "quip": "Wärme erkannt. Knochen jetzt optional. Die Katze ist zu Brot geworden."
+      },
+      "floof": {
+        "name": "🙀 Plustern",
+        "quip": "EIN FREMDER. Doppelt so groß, dreifach so misstrauisch. Alles gut. (Ist es nicht.)"
+      },
+      "judge": {
+        "name": "😼 Urteil",
+        "quip": "Keine Sonne, keine Snacks, keine Geduld. Du wirst bewertet. Du bist durchgefallen."
+      }
+    },
+    "footer": "Albernes Vokabular, ernste Engine: Diese Katzenregel kompilierte und lief auf derselben Aster-Lang-Laufzeit wie eine Kreditrichtlinie. Ihre Worte — selbst diese — werden zu einer prüfbaren Entscheidung.",
+    "idleHint": "Die Katze macht ihr eigenes Ding. Wähle unten eine Szene und sieh, wie sie reagiert."
+  },
+  "languageSettings": {
+    "title": "Sprachverfügbarkeit",
+    "description": "Wählen Sie, welche Sprachen für die Benutzer Ihres Teams verfügbar sind. Deaktivierte Sprachen erscheinen nicht im Sprachumschalter.",
+    "enabledLabel": "Aktiviert",
+    "disabledLabel": "Deaktiviert",
+    "defaultLocaleNote": "Die Standardsprache kann nicht deaktiviert werden.",
+    "saving": "Wird gespeichert…",
+    "saved": "Gespeichert",
+    "permissionDenied": "Nur Team-Inhaber oder Administratoren können Sprachen ändern.",
+    "save": "Speichern",
+    "backendUnavailable": "Lexikon im Backend nicht geladen"
+  },
+  "platformLanguageSettings": {
+    "title": "Plattform-Sprachverfügbarkeit",
+    "description": "Wählen Sie, welche Sprachen plattformweit verfügbar sind. Team-Spracheinstellungen sind eine Teilmenge davon — Teams können keine hier deaktivierte Sprache aktivieren.",
+    "enabledLabel": "Aktiviert",
+    "disabledLabel": "Deaktiviert",
+    "defaultLocaleNote": "Die Standardsprache kann nicht deaktiviert werden.",
+    "saving": "Wird gespeichert…",
+    "saved": "Gespeichert",
+    "save": "Speichern",
+    "saveFailed": "Speichern fehlgeschlagen. Bitte erneut versuchen.",
+    "loadFailed": "Plattform-Spracheinstellungen konnten nicht geladen werden.",
+    "backendUnavailable": "Lexikon im Backend nicht geladen"
+  }
+}

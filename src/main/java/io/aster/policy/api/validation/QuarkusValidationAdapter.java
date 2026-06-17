@@ -2,6 +2,7 @@ package io.aster.policy.api.validation;
 
 import io.aster.validation.metadata.ConstructorMetadataCache;
 import io.aster.validation.schema.SchemaValidator;
+import io.aster.validation.schema.SchemaValidator.MissingFieldPolicy;
 import io.aster.validation.semantic.SemanticValidator;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -17,7 +18,11 @@ public class QuarkusValidationAdapter {
 
     @Inject
     public QuarkusValidationAdapter(ConstructorMetadataCache cache) {
-        this.schemaValidator = new SchemaValidator(cache);
+        // aster-lang-validation #6 changed the no-arg SchemaValidator default to STRICT
+        // (throw on missing fields). PolicyTypeConverter intentionally fills defaults for
+        // missing fields (construct-from-map semantics), so opt into LENIENT to preserve
+        // that contract.
+        this.schemaValidator = new SchemaValidator(cache, MissingFieldPolicy.LENIENT);
         this.semanticValidator = new SemanticValidator(cache);
     }
 

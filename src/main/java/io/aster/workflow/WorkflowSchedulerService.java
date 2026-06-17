@@ -501,50 +501,82 @@ public class WorkflowSchedulerService {
      * 注意：clock_times 加载逻辑已在 processWorkflow() 中实现（Phase 3.6），
      * 此方法复用该机制，无需重复实现。
      *
+     * #57 修复：此方法属于 *blocking* workflow 子系统（Hibernate ORM + JTA）。
+     * 此前 {@code @Transactional} 标注在返回 {@code Uni} 的方法上，但 JTA 事务在
+     * 方法返回（即生成 Uni 对象）时即提交/关闭，而真正的工作（{@code processWorkflow}
+     * 及最终重新查询）发生在 {@code Uni.createFrom().item(supplier)} 的*延迟订阅*阶段，
+     * 此时已无事务/Session 上下文 —— 延迟体内的阻塞 Panache 调用会在无事务下运行。
+     * 5 分钟超时也无法被 JTA 事务尊重，且与 GenericOutboxScheduler 的 30s
+     * {@code await().atMost(...)} 预算冲突。
+     *
+     * 正确做法（保持 blocking 模型不变，避免引入 reactive Session 混用）：
+     * - 移除外层方法的 {@code @Transactional}（它本就不覆盖延迟体）；
+     * - 校验 + 状态重置放入独立同步事务 {@link #prepareReplay(UUID)}；
+     * - processWorkflow 已自带 {@code @Transactional}；
+     * - 最终重新查询放入独立同步事务 {@link #reloadState(UUID)}。
+     * 全部阻塞工作都在 supplier 内于订阅线程（outbox worker，非事件循环线程）执行。
+     *
      * @param workflowId workflow 唯一标识符
      * @return 重放后的 workflow 状态
      * @throws IllegalArgumentException  Workflow 不存在
      * @throws IllegalStateException     缺少 clock_times，无法 replay
      * @throws TimeoutException          Replay 执行超时
      */
-    @Transactional
     public Uni<WorkflowStateEntity> replayWorkflow(UUID workflowId) {
-        // 1. 查询 workflow 状态
+        // 所有阻塞持久化工作都推迟到订阅时执行（每段各自独立事务）。
+        // 注意：本方法不再标注 @Transactional —— 见上方说明。
+        return Uni.createFrom().item(() -> {
+            // 1+2+3. 校验并在独立事务内将状态重置为 READY
+            prepareReplay(workflowId);
+
+            // 4. 调用 processWorkflow（自带 @Transactional，clock_times 自动加载）
+            try {
+                processWorkflow(workflowId.toString());
+            } catch (Exception e) {
+                throw new RuntimeException("Replay 执行失败: " + e.getMessage(), e);
+            }
+
+            // 5. 在独立事务内重新查询最新状态
+            return reloadState(workflowId);
+        })
+        .ifNoItem().after(Duration.ofMinutes(5))  // 超时控制
+        .failWith(() -> new TimeoutException("Replay 超时: " + workflowId));
+    }
+
+    /**
+     * #57: replay 前置校验 + 状态重置，运行于独立的同步 JTA 事务。
+     *
+     * @throws IllegalArgumentException Workflow 不存在
+     * @throws IllegalStateException    缺少 clock_times，无法 replay
+     */
+    @Transactional
+    public void prepareReplay(UUID workflowId) {
         Optional<WorkflowStateEntity> stateOpt = WorkflowStateEntity.findByWorkflowId(workflowId);
         if (stateOpt.isEmpty()) {
-            return Uni.createFrom().failure(
-                new IllegalArgumentException("Workflow 不存在: " + workflowId)
-            );
+            throw new IllegalArgumentException("Workflow 不存在: " + workflowId);
         }
 
         WorkflowStateEntity state = stateOpt.get();
 
-        // 2. 验证 clock_times 存在
         if (state.clockTimes == null || state.clockTimes.isBlank()) {
-            return Uni.createFrom().failure(new IllegalStateException(
+            throw new IllegalStateException(
                 "Workflow " + workflowId + " 没有 clock_times，无法 replay"
-            ));
+            );
         }
 
         Log.infof("开始 replay workflow %s，clock_times 长度: %d",
             workflowId, state.clockTimes.length());
 
-        // 3. 重置状态为 READY（准备重放）
         state.status = "READY";
         state.persist();
+    }
 
-        // 4. 异步调用 processWorkflow（clock_times 会自动加载）
-        return Uni.createFrom().item(() -> {
-            try {
-                processWorkflow(workflowId.toString());
-                // 重新查询最新状态
-                return WorkflowStateEntity.findByWorkflowId(workflowId).orElse(state);
-            } catch (Exception e) {
-                throw new RuntimeException("Replay 执行失败: " + e.getMessage(), e);
-            }
-        })
-        .ifNoItem().after(Duration.ofMinutes(5))  // 超时控制
-        .failWith(() -> new TimeoutException("Replay 超时: " + workflowId));
+    /**
+     * #57: 在独立同步事务内重新查询 workflow 状态。
+     */
+    @Transactional
+    public WorkflowStateEntity reloadState(UUID workflowId) {
+        return WorkflowStateEntity.findByWorkflowId(workflowId).orElse(null);
     }
 
     /**

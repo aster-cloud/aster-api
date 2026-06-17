@@ -1,8 +1,10 @@
 plugins {
     id 'java'
     id 'jacoco'
-    // Using latest Quarkus 3.28.3 - testing Gradle 9.0 compatibility
-    id 'io.quarkus' version '3.36.1'
+    // Quarkus plugin version MUST match the quarkus-bom version below (#57).
+    // Keep these two in lockstep — a plugin/BOM skew can pull mismatched
+    // codegen vs runtime artifacts.
+    id 'io.quarkus' version '3.36.2'
     id 'io.gatling.gradle' version '3.15.1'
     id 'org.gradle.test-retry' version '1.6.5'
 }

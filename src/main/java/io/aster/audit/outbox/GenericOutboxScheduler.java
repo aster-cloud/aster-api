@@ -21,6 +21,14 @@ import java.util.Objects;
 public abstract class GenericOutboxScheduler<P, E extends GenericOutboxEntity<P>> {
 
     /**
+     * #55: 单个 outbox 事件执行的最大阻塞等待时间。原先 {@code .await().indefinitely()}
+     * 若下游 handler 永远不完成（如外部依赖挂死），会永久占用 outbox worker 线程。
+     * 给一个充裕但有限的上限：超时即抛 {@code TimeoutException}，落入 FAILED 重试路径，
+     * 而不是无声 wedge 整个调度循环。
+     */
+    private static final java.time.Duration OUTBOX_EVENT_TIMEOUT = java.time.Duration.ofSeconds(30);
+
+    /**
      * 触发全量 Outbox 处理
      */
     public void processOutbox() {
@@ -101,9 +109,12 @@ public abstract class GenericOutboxScheduler<P, E extends GenericOutboxEntity<P>
 
         try {
             P payload = entity.deserializePayload();
+            // #55: bound the blocking wait so a hung downstream handler cannot
+            // pin the outbox worker thread forever. A stuck event now fails
+            // (and is retried via the FAILED path) instead of wedging the loop.
             executeEvent(entity, payload)
                 .replaceWithVoid()
-                .await().indefinitely();
+                .await().atMost(OUTBOX_EVENT_TIMEOUT);
 
             entity.status = OutboxStatus.DONE;
             entity.completedAt = Instant.now();

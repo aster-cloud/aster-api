@@ -1,6 +1,5 @@
 package io.aster.workflow;
 
-import aster.runtime.workflow.DeterministicClock;
 import aster.runtime.workflow.ExecutionHandle;
 import aster.runtime.workflow.WorkflowEvent;
 import aster.runtime.workflow.WorkflowMetadata;

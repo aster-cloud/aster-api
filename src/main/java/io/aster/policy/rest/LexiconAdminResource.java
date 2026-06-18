@@ -90,6 +90,17 @@ public class LexiconAdminResource {
     @ConfigProperty(name = "aster.lexicon.upload.sha256-allowlist")
     Optional<String> shaAllowlist;
 
+    /**
+     * 是否强制要求 SHA-256 allowlist（纵深防御，ADR 0018 安全加固）。
+     *
+     * <p>热插拔上传走 {@code URLClassLoader} 加载 jar = 任意代码执行。HMAC 签名是第一道
+     * 门（默认强制），但 HMAC key 泄露后若无 allowlist 兜底即 RCE。本开关在生产 profile
+     * 默认 {@code true}（fail-closed）：allowlist 为空时**拒绝上传**而非放行；dev/test 默认
+     * {@code false}（开发便利，沿用旧 fail-open 行为）。profile 默认值见 application.properties。
+     */
+    @ConfigProperty(name = "aster.lexicon.upload.require-allowlist", defaultValue = "false")
+    boolean requireAllowlist;
+
     /** Nonce 缓存（key = nonce hex, value = 占位），TTL 与 clock skew 一致。 */
     private final Cache<String, Boolean> usedNonces = Caffeine.newBuilder()
         .expireAfterWrite(Duration.ofSeconds(MAX_CLOCK_SKEW_SECONDS + 60))
@@ -143,20 +154,22 @@ public class LexiconAdminResource {
         verifyHmac(headers, "POST", "/api/v1/admin/lexicons",
             file.contentType(), body.length, bodySha, fileName);
 
-        // C3: jar 结构 + SPI descriptor 校验
-        validateJarStructure(body, fileName);
-
-        // 可选 SHA-256 allowlist
-        if (shaAllowlist.isPresent() && !shaAllowlist.get().isBlank()) {
-            boolean ok = false;
-            for (String s : shaAllowlist.get().split(",")) {
-                if (s.trim().equalsIgnoreCase(bodySha)) { ok = true; break; }
-            }
-            if (!ok) {
-                throw forbidden("not_in_allowlist",
-                    "sha256 " + bodySha + " not in aster.lexicon.upload.sha256-allowlist");
-            }
+        // SHA-256 allowlist（纵深防御，ADR 0018）。判定逻辑抽到纯静态方法以便单测。
+        // **置于 ZIP/SPI 解析之前（Codex 审查）**：allowlist 只需 bodySha，不依赖 jar 内容；
+        // 提前拒绝可减少 HMAC key 泄露后攻击者反复触发 ZIP 解压/限额逻辑的成本。
+        AllowlistVerdict verdict =
+            checkAllowlist(shaAllowlist.orElse(null), requireAllowlist, bodySha);
+        switch (verdict.outcome()) {
+            case REQUIRED -> throw forbidden("allowlist_required",
+                "aster.lexicon.upload.sha256-allowlist must be configured in production; "
+                    + "empty allowlist rejected (set aster.lexicon.upload.require-allowlist=false to opt out)");
+            case NOT_LISTED -> throw forbidden("not_in_allowlist",
+                "sha256 " + bodySha + " not in aster.lexicon.upload.sha256-allowlist");
+            case ALLOWED -> { /* 通过 */ }
         }
+
+        // C3: jar 结构 + SPI descriptor 校验（allowlist 通过后才解析 jar）
+        validateJarStructure(body, fileName);
 
         // R11-Backend-Critical + R12-Backend-Major-2：双层锁。
         //   1) JVM-local striped ReentrantLock —— 同 pod 内同 fileName 串行
@@ -631,6 +644,45 @@ public class LexiconAdminResource {
         return MessageDigest.isEqual(
             a.toLowerCase().getBytes(StandardCharsets.US_ASCII),
             b.toLowerCase().getBytes(StandardCharsets.US_ASCII));
+    }
+
+    // ---------------------------------------------------------- allowlist 判定
+
+    /** allowlist 判定结果。{@link #checkAllowlist} 的纯返回值，便于单测。 */
+    enum AllowlistOutcome {
+        /** 通过：allowlist 命中，或未配置且非强制（fail-open）。 */
+        ALLOWED,
+        /** 拒绝：require-allowlist=true（生产）但 allowlist 为空——fail-closed。 */
+        REQUIRED,
+        /** 拒绝：allowlist 已配置但 body sha 不在其中。 */
+        NOT_LISTED
+    }
+
+    record AllowlistVerdict(AllowlistOutcome outcome) {}
+
+    /**
+     * SHA-256 allowlist 纵深防御判定（ADR 0018）。纯函数，无副作用，可独立单测。
+     *
+     * <p>HMAC 是上传的第一道门（默认强制）；allowlist 是 HMAC key 泄露后的兜底。
+     * 因此生产 profile 下（{@code requireAllowlist=true}）allowlist 不可为空：
+     * 空即 {@link AllowlistOutcome#REQUIRED} 拒绝，而非放行。dev/test 默认放行便于开发。
+     *
+     * @param shaAllowlist 逗号分隔的受信 SHA-256 hex；{@code null}/空白视为未配置
+     * @param requireAllowlist fail-closed 开关（prod=true，dev/test=false）
+     * @param bodySha 本次上传 jar 的 SHA-256 hex
+     */
+    static AllowlistVerdict checkAllowlist(String shaAllowlist, boolean requireAllowlist, String bodySha) {
+        boolean configured = shaAllowlist != null && !shaAllowlist.isBlank();
+        if (!configured) {
+            return new AllowlistVerdict(
+                requireAllowlist ? AllowlistOutcome.REQUIRED : AllowlistOutcome.ALLOWED);
+        }
+        for (String s : shaAllowlist.split(",")) {
+            if (constantTimeEqualsHex(s.trim(), bodySha)) {
+                return new AllowlistVerdict(AllowlistOutcome.ALLOWED);
+            }
+        }
+        return new AllowlistVerdict(AllowlistOutcome.NOT_LISTED);
     }
 
     // ---------------------------------------------------------- error helpers

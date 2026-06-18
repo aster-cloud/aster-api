@@ -2,6 +2,7 @@
 # 客户集成依赖此契约——删除/改路径/改方法 = breaking，走 /api/v2 或 deprecation。
 # 新增端点（向后兼容）：运行 PublicApiContractTest 会自动追加，连同本文件提交。
 DELETE /api/v1/admin/lexicons
+DELETE /api/v1/admin/messages
 DELETE /api/v1/policies/cache
 GET /api/v1/audit
 GET /api/v1/audit/anomalies
@@ -31,3 +32,4 @@ POST /api/v1/policies/evaluate-source
 POST /api/v1/policies/evaluate/batch
 POST /api/v1/policies/schema
 POST /api/v1/policies/validate
+PUT /api/v1/admin/messages

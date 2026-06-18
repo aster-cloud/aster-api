@@ -3,6 +3,7 @@ package io.aster.policy.i18n;
 import io.quarkus.redis.datasource.RedisDataSource;
 import io.quarkus.redis.datasource.pubsub.PubSubCommands;
 import io.quarkus.redis.datasource.pubsub.PubSubCommands.RedisSubscriber;
+import io.quarkus.redis.datasource.value.ValueCommands;
 import io.quarkus.runtime.StartupEvent;
 import io.vertx.core.json.JsonObject;
 import jakarta.annotation.PreDestroy;
@@ -57,6 +58,12 @@ public class UiMessagesService {
     /** classpath 资源前缀。 */
     private static final String RESOURCE_PREFIX = "ui-messages/";
 
+    /**
+     * Redis 运行时文案覆盖层 key 前缀（ADR 0021 方案 A）。admin 改的文案存这里，
+     * 是 classpath 基线之上的运行时增量。掉电回退 classpath（不丢显示能力，只丢增量）。
+     */
+    private static final String REDIS_OVERRIDE_PREFIX = "aster:i18n:messages:";
+
     /** 启动时预加载的 locale（与语言包 jar 对齐）。运行时热刷新可加载任意 locale。 */
     private static final List<String> PRELOAD_LOCALES = List.of("en-US", "zh-CN", "de-DE", "hi-IN");
 
@@ -75,7 +82,8 @@ public class UiMessagesService {
 
     void onStart(@Observes StartupEvent event) {
         for (String locale : PRELOAD_LOCALES) {
-            loadFromClasspath(locale).ifPresent(entry -> {
+            // ADR 0021：先 Redis 运行时覆盖层、miss 回退 classpath 基线（重启后恢复增量）。
+            resolveEntry(locale).ifPresent(entry -> {
                 store.put(locale, entry);
                 LOG.infof("ui-messages 已加载: %s (%d bytes, sha=%s…)",
                     locale, entry.json().length(), entry.sha256().substring(0, 8));
@@ -135,6 +143,136 @@ public class UiMessagesService {
         }
     }
 
+    // ──────────────────────────────────────── Redis 运行时覆盖层（ADR 0021）
+
+    /**
+     * Redis 读结果三态（区分 miss 与 error，Codex 审查关键点）：
+     * <ul>
+     *   <li>{@code present} —— key 存在，{@code entry} 是其内容</li>
+     *   <li>{@code miss} —— key 不存在 → 调用方回退 classpath 基线</li>
+     *   <li>{@code error} —— 瞬时 Redis 故障 → 调用方**保留当前内存**，不回退、不冲掉增量</li>
+     * </ul>
+     */
+    private enum RedisLoadKind { PRESENT, MISS, ERROR }
+
+    private record RedisLoad(RedisLoadKind kind, MessagesEntry entry) {
+        static RedisLoad present(MessagesEntry e) { return new RedisLoad(RedisLoadKind.PRESENT, e); }
+        static final RedisLoad MISS = new RedisLoad(RedisLoadKind.MISS, null);
+        static final RedisLoad ERROR = new RedisLoad(RedisLoadKind.ERROR, null);
+    }
+
+    private boolean redisAvailable() {
+        return redisDataSource != null && redisDataSource.isResolvable() && !redisDataSource.isUnsatisfied();
+    }
+
+    private ValueCommands<String, String> redisStrings() {
+        return redisDataSource.get().value(String.class);
+    }
+
+    /** 读 Redis 运行时覆盖层。区分 miss（null）与 error（异常），见 {@link RedisLoad}。 */
+    private RedisLoad loadFromRedis(String locale) {
+        if (!redisAvailable()) {
+            return RedisLoad.MISS; // 无 Redis = 无覆盖层 = 走 classpath 基线
+        }
+        try {
+            String json = redisStrings().get(REDIS_OVERRIDE_PREFIX + locale);
+            if (json == null) {
+                return RedisLoad.MISS;
+            }
+            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+            return RedisLoad.present(new MessagesEntry(json, sha256Hex(bytes)));
+        } catch (Exception e) {
+            LOG.warnf("ui-messages Redis 覆盖层读取失败 locale=%s: %s（保留当前内存）", locale, e.getMessage());
+            return RedisLoad.ERROR;
+        }
+    }
+
+    /**
+     * 解析某 locale 的最终条目：先 Redis 运行时覆盖层，**真 miss** 回退 classpath 基线。
+     * **Redis error 返回 empty**（调用方据此保留当前内存，不冲掉运行时增量）。
+     */
+    private Optional<MessagesEntry> resolveEntry(String locale) {
+        RedisLoad redis = loadFromRedis(locale);
+        return switch (redis.kind()) {
+            case PRESENT -> Optional.of(redis.entry());
+            case MISS -> loadFromClasspath(locale);   // 无覆盖 → classpath 基线
+            case ERROR -> Optional.empty();           // 瞬时故障 → 保留内存
+        };
+    }
+
+    /**
+     * admin 写运行时文案覆盖（ADR 0021 方案 A）。写 Redis → 本 pod 自更新内存（不等 pub/sub）
+     * → 广播 publishReload 让其它 pod 重载。
+     *
+     * @param locale 目标 locale（调用方须已校验在可用集合）
+     * @param json   完整 messages 树 JSON（调用方须已校验合法 + schema/ICU/占位符 parity）
+     * @return 写入结果（entry + 是否成功广播到其它 pod），Redis 不可用 → empty（调用方返回 503）
+     */
+    public Optional<WriteResult> writeOverride(String locale, String json) {
+        if (locale == null || locale.isBlank() || json == null) {
+            return Optional.empty();
+        }
+        String key = locale.trim();
+        if (!redisAvailable()) {
+            LOG.warnf("ui-messages 写覆盖失败：Redis 不可用 locale=%s", key);
+            return Optional.empty();
+        }
+        try {
+            redisStrings().set(REDIS_OVERRIDE_PREFIX + key, json);
+        } catch (Exception e) {
+            LOG.warnf(e, "ui-messages 写覆盖 Redis set 失败 locale=%s", key);
+            return Optional.empty();
+        }
+        // 写成功后本 pod 自更新内存（不等 pub/sub，避免发布失败时本 pod 还吐旧内容）。
+        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+        MessagesEntry entry = new MessagesEntry(json, sha256Hex(bytes));
+        store.put(key, entry);
+        // 广播给其它 pod；记录是否成功（Codex 审查：广播失败 → propagated=false，调用方标记
+        // degraded，其它 pod 仍会在下次 reload/重启时从 Redis 真相源纠偏，不会永久不一致）。
+        boolean propagated = publishReload(key);
+        LOG.infof("ui-messages 运行时覆盖已写入: %s → sha=%s… propagated=%s",
+            key, entry.sha256().substring(0, 8), propagated);
+        return Optional.of(new WriteResult(entry, propagated));
+    }
+
+    /** 写入结果：新条目 + 是否成功广播到其它 pod。 */
+    public record WriteResult(MessagesEntry entry, boolean propagated) {}
+
+    /**
+     * 取某 locale 的 classpath 基线文案（不含运行时覆盖），供写入端点做键集/占位符 parity
+     * 校验。基线缺失（locale 未发版）→ empty。
+     */
+    public Optional<String> baselineJson(String locale) {
+        if (locale == null || locale.isBlank()) {
+            return Optional.empty();
+        }
+        return loadFromClasspath(locale.trim()).map(MessagesEntry::json);
+    }
+
+    /** 删除结果：是否删除成功 + 是否成功广播到其它 pod（Codex 复审：DELETE 也暴露 degraded）。 */
+    public record DeleteResult(boolean removed, boolean propagated) {
+        static final DeleteResult UNAVAILABLE = new DeleteResult(false, false);
+    }
+
+    /** 删除某 locale 的运行时覆盖（回退 classpath 基线，ADR 0021 回滚路径）。 */
+    public DeleteResult deleteOverride(String locale) {
+        if (locale == null || locale.isBlank() || !redisAvailable()) {
+            return DeleteResult.UNAVAILABLE;
+        }
+        String key = locale.trim();
+        try {
+            redisDataSource.get().key(String.class).del(REDIS_OVERRIDE_PREFIX + key);
+        } catch (Exception e) {
+            LOG.warnf(e, "ui-messages 删除覆盖失败 locale=%s", key);
+            return DeleteResult.UNAVAILABLE;
+        }
+        // 本 pod 自更新（回退 classpath）+ 广播。
+        resolveEntry(key).ifPresent(entry -> store.put(key, entry));
+        boolean propagated = publishReload(key);
+        LOG.infof("ui-messages 运行时覆盖已删除（回退 classpath 基线）: %s propagated=%s", key, propagated);
+        return new DeleteResult(true, propagated);
+    }
+
     // ──────────────────────────────────────── Redis 热刷新
 
     private void initReloadChannel() {
@@ -159,8 +297,12 @@ public class UiMessagesService {
     }
 
     /**
-     * 处理热刷新瘦事件 {@code {"locale":"en-US"}}：从 classpath 重新加载该 locale 并
-     * 原子替换内存条目。包内可见，便于单测直接触发。
+     * 处理热刷新瘦事件 {@code {"locale":"en-US"}}：重新加载该 locale（ADR 0021：先 Redis
+     * 运行时覆盖层、miss 回退 classpath 基线）并原子替换内存条目。包内可见，便于单测直接触发。
+     *
+     * <p>**Redis error 不冲掉内存（Codex 审查）**：{@link #resolveEntry} 区分"真 miss"
+     * （key 不存在 → 回退 classpath）与"读 error"（瞬时 Redis 故障 → 返回 empty + 告警）。
+     * 这里对 empty 只告警、**保留当前内存条目**，避免瞬时 Redis 故障把运行时增量冲掉。
      */
     void handleReload(String payload) {
         if (payload == null || payload.isBlank() || !payload.stripLeading().startsWith("{")) {
@@ -174,12 +316,13 @@ public class UiMessagesService {
                 LOG.warnf("ui-messages 热刷新事件缺少 locale: %s", payload);
                 return;
             }
-            loadFromClasspath(locale.trim()).ifPresentOrElse(
+            resolveEntry(locale.trim()).ifPresentOrElse(
                 entry -> {
                     store.put(locale.trim(), entry);
                     LOG.infof("ui-messages 热刷新: %s → sha=%s…", locale, entry.sha256().substring(0, 8));
                 },
-                () -> LOG.warnf("ui-messages 热刷新失败：classpath 无资源 %s", locale)
+                // empty = 真 miss（classpath 也无）或 Redis error；两种都**不动当前内存**。
+                () -> LOG.warnf("ui-messages 热刷新无新内容（miss/error）：%s（保留当前内存）", locale)
             );
         } catch (Exception e) {
             LOG.warnf(e, "解析 ui-messages 热刷新事件失败: %s", payload);
@@ -188,16 +331,19 @@ public class UiMessagesService {
 
     /**
      * 发布热刷新事件（供 admin 写入口 / 测试用）。瘦事件：只带 locale。
+     * @return 是否广播成功（false = pub/sub 不可用或发布异常，调用方据此标记 propagation degraded）
      */
-    public void publishReload(String locale) {
+    public boolean publishReload(String locale) {
         if (pubSubCommands == null || locale == null || locale.isBlank()) {
-            return;
+            return false;
         }
         try {
             pubSubCommands.publish(RELOAD_CHANNEL,
                 new JsonObject().put("locale", locale.trim()).encode());
+            return true;
         } catch (Exception e) {
             LOG.debug("广播 ui-messages 热刷新事件失败", e);
+            return false;
         }
     }
 

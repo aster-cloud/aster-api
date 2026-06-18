@@ -42,7 +42,8 @@ public class RequestSignatureFilter {
                 || path.startsWith("/api/internal/") || path.startsWith("api/internal/")
                 || isLexiconReadPath(path)
                 || isMessagesReadPath(path)
-                || isLexiconAdminPath(path)) {
+                || isLexiconAdminPath(path)
+                || isMessagesAdminPath(path)) {
             return Uni.createFrom().voidItem();
         }
 
@@ -114,5 +115,14 @@ public class RequestSignatureFilter {
     private static boolean isLexiconAdminPath(String path) {
         if ("/api/v1/admin/lexicons".equals(path) || "api/v1/admin/lexicons".equals(path)) return true;
         return path.startsWith("/api/v1/admin/lexicons/") || path.startsWith("api/v1/admin/lexicons/");
+    }
+
+    /**
+     * /api/v1/admin/messages/{locale} 运行时文案编辑（ADR 0021）：与 lexicon admin 同——
+     * 端点**自己**做内部 HMAC（{@code AdminHmacVerifier}），故跳过全局签名过滤器，避免双重
+     * 验签方案冲突。鉴权由资源内 HMAC 保证（这里跳过 ≠ 不鉴权）。
+     */
+    private static boolean isMessagesAdminPath(String path) {
+        return path.startsWith("/api/v1/admin/messages/") || path.startsWith("api/v1/admin/messages/");
     }
 }

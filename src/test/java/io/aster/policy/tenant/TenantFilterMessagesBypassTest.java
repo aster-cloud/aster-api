@@ -116,4 +116,22 @@ class TenantFilterMessagesBypassTest {
         verify(ctx).abortWith(resp.capture());
         assertEquals(400, resp.getValue().getStatus());
     }
+
+    @Test
+    @DisplayName("多段子路径/路径穿越不被误豁免（Codex 安全审查收紧）→ 仍要求 X-Tenant-Id")
+    void multiSegmentAndTraversalNotExempt() throws Exception {
+        TenantFilter filter = newFilter();
+        for (String path : new String[]{
+                "/api/v1/messages/en-US/extra",       // 多段子路径
+                "/api/v1/messages/../policies/evaluate", // 路径穿越尝试绕过 perimeter
+                "/api/v1/messages-admin/foo"          // 兄弟路径
+        }) {
+            ContainerRequestContext ctx = newCtx("GET", path, Map.of());
+            filter.filter(ctx);
+            ArgumentCaptor<Response> resp = ArgumentCaptor.forClass(Response.class);
+            verify(ctx).abortWith(resp.capture());
+            assertEquals(400, resp.getValue().getStatus(),
+                "非单段 messages 路径不应被豁免: " + path);
+        }
+    }
 }

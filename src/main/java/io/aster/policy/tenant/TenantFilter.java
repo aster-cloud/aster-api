@@ -1,5 +1,6 @@
 package io.aster.policy.tenant;
 
+import io.aster.policy.i18n.MessagesPathMatcher;
 import io.aster.policy.security.TrialBypassPredicate;
 import io.aster.policy.security.TrialEndpointGuard;
 import jakarta.inject.Inject;
@@ -232,9 +233,13 @@ public class TenantFilter implements ContainerRequestFilter {
      * /api/v1/messages/{locale} 界面文案查询。与 {@link #matchesLexiconPath} 同源——
      * 公开只读（登录页本身也需文案），前端 messages-loader 匿名 fetch（无 X-Tenant-Id），
      * 受 locale 可用性开关约束（MessagesResource 对未启用 locale 返回 404）。
-     * 仅 {@code /api/v1/messages/} 前缀（必带 locale 段），无裸 {@code /api/v1/messages}。
+     *
+     * <p>**精确单段匹配**（Codex 安全审查）：只豁免 {@code /api/v1/messages/<locale>}
+     * 这一段，locale 段内不得再有斜杠、不得是 {@code .}/{@code ..}（防 {@code
+     * /messages/../policies/evaluate} 之类穿越绕过 perimeter）。资源只有 {@code
+     * /{locale}}，多段路径不是合法端点——豁免范围严格收敛到实际端点，不豁免整个子树。
      */
     private boolean matchesMessagesPath(String path) {
-        return path.startsWith("/api/v1/messages/") || path.startsWith("api/v1/messages/");
+        return MessagesPathMatcher.isSingleLocaleMessagesPath(path);
     }
 }

@@ -41,6 +41,7 @@ public class RequestSignatureFilter {
                 || path.startsWith("/internal/") || path.startsWith("internal/")
                 || path.startsWith("/api/internal/") || path.startsWith("api/internal/")
                 || isLexiconReadPath(path)
+                || isMessagesReadPath(path)
                 || isLexiconAdminPath(path)) {
             return Uni.createFrom().voidItem();
         }
@@ -95,6 +96,18 @@ public class RequestSignatureFilter {
     private static boolean isLexiconReadPath(String path) {
         if ("/api/v1/lexicons".equals(path) || "api/v1/lexicons".equals(path)) return true;
         return path.startsWith("/api/v1/lexicons/") || path.startsWith("api/v1/lexicons/");
+    }
+
+    /**
+     * /api/v1/messages/{locale} 界面文案查询：与 lexicons 同源，公开只读（登录页本身
+     * 也需文案），不应被 HMAC 签名拦截。前端 messages-loader 匿名 fetch（无 X-Tenant-Id /
+     * 无签名），受 locale 可用性开关约束（MessagesResource 内部 404 未启用 locale）。
+     *
+     * <p>精确单段匹配（Codex 安全审查）：复用 {@link MessagesPathMatcher}，与 TenantFilter
+     * 同一份逻辑——只豁免 {@code /api/v1/messages/<locale>} 单段，拒绝多段/路径穿越。
+     */
+    private static boolean isMessagesReadPath(String path) {
+        return io.aster.policy.i18n.MessagesPathMatcher.isSingleLocaleMessagesPath(path);
     }
 
     private static boolean isLexiconAdminPath(String path) {

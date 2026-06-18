@@ -1,5 +1,6 @@
 package io.aster.policy.tenant;
 
+import io.aster.policy.i18n.MessagesPathMatcher;
 import io.aster.policy.security.TrialBypassPredicate;
 import io.aster.policy.security.TrialEndpointGuard;
 import jakarta.inject.Inject;
@@ -108,11 +109,14 @@ public class TenantFilter implements ContainerRequestFilter {
         // 豁免路径：管理端点、schema 端点、AI 端点（浏览器直连，无 X-Tenant-Id）
         // /api/internal/* 跨服务接口：tenantId 在路径里或不需要，自带 HMAC 验签
         // /api/v1/lexicons* 语言包查询：登录前/匿名亦需获取可用语言列表
+        // /api/v1/messages/{locale} 界面文案：与 lexicons 同源，前端匿名 fetch（无 X-Tenant-Id），
+        // 单段 locale 精确匹配（见 MessagesPathMatcher，拒多段/路径穿越）
         // 用 slash-boundary 匹配防止误匹配兄弟路径（如 /api/v1/lexicons-admin）
         if (path.startsWith("/q/") || path.startsWith("q/")
                 || path.equals("/graphql/schema.graphql") || path.equals("graphql/schema.graphql")
                 || path.startsWith("/api/v1/ai/") || path.startsWith("api/v1/ai/")
                 || matchesLexiconPath(path)
+                || matchesMessagesPath(path)
                 || path.startsWith("/api/v1/admin/lexicons/") || path.startsWith("api/v1/admin/lexicons/")
                 || path.equals("/api/v1/admin/lexicons") || path.equals("api/v1/admin/lexicons")
                 || path.startsWith("/api/internal/") || path.startsWith("api/internal/")) {
@@ -224,5 +228,19 @@ public class TenantFilter implements ContainerRequestFilter {
     private boolean matchesLexiconPath(String path) {
         if ("/api/v1/lexicons".equals(path) || "api/v1/lexicons".equals(path)) return true;
         return path.startsWith("/api/v1/lexicons/") || path.startsWith("api/v1/lexicons/");
+    }
+
+    /**
+     * /api/v1/messages/{locale} 界面文案查询。与 {@link #matchesLexiconPath} 同源——
+     * 公开只读（登录页本身也需文案），前端 messages-loader 匿名 fetch（无 X-Tenant-Id），
+     * 受 locale 可用性开关约束（MessagesResource 对未启用 locale 返回 404）。
+     *
+     * <p>**精确单段匹配**（Codex 安全审查）：只豁免 {@code /api/v1/messages/<locale>}
+     * 这一段，locale 段内不得再有斜杠、不得是 {@code .}/{@code ..}（防 {@code
+     * /messages/../policies/evaluate} 之类穿越绕过 perimeter）。资源只有 {@code
+     * /{locale}}，多段路径不是合法端点——豁免范围严格收敛到实际端点，不豁免整个子树。
+     */
+    private boolean matchesMessagesPath(String path) {
+        return MessagesPathMatcher.isSingleLocaleMessagesPath(path);
     }
 }

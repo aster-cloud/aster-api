@@ -42,6 +42,19 @@ class CnlErrorFriendlyTest {
     }
 
     @Test
+    void noViableAlternative_stripsEmbeddedLayoutMarkers() {
+        // ADR 0019 G2a 内联 if grammar 让畸形 if（缩进但缺 then/冒号）产生
+        // `no viable alternative at input 'Ifx<5\n<DEDENT>'`——group(1) 是多 token
+        // 串，内嵌 <DEDENT> 必须被剥掉，不能泄露给用户。
+        String err = parseErr("Module m.\nRule r given x, produce:\n      If x < 5\n  Return 1.");
+        assertThat(err)
+            .doesNotContain("<INDENT>")
+            .doesNotContain("<DEDENT>")
+            .doesNotContain("DEDENT")
+            .doesNotContain("INDENT");
+    }
+
+    @Test
     void onlyFirstRootCause_notCascadeOfDozens() {
         // 一个真实错误常引发几十条级联；用户只该看到根因。
         String err = parseErr("Module m.\nRule r given x, produce:\n  If x is wobbly 5\n    Return 1.");

@@ -55,7 +55,7 @@ class MessagesManifestResourceTest {
     }
 
     @Test
-    @DisplayName("manifest 返回 200 + 仅含已加载 locale（en-US）+ 8 位 sha + ETag")
+    @DisplayName("manifest 返回 200 + 仅含已加载 locale（en-US）+ 16 位 sha + ETag")
     void manifestReturns200WithLoadedLocale() {
         Response resp = resource.manifest(new StubRequest());
         assertThat(resp.getStatus()).isEqualTo(200);
@@ -67,7 +67,7 @@ class MessagesManifestResourceTest {
         // 只 en-US 有 ui-messages（zh/de/hi test 资源未提供）。
         assertThat(entries).hasSize(1);
         assertThat(entries.get(0).locale()).isEqualTo("en-US");
-        assertThat(entries.get(0).sha()).hasSize(8); // sha256 前 8 位
+        assertThat(entries.get(0).sha()).hasSize(16); // sha256 前 16 位
     }
 
     @Test

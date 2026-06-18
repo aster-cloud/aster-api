@@ -104,11 +104,15 @@ public class UiMessagesService {
     }
 
     /**
-     * ADR 0020 优化 1：取某 locale 的版本（sha256 前 8 位），供前端拼版本化 KV key。
+     * ADR 0020 优化 1：取某 locale 的版本（sha256 前 16 位），供前端拼版本化 KV key。
      * 未加载 → empty。
+     *
+     * <p>取 16 位（非 8 位）：版本标识的碰撞域要足够大（Codex 审查），16 位 = 64 bit，
+     * KV key / manifest payload 都很小不在乎这点长度。前端 body ETag 一致性校验也按此
+     * 前缀比对。
      */
     public Optional<String> shortSha(String locale) {
-        return get(locale).map(e -> e.sha256().substring(0, 8));
+        return get(locale).map(e -> e.sha256().substring(0, 16));
     }
 
     /**

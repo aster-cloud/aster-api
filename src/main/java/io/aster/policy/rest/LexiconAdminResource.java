@@ -154,10 +154,9 @@ public class LexiconAdminResource {
         verifyHmac(headers, "POST", "/api/v1/admin/lexicons",
             file.contentType(), body.length, bodySha, fileName);
 
-        // C3: jar 结构 + SPI descriptor 校验
-        validateJarStructure(body, fileName);
-
         // SHA-256 allowlist（纵深防御，ADR 0018）。判定逻辑抽到纯静态方法以便单测。
+        // **置于 ZIP/SPI 解析之前（Codex 审查）**：allowlist 只需 bodySha，不依赖 jar 内容；
+        // 提前拒绝可减少 HMAC key 泄露后攻击者反复触发 ZIP 解压/限额逻辑的成本。
         AllowlistVerdict verdict =
             checkAllowlist(shaAllowlist.orElse(null), requireAllowlist, bodySha);
         switch (verdict.outcome()) {
@@ -168,6 +167,9 @@ public class LexiconAdminResource {
                 "sha256 " + bodySha + " not in aster.lexicon.upload.sha256-allowlist");
             case ALLOWED -> { /* 通过 */ }
         }
+
+        // C3: jar 结构 + SPI descriptor 校验（allowlist 通过后才解析 jar）
+        validateJarStructure(body, fileName);
 
         // R11-Backend-Critical + R12-Backend-Major-2：双层锁。
         //   1) JVM-local striped ReentrantLock —— 同 pod 内同 fileName 串行

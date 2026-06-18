@@ -103,11 +103,12 @@ public class RequestSignatureFilter {
      * 也需文案），不应被 HMAC 签名拦截。前端 messages-loader 匿名 fetch（无 X-Tenant-Id /
      * 无签名），受 locale 可用性开关约束（MessagesResource 内部 404 未启用 locale）。
      *
-     * <p>精确单段匹配（Codex 安全审查）：复用 {@link MessagesPathMatcher}，与 TenantFilter
-     * 同一份逻辑——只豁免 {@code /api/v1/messages/<locale>} 单段，拒绝多段/路径穿越。
+     * <p>精确匹配（Codex 安全审查）：复用 {@link MessagesPathMatcher}，与 TenantFilter
+     * 同一份逻辑——豁免 {@code /api/v1/messages/<locale>} 单段（拒多段/穿越）与
+     * {@code /api/v1/messages-manifest}（精确，ADR 0020 版本清单）。
      */
     private static boolean isMessagesReadPath(String path) {
-        return io.aster.policy.i18n.MessagesPathMatcher.isSingleLocaleMessagesPath(path);
+        return io.aster.policy.i18n.MessagesPathMatcher.isPublicMessagesReadPath(path);
     }
 
     private static boolean isLexiconAdminPath(String path) {

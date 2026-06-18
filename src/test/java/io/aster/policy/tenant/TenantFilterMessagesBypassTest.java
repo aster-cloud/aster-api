@@ -93,6 +93,15 @@ class TenantFilterMessagesBypassTest {
     }
 
     @Test
+    @DisplayName("messages-manifest 版本清单端点匿名访问 → 不要求 X-Tenant-Id（ADR 0020）")
+    void manifestPathBypassesTenant() throws Exception {
+        TenantFilter filter = newFilter();
+        ContainerRequestContext ctx = newCtx("GET", "/api/v1/messages-manifest", Map.of());
+        filter.filter(ctx);
+        verify(ctx, never()).abortWith(any());
+    }
+
+    @Test
     @DisplayName("兄弟路径不被误豁免：裸 /api/v1/messages（无 locale 段）仍要求 X-Tenant-Id")
     void bareMessagesPathNotExempt() throws Exception {
         // matchesMessagesPath 只匹配 `/api/v1/messages/` 前缀（必带 locale 段），

@@ -65,4 +65,34 @@ class MessagesPathMatcherTest {
     void nullNotExempt() {
         assertThat(MessagesPathMatcher.isSingleLocaleMessagesPath(null)).isFalse();
     }
+
+    // ---- ADR 0020：messages-manifest 端点 ----
+
+    @Test
+    @DisplayName("messages-manifest 精确路径 → 豁免（带/不带前导斜杠）")
+    void manifestExactPathExempt() {
+        assertThat(MessagesPathMatcher.isManifestPath("/api/v1/messages-manifest")).isTrue();
+        assertThat(MessagesPathMatcher.isManifestPath("api/v1/messages-manifest")).isTrue();
+        // 统一入口也认。
+        assertThat(MessagesPathMatcher.isPublicMessagesReadPath("/api/v1/messages-manifest")).isTrue();
+    }
+
+    @Test
+    @DisplayName("manifest 子路径/兄弟路径 → 不豁免（精确匹配，无子树）")
+    void manifestSubAndSiblingNotExempt() {
+        assertThat(MessagesPathMatcher.isManifestPath("/api/v1/messages-manifest/")).isFalse();
+        assertThat(MessagesPathMatcher.isManifestPath("/api/v1/messages-manifest/extra")).isFalse();
+        assertThat(MessagesPathMatcher.isManifestPath("/api/v1/messages-manifest-admin")).isFalse();
+        assertThat(MessagesPathMatcher.isManifestPath("/api/v1/messages")).isFalse();
+    }
+
+    @Test
+    @DisplayName("isPublicMessagesReadPath 同时认 locale 文案 + manifest，仍拒穿越")
+    void publicReadPathCoversBoth() {
+        assertThat(MessagesPathMatcher.isPublicMessagesReadPath("/api/v1/messages/en-US")).isTrue();
+        assertThat(MessagesPathMatcher.isPublicMessagesReadPath("/api/v1/messages-manifest")).isTrue();
+        // 仍拒多段/穿越/裸路径。
+        assertThat(MessagesPathMatcher.isPublicMessagesReadPath("/api/v1/messages/../policies/evaluate")).isFalse();
+        assertThat(MessagesPathMatcher.isPublicMessagesReadPath("/api/v1/messages")).isFalse();
+    }
 }

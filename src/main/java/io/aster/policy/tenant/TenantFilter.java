@@ -241,6 +241,6 @@ public class TenantFilter implements ContainerRequestFilter {
      * /{locale}}，多段路径不是合法端点——豁免范围严格收敛到实际端点，不豁免整个子树。
      */
     private boolean matchesMessagesPath(String path) {
-        return MessagesPathMatcher.isSingleLocaleMessagesPath(path);
+        return MessagesPathMatcher.isPublicMessagesReadPath(path);
     }
 }

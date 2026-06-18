@@ -2,19 +2,7 @@
 -- 作者: Claude Code
 -- 日期: 2026-01-10
 -- 目的: 为 demo 环境提供示例 workflow 数据，解决统计页面空值和 NaN 显示问题
--- 注意: 仅在 demo/dev/test 环境执行，生产环境必须跳过。
---
--- #55 prod-seed gating（已应用的版本化迁移不可删除，故用 Flyway placeholder 中和）：
---   本脚本的每条 INSERT 都额外用 Flyway placeholder `${asterDemoSeedEnabled}` 守护。
---   该 placeholder 在 dev/test profile 解析为 `true`（照常注入 demo 数据），在 prod
---   解析为 `false` —— 此时每条 `WHERE NOT EXISTS(...) AND false` 恒为假，一行都不会插入，
---   末尾的诊断 DO 块只会报告 0（无副作用）。
---   迁移历史影响：本文件内容变更会改变其 SHA-256，需同步更新
---   src/test/resources/db/migration-checksums.golden（MigrationGovernanceTest 会校验）；
---   schema_history 中已应用的 checksum 在生产可能漂移——因 Flyway 配置已 baseline 且
---   prod 未开 validate-on-migrate（migrate-at-start 不重跑已应用版本），故安全。
---   未来若需在已 seeded 的 prod 清理 demo 数据，应新增一个 prod-safe 的补偿迁移，
---   而非修改本历史文件。
+-- 注意: 仅在 demo/dev 环境执行，生产环境应跳过或回滚
 
 -- ============================================================================
 -- 1. 创建 Demo 策略版本（如果不存在）
@@ -31,7 +19,7 @@ SELECT 'demo.loan.approval', 1736000000000, 'demo.loan', 'evaluateLoanApproval',
 否则
   拒绝贷款申请',
        true, NOW() - INTERVAL '30 days', 'system', 'Demo 贷款审批策略 - 初始版本'
-WHERE ${asterDemoSeedEnabled} AND NOT EXISTS (SELECT 1 FROM policy_versions WHERE policy_id = 'demo.loan.approval' AND version = 1736000000000);
+WHERE NOT EXISTS (SELECT 1 FROM policy_versions WHERE policy_id = 'demo.loan.approval' AND version = 1736000000000);
 
 -- Demo 贷款审批策略 v2（更新版）
 INSERT INTO policy_versions (policy_id, version, module_name, function_name, content, active, created_at, created_by, notes)
@@ -44,7 +32,7 @@ SELECT 'demo.loan.approval', 1736100000000, 'demo.loan', 'evaluateLoanApproval',
 否则
   拒绝贷款申请',
        false, NOW() - INTERVAL '15 days', 'system', 'Demo 贷款审批策略 - 降低门槛'
-WHERE ${asterDemoSeedEnabled} AND NOT EXISTS (SELECT 1 FROM policy_versions WHERE policy_id = 'demo.loan.approval' AND version = 1736100000000);
+WHERE NOT EXISTS (SELECT 1 FROM policy_versions WHERE policy_id = 'demo.loan.approval' AND version = 1736100000000);
 
 -- Demo 欺诈检测策略
 INSERT INTO policy_versions (policy_id, version, module_name, function_name, content, active, created_at, created_by, notes)
@@ -58,7 +46,7 @@ SELECT 'demo.fraud.detection', 1736000000000, 'demo.fraud', 'detectFraud',
 否则
   放行交易',
        true, NOW() - INTERVAL '20 days', 'system', 'Demo 欺诈检测策略'
-WHERE ${asterDemoSeedEnabled} AND NOT EXISTS (SELECT 1 FROM policy_versions WHERE policy_id = 'demo.fraud.detection' AND version = 1736000000000);
+WHERE NOT EXISTS (SELECT 1 FROM policy_versions WHERE policy_id = 'demo.fraud.detection' AND version = 1736000000000);
 
 -- ============================================================================
 -- 2. 获取策略版本 ID（用于后续插入）
@@ -126,7 +114,7 @@ SELECT
         ELSE NULL
     END AS error_message
 FROM generate_series(1, 50) AS i
-WHERE ${asterDemoSeedEnabled} AND NOT EXISTS (
+WHERE NOT EXISTS (
     SELECT 1 FROM workflow_state ws
     WHERE ws.tenant_id = 'demo-tenant'
     AND ws.policy_version_id = (SELECT id FROM policy_versions WHERE policy_id = 'demo.loan.approval' AND version = 1736000000000 LIMIT 1)
@@ -181,7 +169,7 @@ SELECT
         ELSE NULL
     END AS error_message
 FROM generate_series(1, 30) AS i
-WHERE ${asterDemoSeedEnabled} AND NOT EXISTS (
+WHERE NOT EXISTS (
     SELECT 1 FROM workflow_state ws
     WHERE ws.tenant_id = 'demo-tenant'
     AND ws.policy_version_id = (SELECT id FROM policy_versions WHERE policy_id = 'demo.loan.approval' AND version = 1736100000000 LIMIT 1)
@@ -236,7 +224,7 @@ SELECT
         ELSE NULL
     END AS error_message
 FROM generate_series(1, 40) AS i
-WHERE ${asterDemoSeedEnabled} AND NOT EXISTS (
+WHERE NOT EXISTS (
     SELECT 1 FROM workflow_state ws
     WHERE ws.tenant_id = 'demo-tenant'
     AND ws.policy_version_id = (SELECT id FROM policy_versions WHERE policy_id = 'demo.fraud.detection' AND version = 1736000000000 LIMIT 1)

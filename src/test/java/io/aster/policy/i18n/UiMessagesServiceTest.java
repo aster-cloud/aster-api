@@ -108,4 +108,43 @@ class UiMessagesServiceTest {
         svc.handleReload("not-json{{{");
         assertThat(svc.loadedLocales()).isEmpty();
     }
+
+    // ──────────────────────────────────────── ADR 0021 运行时覆盖层
+
+    @Test
+    @DisplayName("无 Redis：resolveEntry 回退 classpath（handleReload 仍从 classpath 加载）")
+    void noRedisFallsBackToClasspath() {
+        // 无 Redis → loadFromRedis MISS → resolveEntry 回退 classpath。
+        UiMessagesService svc = new UiMessagesService();
+        svc.handleReload("{\"locale\":\"en-US\"}");
+        assertThat(svc.get("en-US")).isPresent();
+    }
+
+    @Test
+    @DisplayName("baselineJson 读 classpath 基线（en-US 存在，xx-XX 不存在）")
+    void baselineJsonReadsClasspath() {
+        UiMessagesService svc = new UiMessagesService();
+        assertThat(svc.baselineJson("en-US")).isPresent();
+        assertThat(svc.baselineJson("xx-XX")).isEmpty();
+        assertThat(svc.baselineJson(null)).isEmpty();
+        assertThat(svc.baselineJson("  ")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("无 Redis：writeOverride → empty（写入端点据此返回 503，不假装成功）")
+    void writeOverrideNoRedisReturnsEmpty() {
+        UiMessagesService svc = new UiMessagesService();
+        assertThat(svc.writeOverride("en-US", "{\"common\":{}}")).isEmpty();
+        assertThat(svc.writeOverride(null, "{}")).isEmpty();
+        assertThat(svc.writeOverride("en-US", null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("无 Redis：deleteOverride → removed=false（不可用时不假装删除成功）")
+    void deleteOverrideNoRedisReturnsFalse() {
+        UiMessagesService svc = new UiMessagesService();
+        UiMessagesService.DeleteResult r = svc.deleteOverride("en-US");
+        assertThat(r.removed()).isFalse();
+        assertThat(r.propagated()).isFalse();
+    }
 }

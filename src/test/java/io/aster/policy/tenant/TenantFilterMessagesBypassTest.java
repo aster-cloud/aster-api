@@ -102,6 +102,16 @@ class TenantFilterMessagesBypassTest {
     }
 
     @Test
+    @DisplayName("admin/messages 写端点跳过 tenant（自做内部 HMAC，ADR 0021）→ 不要求 X-Tenant-Id")
+    void messagesAdminPathBypassesTenant() throws Exception {
+        // admin 端点鉴权靠资源内 AdminHmacVerifier，全局 tenant 校验跳过（同 admin/lexicons）。
+        TenantFilter filter = newFilter();
+        ContainerRequestContext ctx = newCtx("PUT", "/api/v1/admin/messages/en-US", Map.of());
+        filter.filter(ctx);
+        verify(ctx, never()).abortWith(any());
+    }
+
+    @Test
     @DisplayName("兄弟路径不被误豁免：裸 /api/v1/messages（无 locale 段）仍要求 X-Tenant-Id")
     void bareMessagesPathNotExempt() throws Exception {
         // matchesMessagesPath 只匹配 `/api/v1/messages/` 前缀（必带 locale 段），

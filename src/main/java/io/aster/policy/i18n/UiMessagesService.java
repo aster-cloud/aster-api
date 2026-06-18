@@ -104,6 +104,14 @@ public class UiMessagesService {
     }
 
     /**
+     * ADR 0020 优化 1：取某 locale 的版本（sha256 前 8 位），供前端拼版本化 KV key。
+     * 未加载 → empty。
+     */
+    public Optional<String> shortSha(String locale) {
+        return get(locale).map(e -> e.sha256().substring(0, 8));
+    }
+
+    /**
      * 从 classpath 读 {@code ui-messages/<locale>.json}，计算 sha256。
      * 资源缺失 → empty（不抛，便于 P1 未发版时优雅降级）。
      */

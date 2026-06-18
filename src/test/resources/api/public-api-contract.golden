@@ -12,6 +12,7 @@ GET /api/v1/audit/verify-chain
 GET /api/v1/lexicons
 GET /api/v1/lexicons/stream
 GET /api/v1/messages
+GET /api/v1/messages-manifest
 GET /api/v1/metrics/waadr
 GET /api/v1/modules/catalog
 GET /api/v1/policies

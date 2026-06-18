@@ -172,9 +172,26 @@ public class CnlErrorListener extends BaseErrorListener {
             case "STRING_LITERAL":
                 return "字符串";
             default:
-                // 普通符号/关键字：加引号直观显示
-                return "'" + tok + "'";
+                // no viable alternative 等错误的 group(1) 可能是多 token 串
+                // （如 `Ifx<5\n<DEDENT>`），其中内嵌的 <INDENT>/<DEDENT> 是 lexer
+                // 内部缩进标记，绝不能泄露给用户。先剥掉这些标记再加引号显示。
+                String scrubbed = stripLayoutMarkers(tok);
+                return "'" + scrubbed + "'";
         }
+    }
+
+    /**
+     * 剥掉 token 文本里内嵌的缩进标记（{@code <INDENT>}/{@code <DEDENT>}）与
+     * 字面换行，避免在友好错误里泄露 lexer 内部 token 名。多 token 串场景
+     * （no viable alternative 的 group(1)）会命中。
+     */
+    private static String stripLayoutMarkers(String tok) {
+        return tok
+            .replace("<INDENT>", "")
+            .replace("<DEDENT>", "")
+            .replace("\\n", " ")
+            .replace("\n", " ")
+            .trim();
     }
 
     /** 简化 expecting 集合（ANTLR 常列十几个 token），只取前几个友好项。 */

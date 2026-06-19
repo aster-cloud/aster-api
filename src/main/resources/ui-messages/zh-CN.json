@@ -1582,6 +1582,7 @@
     "overview": {
       "title": "管理员概览",
       "subtitle": "跨业务的平台级运营控制项。",
+      "controlsHeading": "平台控制",
       "cardsHeading": "运营工具",
       "aiBreakerCard": {
         "title": "AI 熔断器",
@@ -2989,15 +2990,11 @@
   },
   "platformLanguageSettings": {
     "title": "平台语言可用性",
-    "description": "选择整个平台开放哪些语言。团队级语言设定是其子集——团队无法启用此处禁用的语言。",
+    "description": "选择整个平台开放哪些语言——同时作用于应用与文档站（aster-lang.dev）。禁用某语言会使其全面下线：UI、语言包、以及用该语言编写策略均不可用。团队级语言设定是其子集。",
     "enabledLabel": "已启用",
     "disabledLabel": "已禁用",
-    "defaultLocaleNote": "默认语言无法被禁用。",
-    "saving": "保存中…",
-    "saved": "已保存",
-    "save": "保存",
-    "saveFailed": "保存失败，请重试。",
-    "loadFailed": "无法加载平台语言设置。",
-    "backendUnavailable": "后端未加载该语言包"
+    "defaultLocaleNote": "默认语言——始终可用，无法禁用。",
+    "toggleAriaLabel": "切换 {language} 的可用性",
+    "saveFailed": "更新失败，请重试。"
   }
 }

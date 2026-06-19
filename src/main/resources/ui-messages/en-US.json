@@ -1582,6 +1582,7 @@
     "overview": {
       "title": "Admin overview",
       "subtitle": "Cross-cutting operational controls for the platform.",
+      "controlsHeading": "Platform controls",
       "cardsHeading": "Operational tools",
       "aiBreakerCard": {
         "title": "AI circuit breaker",
@@ -2989,15 +2990,11 @@
   },
   "platformLanguageSettings": {
     "title": "Platform language availability",
-    "description": "Choose which languages are available across the entire platform. Team-level language settings are a subset of this — teams cannot enable a language disabled here.",
+    "description": "Choose which languages are available across the entire platform — both the app and the docs site (aster-lang.dev). Disabling a language takes it offline everywhere: its UI, its lexicon, and writing policies in it. Team-level language settings are a subset of this.",
     "enabledLabel": "Enabled",
     "disabledLabel": "Disabled",
-    "defaultLocaleNote": "The default language cannot be disabled.",
-    "saving": "Saving…",
-    "saved": "Saved",
-    "save": "Save",
-    "saveFailed": "Could not save. Please try again.",
-    "loadFailed": "Could not load platform language settings.",
-    "backendUnavailable": "lexicon not loaded on backend"
+    "defaultLocaleNote": "Default language — always available, cannot be disabled.",
+    "toggleAriaLabel": "Toggle availability of {language}",
+    "saveFailed": "Could not update. Please try again."
   }
 }

@@ -18,14 +18,12 @@ dependencyResolutionManagement {
 // Composite Build: 引用独立的 aster-lang 子项目
 // 这些项目已从 aster-lang 多模块项目拆分为独立项目
 
-// Composite Build: 仅当兄弟目录存在时启用（本地开发）；CI 使用 Maven Local
+// Composite Build: 仅当兄弟目录存在时启用（本地开发）；CI 使用 Maven Local。
+// 单坐标=单仓的：core/runtime/truffle/validation/hi（artifactId==repo 名）。
 ['aster-lang-core',
  'aster-lang-runtime',
  'aster-lang-truffle',
  'aster-lang-validation',
- 'aster-lang-en',
- 'aster-lang-zh',
- 'aster-lang-de',
  'aster-lang-hi',
 ].each { name ->
     def dir = file("../$name")
@@ -34,6 +32,20 @@ dependencyResolutionManagement {
             dependencySubstitution {
                 substitute module("cloud.aster-lang:$name") using project(':')
             }
+        }
+    }
+}
+
+// en/zh/de lexicon SPI 包：从 aster-lang-locales 多模块仓发布，坐标
+// cloud.aster-lang:aster-lang-locales-{en,zh,de}（脱离已归档的 aster-lang-{en,zh,de}
+// 仓）。composite includeBuild 把三个坐标替换到 locales 的对应 subproject。
+def localesDir = file("../aster-lang-locales")
+if (localesDir.isDirectory()) {
+    includeBuild(localesDir) {
+        dependencySubstitution {
+            substitute module("cloud.aster-lang:aster-lang-locales-en") using project(':en')
+            substitute module("cloud.aster-lang:aster-lang-locales-zh") using project(':zh')
+            substitute module("cloud.aster-lang:aster-lang-locales-de") using project(':de')
         }
     }
 }

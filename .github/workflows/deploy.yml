@@ -87,22 +87,12 @@ jobs:
           path: aster-lang-validation
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
+      # en/zh/de lexicon SPI 包源：aster-lang-locales（新坐标，composite includeBuild）。
+      # 旧独立 en/zh/de 仓已归档。
       - uses: actions/checkout@v6
         with:
-          repository: aster-cloud/aster-lang-en
-          path: aster-lang-en
-          token: ${{ secrets.CROSS_REPO_TOKEN }}
-
-      - uses: actions/checkout@v6
-        with:
-          repository: aster-cloud/aster-lang-zh
-          path: aster-lang-zh
-          token: ${{ secrets.CROSS_REPO_TOKEN }}
-
-      - uses: actions/checkout@v6
-        with:
-          repository: aster-cloud/aster-lang-de
-          path: aster-lang-de
+          repository: aster-cloud/aster-lang-locales
+          path: aster-lang-locales
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
       # Hindi SPI pack (extracted from core builtins) — composite includeBuild.

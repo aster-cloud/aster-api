@@ -92,22 +92,13 @@ jobs:
           path: aster-lang-validation
           token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
 
+      # en/zh/de lexicon SPI 包源：aster-lang-locales（多模块，新坐标
+      # aster-lang-locales-{en,zh,de}）。settings.gradle 的 composite includeBuild
+      # 把这三个坐标替换到 locales 对应 subproject。旧独立 en/zh/de 仓已归档。
       - uses: actions/checkout@v6
         with:
-          repository: aster-cloud/aster-lang-en
-          path: aster-lang-en
-          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
-
-      - uses: actions/checkout@v6
-        with:
-          repository: aster-cloud/aster-lang-zh
-          path: aster-lang-zh
-          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
-
-      - uses: actions/checkout@v6
-        with:
-          repository: aster-cloud/aster-lang-de
-          path: aster-lang-de
+          repository: aster-cloud/aster-lang-locales
+          path: aster-lang-locales
           token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
 
       # Hindi (hi-IN) is now a standalone SPI pack (extracted from core's

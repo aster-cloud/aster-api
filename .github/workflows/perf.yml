@@ -58,12 +58,9 @@ jobs:
         with: { repository: aster-cloud/aster-lang-truffle, path: aster-lang-truffle, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
       - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-validation, path: aster-lang-validation, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+      # en/zh/de lexicon SPI 包源：aster-lang-locales（新坐标，composite includeBuild）。
       - uses: actions/checkout@v6
-        with: { repository: aster-cloud/aster-lang-en, path: aster-lang-en, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v6
-        with: { repository: aster-cloud/aster-lang-zh, path: aster-lang-zh, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v6
-        with: { repository: aster-cloud/aster-lang-de, path: aster-lang-de, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
+        with: { repository: aster-cloud/aster-lang-locales, path: aster-lang-locales, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
       - uses: actions/checkout@v6
         with: { repository: aster-cloud/aster-lang-hi, path: aster-lang-hi, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
 

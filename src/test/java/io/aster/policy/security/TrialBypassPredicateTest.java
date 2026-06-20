@@ -93,4 +93,54 @@ class TrialBypassPredicateTest {
         assertFalse(TrialBypassPredicate.isGuardedTrialPath(
             null, Boolean.TRUE));
     }
+
+    private ContainerRequestContext ctxWithHeaders(String caller, String signature, String timestamp) {
+        ContainerRequestContext c = mock(ContainerRequestContext.class);
+        if (caller != null) {
+            when(c.getHeaderString(TrialBypassPredicate.INTERNAL_CALLER_HEADER)).thenReturn(caller);
+        }
+        if (signature != null) {
+            when(c.getHeaderString(TrialBypassPredicate.INTERNAL_SIGNATURE_HEADER)).thenReturn(signature);
+        }
+        if (timestamp != null) {
+            when(c.getHeaderString(TrialBypassPredicate.INTERNAL_TIMESTAMP_HEADER)).thenReturn(timestamp);
+        }
+        return c;
+    }
+
+    @Test
+    @DisplayName("内部调用头齐全（cloud-bff + signature + timestamp）→ true")
+    void internalCallerComplete() {
+        assertTrue(TrialBypassPredicate.hasInternalCallerCredentials(
+            ctxWithHeaders("cloud-bff", "sig", "1700000000")));
+    }
+
+    @Test
+    @DisplayName("缺签名头 → false")
+    void internalCallerMissingSignature() {
+        assertFalse(TrialBypassPredicate.hasInternalCallerCredentials(
+            ctxWithHeaders("cloud-bff", null, "1700000000")));
+    }
+
+    @Test
+    @DisplayName("缺时间戳头 → false")
+    void internalCallerMissingTimestamp() {
+        assertFalse(TrialBypassPredicate.hasInternalCallerCredentials(
+            ctxWithHeaders("cloud-bff", "sig", null)));
+    }
+
+    @Test
+    @DisplayName("caller 值不是 cloud-bff → false")
+    void internalCallerWrongValue() {
+        assertFalse(TrialBypassPredicate.hasInternalCallerCredentials(
+            ctxWithHeaders("attacker", "sig", "1700000000")));
+    }
+
+    @Test
+    @DisplayName("无任何内部调用头 / null ctx → false")
+    void internalCallerAbsent() {
+        assertFalse(TrialBypassPredicate.hasInternalCallerCredentials(
+            ctxWithHeaders(null, null, null)));
+        assertFalse(TrialBypassPredicate.hasInternalCallerCredentials(null));
+    }
 }

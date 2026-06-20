@@ -84,6 +84,35 @@ class InternalCallerFilterTest {
     }
 
     @Test
+    void evaluateSourceTrialWithInternalCallerRequiresHmac() {
+        // 关键修复：trial 开启时，携带内部调用头（cloud-bff）的 evaluate-source 必须走
+        // HMAC 校验（REQUIRE_HMAC），而非 trial 旁路。否则已认证的内部调用（服务器到服务器、
+        // 无浏览器 Origin）会被 TrialEndpointGuard 的 Origin 闸门误拦 → cloud /policies/{id}/
+        // execute 报 origin_not_allowed。
+        assertEquals(Classification.REQUIRE_HMAC,
+            InternalCallerFilter.classify("/api/v1/policies/evaluate-source",
+                /*evaluateSourcePublic*/ false, /*evaluateSourceTrial*/ true,
+                /*aiPublic*/ false, /*aiSsePublic*/ false, /*hasInternalCaller*/ true));
+    }
+
+    @Test
+    void evaluateSourceTrialWithoutInternalCallerStaysTrial() {
+        // 反面：无内部调用头 → 仍是匿名 trial 流量，走 BYPASS_TRIAL（经 TrialEndpointGuard）。
+        assertEquals(Classification.BYPASS_TRIAL,
+            InternalCallerFilter.classify("/api/v1/policies/evaluate-source",
+                false, /*evaluateSourceTrial*/ true, false, false, /*hasInternalCaller*/ false));
+    }
+
+    @Test
+    void evaluateSourcePublicTakesPrecedenceOverInternalCaller() {
+        // .public 仍是最高优先级全量旁路，即便带内部调用头也走 BYPASS_OK。
+        assertEquals(Classification.BYPASS_OK,
+            InternalCallerFilter.classify("/api/v1/policies/evaluate-source",
+                /*evaluateSourcePublic*/ true, /*evaluateSourceTrial*/ true,
+                false, false, /*hasInternalCaller*/ true));
+    }
+
+    @Test
     void evaluateSourceTrialDoesNotAffectAiEndpoints() {
         // .trial 是 evaluate-source 专属的：AI 路径仍要 HMAC
         assertEquals(Classification.REQUIRE_HMAC,

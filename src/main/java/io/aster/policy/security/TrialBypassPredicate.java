@@ -55,4 +55,33 @@ public final class TrialBypassPredicate {
         if (rawPath == null) return false;
         return TrialEndpointGuard.TRIAL_PATH.equals(PathNormalizer.normalize(rawPath));
     }
+
+    /** 内部调用方标识头：cloud-bff BFF 经 HMAC 签名访问 evaluate-source 时携带。 */
+    public static final String INTERNAL_CALLER_HEADER = "X-Internal-Caller";
+    public static final String INTERNAL_SIGNATURE_HEADER = "X-Internal-Signature";
+    public static final String INTERNAL_TIMESTAMP_HEADER = "X-Aster-Timestamp";
+    private static final String INTERNAL_CALLER_VALUE = "cloud-bff";
+
+    /**
+     * 判断请求是否声称自己是 cloud-bff 的<b>内部调用</b>（携带 X-Internal-Caller=cloud-bff
+     * 且带签名头 + 时间戳头——即完整的内部调用凭据形态）。
+     *
+     * <p><b>这只是"声称"，不是认证</b>：签名的真伪由 {@code InternalCallerFilter} 校验。
+     * 用途是让 {@link TrialEndpointGuard} 对内部调用<b>跳过</b> Origin/body/IP 这些
+     * <b>仅针对匿名浏览器 trial 流量</b>的成本控制闸门——内部调用是服务器到服务器的
+     * fetch，没有浏览器 Origin 头，本不该被 trial 的 Origin 白名单拦下。
+     *
+     * <p><b>安全边界澄清</b>：跳过只让出 trial 的<b>成本控制</b>（per-IP 限流、32KiB body
+     * cap、Turnstile），<b>不</b>让出任何业务执行/鉴权能力。伪造 X-Internal-Caller 的请求
+     * 会被 {@code InternalCallerFilter} 在 <b>request filter 阶段</b>（读 entity 之前）以
+     * invalid_signature 403 拒掉，不会进入 {@code evaluateSource} 资源方法。被让出的 body
+     * cap 由全局 {@code quarkus.http.limits.max-body-size}（1M）+ source 字段 {@code @Size}
+     * （64KiB）兜底，但实际第一道防线是 HMAC filter 早拒。
+     */
+    public static boolean hasInternalCallerCredentials(ContainerRequestContext ctx) {
+        if (ctx == null) return false;
+        return INTERNAL_CALLER_VALUE.equals(ctx.getHeaderString(INTERNAL_CALLER_HEADER))
+            && ctx.getHeaderString(INTERNAL_SIGNATURE_HEADER) != null
+            && ctx.getHeaderString(INTERNAL_TIMESTAMP_HEADER) != null;
+    }
 }

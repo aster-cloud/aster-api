@@ -119,6 +119,13 @@ public class LexiconAdminResource {
     @Inject
     io.aster.policy.lexicon.LexiconAdminMetrics metrics;
 
+    /**
+     * 可用性（软上/下线）跨副本一致性服务：disable/enable 经它持久到 Redis + 广播，
+     * 让 K3S 多副本同步生效（否则只改命中的那一个副本 → /api/v1/lexicons 各副本不一致）。
+     */
+    @Inject
+    io.aster.policy.lexicon.LexiconAvailabilityService availabilityService;
+
     @POST
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
@@ -354,7 +361,8 @@ public class LexiconAdminResource {
         String validatedId = sanitizeLocaleId(id);
         verifyHmac(headers, "POST", "/api/v1/admin/lexicons/" + validatedId + "/disable",
             null, 0, null, null);
-        boolean changed = aster.core.lexicon.LexiconRegistry.getInstance().markUnavailable(validatedId);
+        // 经可用性服务：本地 markUnavailable + 持久 Redis + 广播（跨副本一致）。
+        boolean changed = availabilityService.disable(validatedId);
         // R17-Major-1：可观测对齐 upload/delete
         String outcome = changed ? "disabled" : "unchanged";
         metrics.recordAvailabilityChange("disable", outcome, validatedId);
@@ -371,7 +379,8 @@ public class LexiconAdminResource {
         String validatedId = sanitizeLocaleId(id);
         verifyHmac(headers, "POST", "/api/v1/admin/lexicons/" + validatedId + "/enable",
             null, 0, null, null);
-        boolean changed = aster.core.lexicon.LexiconRegistry.getInstance().markAvailable(validatedId);
+        // 经可用性服务：本地 markAvailable + Redis SREM + 广播（跨副本一致）。
+        boolean changed = availabilityService.enable(validatedId);
         String outcome = changed ? "enabled" : "unchanged";
         metrics.recordAvailabilityChange("enable", outcome, validatedId);
         return Response.ok(Map.of(

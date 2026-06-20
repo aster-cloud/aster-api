@@ -102,19 +102,36 @@ public class InternalCallerFilter {
      */
     enum Classification { NOT_PROTECTED, BYPASS_OK, BYPASS_TRIAL, REQUIRE_HMAC }
 
+    /**
+     * 5 参重载：不带内部调用方信号（等价 hasInternalCaller=false）。保留给已有调用方/测试，
+     * 语义与改造前一致。
+     */
     static Classification classify(String normalizedPath,
                                    boolean evaluateSourcePublic,
                                    boolean evaluateSourceTrial,
                                    boolean aiPublic,
                                    boolean aiSsePublic) {
+        return classify(normalizedPath, evaluateSourcePublic, evaluateSourceTrial,
+            aiPublic, aiSsePublic, false);
+    }
+
+    static Classification classify(String normalizedPath,
+                                   boolean evaluateSourcePublic,
+                                   boolean evaluateSourceTrial,
+                                   boolean aiPublic,
+                                   boolean aiSsePublic,
+                                   boolean hasInternalCaller) {
         boolean isEvaluateSource = normalizedPath.equals("/api/v1/policies/evaluate-source");
         boolean isAi = normalizedPath.startsWith("/api/v1/ai/")
             // 仅 LLM 代理路径，且必须有 "/ai/<something>" 后缀（防 /api/v1/ai 自身误匹配）
             && normalizedPath.length() > "/api/v1/ai/".length();
         if (!isEvaluateSource && !isAi) return Classification.NOT_PROTECTED;
-        // 优先级：.public（全量旁路）> .trial（仅 evaluate-source，且需经 TrialEndpointGuard）。
+        // 优先级：.public（全量旁路）> 内部调用 HMAC > .trial（匿名浏览器流量经 TrialEndpointGuard）。
         if (isEvaluateSource && evaluateSourcePublic) return Classification.BYPASS_OK;
-        if (isEvaluateSource && evaluateSourceTrial) return Classification.BYPASS_TRIAL;
+        // 携带内部调用头（cloud-bff）的 evaluate-source 走 HMAC 校验，即使 trial 开启也不归
+        // trial 旁路——否则 trial 模式下，已认证的内部调用（无浏览器 Origin）会被 trial guard
+        // 的 Origin 闸门误拦（cloud /policies/{id}/execute 报 origin_not_allowed 即此因）。
+        if (isEvaluateSource && evaluateSourceTrial && !hasInternalCaller) return Classification.BYPASS_TRIAL;
         if (isAi && aiPublic) return Classification.BYPASS_OK;
         // R25-Major-3：细粒度 SSE 旁路 —— 只放 generate/suggest，
         // /complete 仍要求 HMAC（已走 cloud-side proxy）。
@@ -169,8 +186,10 @@ public class InternalCallerFilter {
         // 参见 ApiKeyAuthFilter.shouldProtect 同样修复。
         String p = io.aster.security.PathNormalizer.normalize(ctx.getUriInfo().getPath());
 
+        boolean hasInternalCaller =
+            io.aster.policy.security.TrialBypassPredicate.hasInternalCallerCredentials(ctx);
         Classification cls = classify(p, evaluateSourcePublic, evaluateSourceTrial,
-            aiPublic, aiSsePublic);
+            aiPublic, aiSsePublic, hasInternalCaller);
         if (cls == Classification.NOT_PROTECTED) return;
         if (cls == Classification.BYPASS_OK) {
             // 旁路命中时打 warn —— 不丢失 operator 可见性

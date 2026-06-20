@@ -269,6 +269,14 @@ public class TrialEndpointGuard {
         // OPTIONS preflight 由 CorsFilter 处理，不在 trial guard 管辖。
         if ("OPTIONS".equalsIgnoreCase(ctx.getMethod())) return null;
 
+        // 内部调用（cloud-bff 带 HMAC 签名）跳过本守门：Origin/body/IP 闸门是给匿名浏览器
+        // trial 流量的成本控制，服务器到服务器的内部 fetch 没有浏览器 Origin 头，本不该被
+        // Origin 白名单拦下。真伪由后续 InternalCallerFilter 的 HMAC 校验把关——伪造
+        // X-Internal-Caller 但无有效签名者会在那里被拒，故此处跳过不削弱安全性。
+        if (io.aster.policy.security.TrialBypassPredicate.hasInternalCallerCredentials(ctx)) {
+            return null;
+        }
+
         init(); // 刷新 allowedOrigins set
 
         // 1) Origin 白名单

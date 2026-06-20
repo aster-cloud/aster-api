@@ -344,6 +344,44 @@ class TrialEndpointGuardTest {
     }
 
     @Test
+    void internalCallerWithoutOriginIsSkipped() {
+        // 关键修复：cloud-bff 内部调用（带 X-Internal-Caller + X-Internal-Signature、
+        // 服务器到服务器无浏览器 Origin）应被 trial guard 跳过（返回 null），交给
+        // InternalCallerFilter 校验 HMAC——而非被 Origin 闸门误拦成 403。
+        TrialEndpointGuard g = guardWith(true, false);
+        setRouting(g, "10.0.0.1");
+        Map<String, Object> props = new HashMap<>();
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Internal-Caller", "cloud-bff");
+        headers.put("X-Internal-Signature", "abc123");
+        headers.put("X-Aster-Timestamp", "1700000000");
+        // 故意不带 Origin、不带 Content-Length —— 验证内部调用早于所有闸门被放行。
+        ContainerRequestContext ctx = mockCtx(
+            "/api/v1/policies/evaluate-source", "POST", headers, props);
+        assertNull(g.filterRequest(ctx),
+            "内部调用应被 trial guard 跳过，交 InternalCallerFilter 验签");
+        // 不颁发 trial 凭证（它不是 trial 流量）。
+        assertNull(props.get(TrialEndpointGuard.TRIAL_GUARD_PASSED_PROP));
+    }
+
+    @Test
+    void forgedInternalCallerStillSkipsGuardButFailsDownstream() {
+        // 安全不变式记录：伪造 X-Internal-Caller 但无有效 HMAC 也会跳过 trial guard，
+        // 但随后 InternalCallerFilter 的签名校验会拒掉它（本测试只验 guard 这一层放行，
+        // HMAC 拒绝由 InternalCallerFilterTest 覆盖）。
+        TrialEndpointGuard g = guardWith(true, false);
+        setRouting(g, "10.0.0.1");
+        Map<String, Object> props = new HashMap<>();
+        Map<String, String> headers = new HashMap<>();
+        headers.put("X-Internal-Caller", "cloud-bff");
+        headers.put("X-Internal-Signature", "forged");
+        headers.put("X-Aster-Timestamp", "1700000000");
+        ContainerRequestContext ctx = mockCtx(
+            "/api/v1/policies/evaluate-source", "POST", headers, props);
+        assertNull(g.filterRequest(ctx));
+    }
+
+    @Test
     void chunkedTransferEncodingIsRejected() {
         TrialEndpointGuard g = guardWith(true, false);
         setRouting(g, "10.0.0.1");

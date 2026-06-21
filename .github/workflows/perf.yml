@@ -42,26 +42,26 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with: { path: aster-api }
 
       # 共享版本目录（aster-lang-platform，ADR 0012）—— settings.gradle 依赖它。
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with: { repository: aster-cloud/aster-lang-platform, path: aster-lang-platform, token: '${{ secrets.CROSS_REPO_TOKEN || github.token }}' }
 
       # 子模块仓库（与 nightly.yml 一致）
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with: { repository: aster-cloud/aster-lang-core, path: aster-lang-core, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with: { repository: aster-cloud/aster-lang-runtime, path: aster-lang-runtime, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with: { repository: aster-cloud/aster-lang-truffle, path: aster-lang-truffle, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with: { repository: aster-cloud/aster-lang-validation, path: aster-lang-validation, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
       # en/zh/de lexicon SPI 包源：aster-lang-locales（新坐标，composite includeBuild）。
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with: { repository: aster-cloud/aster-lang-locales, path: aster-lang-locales, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with: { repository: aster-cloud/aster-lang-hi, path: aster-lang-hi, token: '${{ secrets.CROSS_REPO_TOKEN }}' }
 
       - uses: actions/setup-java@v5

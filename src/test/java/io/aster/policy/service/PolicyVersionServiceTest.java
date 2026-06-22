@@ -97,16 +97,24 @@ class PolicyVersionServiceTest extends BasePolicyVersionServiceTest {
 
         // 回滚到 v1（已审批）→ 活跃回到 v1，且 catalog.defaultVersionId 必须同步回 v1。
         // 用显式 version 号 1001（v1.version 内存值因 setVersionNumber 已陈旧）。
-        versionService.rollbackToVersion(v1.policyId, 1001L, "rollbacker");
+        PolicyVersion rolledBack = versionService.rollbackToVersion(v1.policyId, 1001L, "rollbacker");
+        assertEquals(v1.id, rolledBack.id, "回滚返回的应是 version=1001 的 v1 实体");
 
         PolicyVersion v1After = PolicyVersion.findById(v1.id);
         PolicyVersion v2After = PolicyVersion.findById(v2.id);
         assertTrue(v1After.active, "回滚后 v1 应为活跃");
         assertFalse(v2After.active, "回滚后 v2 应被停用");
 
+        // catalog.defaultVersionId 必须同步到回滚返回的版本实体 id（= v1.id）。
         PolicyCatalog refreshed = PolicyCatalog.findById(catalog.id);
-        assertEquals(v1.id, refreshed.defaultVersionId,
-            "回滚必须同步 catalog.defaultVersionId 回 v1，否则 /evaluate 读空");
+        assertEquals(rolledBack.id, refreshed.defaultVersionId,
+            String.format("回滚必须同步 catalog.defaultVersionId 回 v1。诊断: v1.id=%d v2.id=%d "
+                + "rolledBack.id=%d catalog.defaultVersionId=%s v1After.tenantId=%s "
+                + "v1After.moduleName=%s v1After.functionName=%s catalog.tenantId=%s "
+                + "catalog.moduleName=%s catalog.functionName=%s",
+                v1.id, v2.id, rolledBack.id, refreshed.defaultVersionId,
+                v1After.tenantId, v1After.moduleName, v1After.functionName,
+                refreshed.tenantId, refreshed.moduleName, refreshed.functionName));
     }
 
     /**

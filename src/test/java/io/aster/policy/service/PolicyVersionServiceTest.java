@@ -106,15 +106,19 @@ class PolicyVersionServiceTest extends BasePolicyVersionServiceTest {
         assertFalse(v2After.active, "回滚后 v2 应被停用");
 
         // catalog.defaultVersionId 必须同步到回滚返回的版本实体 id（= v1.id）。
-        PolicyCatalog refreshed = PolicyCatalog.findById(catalog.id);
+        // 用与生产 activateVersionInternal 相同的查询口径（tenant/module/function +
+        // firstResult），避免共享测试夹具下 findById 与 firstResult 命中不同 catalog 行
+        // （V99 种子在 tenant-default 建了同坐标 catalog，@BeforeEach 删了但需对齐查询）。
+        long catalogCount = PolicyCatalog.count(
+            "tenantId = ?1 and moduleName = ?2 and functionName = ?3",
+            TEST_TENANT, MODULE_NAME, FUNCTION_NAME);
+        PolicyCatalog refreshed = PolicyCatalog.<PolicyCatalog>find(
+            "tenantId = ?1 and moduleName = ?2 and functionName = ?3",
+            TEST_TENANT, MODULE_NAME, FUNCTION_NAME).firstResult();
         assertEquals(rolledBack.id, refreshed.defaultVersionId,
-            String.format("回滚必须同步 catalog.defaultVersionId 回 v1。诊断: v1.id=%d v2.id=%d "
-                + "rolledBack.id=%d catalog.defaultVersionId=%s v1After.tenantId=%s "
-                + "v1After.moduleName=%s v1After.functionName=%s catalog.tenantId=%s "
-                + "catalog.moduleName=%s catalog.functionName=%s",
-                v1.id, v2.id, rolledBack.id, refreshed.defaultVersionId,
-                v1After.tenantId, v1After.moduleName, v1After.functionName,
-                refreshed.tenantId, refreshed.moduleName, refreshed.functionName));
+            String.format("回滚必须同步 catalog.defaultVersionId 回 v1（catalogCount=%d）。"
+                + "诊断: v1.id=%d v2.id=%d rolledBack.id=%d defaultVersionId=%s",
+                catalogCount, v1.id, v2.id, rolledBack.id, refreshed.defaultVersionId));
     }
 
     /**

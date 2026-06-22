@@ -264,9 +264,14 @@ public class AnomalyWorkflowService {
         // 查询所有版本，按 version 降序（PolicyVersion.findAllVersions 已排序）
         List<PolicyVersion> versions = PolicyVersion.findAllVersions(policyId);
 
-        // 找到第一个小于 currentVersion 的版本
+        // 找到第一个小于 currentVersion 且【已审批】的版本（last known good）。
+        // 自动回滚的目标必须是曾经审批通过的版本——回滚到一个未审批的历史草稿
+        // （DRAFT/REJECTED）作为应急目标是危险的，且会被 activateVersion 的
+        // status==APPROVED 闸门拒绝（见 PolicyVersionService.rollbackToVersion）。
+        // 过滤 APPROVED 让自动回滚天然选中合法目标，而非选中后再被闸门拒掉。
         return versions.stream()
             .filter(v -> v.version < currentVersion)
+            .filter(v -> v.status == io.aster.policy.entity.VersionStatus.APPROVED)
             .map(v -> v.version)
             .findFirst()
             .orElse(null);

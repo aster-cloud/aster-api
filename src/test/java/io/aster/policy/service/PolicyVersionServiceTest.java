@@ -79,20 +79,25 @@ class PolicyVersionServiceTest extends BasePolicyVersionServiceTest {
     void rollbackToApprovedVersionShouldSyncCatalogDefault() {
         // v1：审批 + 激活（成为初始活跃版本，catalog.defaultVersionId=v1）
         PolicyVersion v1 = versionService.createVersion(catalog.id, "// rule v1", "en-US");
+        // 显式设不同 version 号：@PrePersist 默认用毫秒时间戳，同事务内快速创建的
+        // v1/v2 可能撞同一毫秒 → findByVersion(policyId, version) 二义、回滚解析错版本。
+        setVersionNumber(v1.id, 1001L);
         versionService.submitForApproval(v1.id, "author");
         versionService.approveVersion(v1.id, "approver");
         versionService.activateVersion(v1.id, "activator");
 
         // v2：审批 + 激活（活跃切到 v2，catalog.defaultVersionId=v2）
         PolicyVersion v2 = versionService.createVersion(catalog.id, "// rule v2", "en-US");
+        setVersionNumber(v2.id, 1002L);
         versionService.submitForApproval(v2.id, "author");
         versionService.approveVersion(v2.id, "approver");
         versionService.activateVersion(v2.id, "activator");
         assertEquals(v2.id, PolicyCatalog.<PolicyCatalog>findById(catalog.id).defaultVersionId,
             "前置：激活 v2 后 catalog 应指向 v2");
 
-        // 回滚到 v1（已审批）→ 活跃回到 v1，且 catalog.defaultVersionId 必须同步回 v1
-        versionService.rollbackToVersion(v1.policyId, v1.version, "rollbacker");
+        // 回滚到 v1（已审批）→ 活跃回到 v1，且 catalog.defaultVersionId 必须同步回 v1。
+        // 用显式 version 号 1001（v1.version 内存值因 setVersionNumber 已陈旧）。
+        versionService.rollbackToVersion(v1.policyId, 1001L, "rollbacker");
 
         PolicyVersion v1After = PolicyVersion.findById(v1.id);
         PolicyVersion v2After = PolicyVersion.findById(v2.id);
@@ -109,23 +114,42 @@ class PolicyVersionServiceTest extends BasePolicyVersionServiceTest {
      */
     @Test
     void rollbackToUnapprovedVersionShouldThrow() {
-        // 一个已审批激活的基线版本
+        // 一个已审批激活的基线版本（显式 version 号避免毫秒撞号）
         PolicyVersion approved = versionService.createVersion(catalog.id, "// approved", "en-US");
+        setVersionNumber(approved.id, 2001L);
         versionService.submitForApproval(approved.id, "author");
         versionService.approveVersion(approved.id, "approver");
         versionService.activateVersion(approved.id, "activator");
 
         // 一个从未审批的 DRAFT 版本（模拟 AI 草稿）
         PolicyVersion draft = versionService.createVersion(catalog.id, "// unapproved draft", "en-US");
-        assertEquals(io.aster.policy.entity.VersionStatus.DRAFT, draft.status, "前置：草稿应为 DRAFT");
+        setVersionNumber(draft.id, 2002L);
+        assertEquals(io.aster.policy.entity.VersionStatus.DRAFT,
+            PolicyVersion.<PolicyVersion>findById(draft.id).status, "前置：草稿应为 DRAFT");
 
         // 回滚到未审批草稿 → 抛 IllegalStateException，活跃版本不变
         assertThrows(IllegalStateException.class,
-            () -> versionService.rollbackToVersion(draft.policyId, draft.version, "attacker"),
+            () -> versionService.rollbackToVersion(draft.policyId, 2002L, "attacker"),
             "未审批版本不得经回滚旁路激活");
 
         PolicyCatalog refreshed = PolicyCatalog.findById(catalog.id);
         assertEquals(approved.id, refreshed.defaultVersionId, "回滚被拒后 catalog 仍指向已审批版本");
+    }
+
+    /**
+     * 给指定版本设确定的 version 号，避免 @PrePersist 默认毫秒时间戳在同事务内撞号
+     * （撞号会让 findByVersion 二义、回滚解析到错误版本）。
+     *
+     * <p>用 {@link io.quarkus.narayana.jta.QuarkusTransaction#requiringNew()} 而非
+     * {@code @Transactional}：本方法被测试体经 {@code this.} 自调用，CDI 拦截器不触发，
+     * 注解事务不会生效。
+     */
+    void setVersionNumber(Long versionPk, long versionNumber) {
+        io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+            PolicyVersion v = PolicyVersion.findById(versionPk);
+            v.version = versionNumber;
+            v.persist();
+        });
     }
 }
 

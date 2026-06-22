@@ -440,7 +440,9 @@ class AnomalyReplayVerificationIntegrationTest {
     @Test
     @Transactional
     void testEndToEnd_AutoRollback_AnomalyReproduced() {
-        // 1. 创建 v1（历史正常版本）
+        // 1. 创建 v1（历史正常版本）。回滚目标必须是曾经审批激活过的版本，
+        //    现实中一个"历史正常版本"的 status 必为 APPROVED（否则它从未上过线、
+        //    不是合法的回滚目标）。显式标 APPROVED 以反映真实不变量。
         PolicyVersion v1 = new PolicyVersion();
         v1.policyId = testPolicyId;
         v1.version = Instant.now().minusSeconds(3600).toEpochMilli();
@@ -448,6 +450,7 @@ class AnomalyReplayVerificationIntegrationTest {
         v1.functionName = "testFunction";
         v1.content = "v1 content";
         v1.active = false;
+        v1.status = io.aster.policy.entity.VersionStatus.APPROVED;
         v1.createdAt = Instant.now().minusSeconds(3600);
         v1.persist();
 
@@ -678,7 +681,7 @@ class AnomalyReplayVerificationIntegrationTest {
     @Test
     @Transactional
     void testEndToEnd_Idempotency_DuplicateRollback() {
-        // 1. 创建 v1（历史版本）
+        // 1. 创建 v1（历史版本）。回滚目标须为曾审批激活过的版本 → status=APPROVED。
         PolicyVersion v1 = new PolicyVersion();
         v1.policyId = testPolicyId;
         v1.version = Instant.now().minusSeconds(3600).toEpochMilli();
@@ -686,6 +689,7 @@ class AnomalyReplayVerificationIntegrationTest {
         v1.functionName = "testFunction";
         v1.content = "v1 content";
         v1.active = false;
+        v1.status = io.aster.policy.entity.VersionStatus.APPROVED;
         v1.createdAt = Instant.now().minusSeconds(3600);
         v1.persist();
 

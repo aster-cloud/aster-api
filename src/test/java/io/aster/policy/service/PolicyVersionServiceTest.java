@@ -106,19 +106,15 @@ class PolicyVersionServiceTest extends BasePolicyVersionServiceTest {
         assertFalse(v2After.active, "回滚后 v2 应被停用");
 
         // catalog.defaultVersionId 必须同步到回滚返回的版本实体 id（= v1.id）。
-        // 用与生产 activateVersionInternal 相同的查询口径（tenant/module/function +
-        // firstResult），避免共享测试夹具下 findById 与 firstResult 命中不同 catalog 行
-        // （V99 种子在 tenant-default 建了同坐标 catalog，@BeforeEach 删了但需对齐查询）。
-        long catalogCount = PolicyCatalog.count(
-            "tenantId = ?1 and moduleName = ?2 and functionName = ?3",
-            TEST_TENANT, MODULE_NAME, FUNCTION_NAME);
-        PolicyCatalog refreshed = PolicyCatalog.<PolicyCatalog>find(
-            "tenantId = ?1 and moduleName = ?2 and functionName = ?3",
-            TEST_TENANT, MODULE_NAME, FUNCTION_NAME).firstResult();
-        assertEquals(rolledBack.id, refreshed.defaultVersionId,
-            String.format("回滚必须同步 catalog.defaultVersionId 回 v1（catalogCount=%d）。"
-                + "诊断: v1.id=%d v2.id=%d rolledBack.id=%d defaultVersionId=%s",
-                catalogCount, v1.id, v2.id, rolledBack.id, refreshed.defaultVersionId));
+        // 关键：前面第 95 行已 findById(catalog.id) 把 catalog 实例（defaultVersionId=119）
+        // 放进了测试线程的一级缓存（Hibernate Session）。rollback 服务在独立事务里把 DB
+        // 更新成 118，但测试线程再读会命中缓存里的旧实例（仍 119）。必须用
+        // requiringNew() 开新事务/新 Session 强制 fresh DB read，才能验证生产已正确提交。
+        Long freshDefaultVersionId = io.quarkus.narayana.jta.QuarkusTransaction
+            .requiringNew()
+            .call(() -> PolicyCatalog.<PolicyCatalog>findById(catalog.id).defaultVersionId);
+        assertEquals(rolledBack.id, freshDefaultVersionId,
+            "回滚必须同步 catalog.defaultVersionId 回 v1，否则 /evaluate 读空");
     }
 
     /**

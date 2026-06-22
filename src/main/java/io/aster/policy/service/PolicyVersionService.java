@@ -263,6 +263,22 @@ public class PolicyVersionService {
      */
     @Transactional
     public void activateVersion(Long versionId, String activatedBy) {
+        // 正常发布激活：发 DRAFT_PUBLISHED 埋点（这是"草稿被审批后正式发布"语义）。
+        activateVersionInternal(versionId, activatedBy, true);
+    }
+
+    /**
+     * 激活的核心实现：状态校验 + 停旧 + 置 active + 同步 catalog 指针 + 发激活通知。
+     *
+     * <p>{@code emitDraftPublished} 控制是否发 {@link NsmEvents#DRAFT_PUBLISHED} 埋点：
+     * 正常发布激活发（true）；回滚（{@link #rollbackToVersion}）不发（false）——回滚是
+     * "恢复一个历史版本"而非"草稿被采纳发布"，发 DRAFT_PUBLISHED 会同时抬高
+     * {@code draft_published_total}（回滚率分母）并污染 source_kind 维度的 AI 草稿采纳
+     * 指标。回滚自有 {@code RULE_ROLLED_BACK} 埋点（REST 层发）。
+     *
+     * @param emitDraftPublished 是否发 DRAFT_PUBLISHED 埋点（正常激活 true，回滚 false）
+     */
+    private void activateVersionInternal(Long versionId, String activatedBy, boolean emitDraftPublished) {
         PolicyVersion version = requireVersion(versionId);
         if (version.status != VersionStatus.APPROVED) {
             throw new IllegalStateException(
@@ -289,7 +305,9 @@ public class PolicyVersionService {
         }
 
         emitActivationNotification(version, catalog);
-        trackDraftPublished(version, activatedBy);
+        if (emitDraftPublished) {
+            trackDraftPublished(version, activatedBy);
+        }
     }
 
     /**
@@ -402,15 +420,29 @@ public class PolicyVersionService {
     /**
      * 回滚到指定版本
      *
-     * 停用当前活跃版本，激活指定版本。
+     * <p>回滚 = 把某个历史版本重新设为活跃版本。它**复用正常激活路径**
+     * （{@link #activateVersion}），因此天然继承同一组发布治理不变量：
+     * <ul>
+     *   <li>仅 {@code status == APPROVED} 的版本可被激活——堵住"未经审批的草稿
+     *       （含 AI 起草的 {@code ai_draft}）经回滚旁路直接上线"的治理缺口。
+     *       合法回滚（目标是曾被正常激活过的版本）天然满足此约束，因为激活不改
+     *       version.status，曾激活版本的 status 一直是 APPROVED。</li>
+     *   <li>同步更新 {@code catalog.defaultVersionId}——否则 active 指向新版本但
+     *       catalog 仍指旧版本，{@code findActiveVersion}（id==defaultVersionId
+     *       AND active==true）会两条件不交集而返回空，导致回滚后 /evaluate 读不到
+     *       活跃版本、评估失败。</li>
+     *   <li>发出版本激活通知（pg_notify），缓存失效由监听方负责。</li>
+     * </ul>
      *
-     * @param policyId 策略ID
-     * @param version  目标版本号
+     * @param policyId    策略ID
+     * @param version     目标版本号
+     * @param performedBy 执行回滚的操作人（写入 activatedBy / 审计 / telemetry）
      * @return 回滚后的活跃版本
      * @throws IllegalArgumentException 如果目标版本不存在
+     * @throws IllegalStateException    如果目标版本未审批通过（status != APPROVED）
      */
     @Transactional
-    public PolicyVersion rollbackToVersion(String policyId, Long version) {
+    public PolicyVersion rollbackToVersion(String policyId, Long version, String performedBy) {
         // 查找目标版本
         PolicyVersion targetVersion = PolicyVersion.findByVersion(policyId, version);
 
@@ -420,12 +452,10 @@ public class PolicyVersionService {
             );
         }
 
-        // 停用所有活跃版本
-        PolicyVersion.deactivateAllVersions(policyId);
-
-        // 激活目标版本
-        targetVersion.active = true;
-        targetVersion.persist();
+        // 收敛到激活核心：status 校验 + catalog 指针同步 + 激活通知一并继承。
+        // emitDraftPublished=false：回滚不发 DRAFT_PUBLISHED（避免污染回滚率/草稿采纳
+        // 指标），回滚的 RULE_ROLLED_BACK 埋点由 REST 层单独发。
+        activateVersionInternal(targetVersion.id, performedBy, false);
 
         return targetVersion;
     }

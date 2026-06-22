@@ -68,6 +68,65 @@ class PolicyVersionServiceTest extends BasePolicyVersionServiceTest {
         PolicyCatalog refreshed = PolicyCatalog.findById(catalog.id);
         assertEquals(version.id, refreshed.defaultVersionId, "Catalog 默认版本应同步更新");
     }
+
+    /**
+     * 回滚到已审批的历史版本：必须同步 catalog.defaultVersionId（G5 一致性修复）。
+     *
+     * <p>否则 active 指向新版本但 catalog 仍指旧版本，findActiveVersion(catalogId)
+     * 的 id==defaultVersionId AND active==true 两条件不交集 → /evaluate 读空、评估失败。
+     */
+    @Test
+    void rollbackToApprovedVersionShouldSyncCatalogDefault() {
+        // v1：审批 + 激活（成为初始活跃版本，catalog.defaultVersionId=v1）
+        PolicyVersion v1 = versionService.createVersion(catalog.id, "// rule v1", "en-US");
+        versionService.submitForApproval(v1.id, "author");
+        versionService.approveVersion(v1.id, "approver");
+        versionService.activateVersion(v1.id, "activator");
+
+        // v2：审批 + 激活（活跃切到 v2，catalog.defaultVersionId=v2）
+        PolicyVersion v2 = versionService.createVersion(catalog.id, "// rule v2", "en-US");
+        versionService.submitForApproval(v2.id, "author");
+        versionService.approveVersion(v2.id, "approver");
+        versionService.activateVersion(v2.id, "activator");
+        assertEquals(v2.id, PolicyCatalog.<PolicyCatalog>findById(catalog.id).defaultVersionId,
+            "前置：激活 v2 后 catalog 应指向 v2");
+
+        // 回滚到 v1（已审批）→ 活跃回到 v1，且 catalog.defaultVersionId 必须同步回 v1
+        versionService.rollbackToVersion(v1.policyId, v1.version, "rollbacker");
+
+        PolicyVersion v1After = PolicyVersion.findById(v1.id);
+        PolicyVersion v2After = PolicyVersion.findById(v2.id);
+        assertTrue(v1After.active, "回滚后 v1 应为活跃");
+        assertFalse(v2After.active, "回滚后 v2 应被停用");
+
+        PolicyCatalog refreshed = PolicyCatalog.findById(catalog.id);
+        assertEquals(v1.id, refreshed.defaultVersionId,
+            "回滚必须同步 catalog.defaultVersionId 回 v1，否则 /evaluate 读空");
+    }
+
+    /**
+     * 回滚到未审批（DRAFT）版本必须被拒绝（G5 发布治理：堵未审批旁路激活）。
+     */
+    @Test
+    void rollbackToUnapprovedVersionShouldThrow() {
+        // 一个已审批激活的基线版本
+        PolicyVersion approved = versionService.createVersion(catalog.id, "// approved", "en-US");
+        versionService.submitForApproval(approved.id, "author");
+        versionService.approveVersion(approved.id, "approver");
+        versionService.activateVersion(approved.id, "activator");
+
+        // 一个从未审批的 DRAFT 版本（模拟 AI 草稿）
+        PolicyVersion draft = versionService.createVersion(catalog.id, "// unapproved draft", "en-US");
+        assertEquals(io.aster.policy.entity.VersionStatus.DRAFT, draft.status, "前置：草稿应为 DRAFT");
+
+        // 回滚到未审批草稿 → 抛 IllegalStateException，活跃版本不变
+        assertThrows(IllegalStateException.class,
+            () -> versionService.rollbackToVersion(draft.policyId, draft.version, "attacker"),
+            "未审批版本不得经回滚旁路激活");
+
+        PolicyCatalog refreshed = PolicyCatalog.findById(catalog.id);
+        assertEquals(approved.id, refreshed.defaultVersionId, "回滚被拒后 catalog 仍指向已审批版本");
+    }
 }
 
 @QuarkusTest

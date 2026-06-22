@@ -888,10 +888,11 @@ public class PolicyEvaluationResource {
             PolicyVersion currentVersion = versionService.getActiveVersion(policyId);
             Long fromVersion = currentVersion != null ? currentVersion.version : null;
 
-            // 执行回滚
+            // 执行回滚（收敛到正常激活路径：校验 APPROVED + 同步 catalog + 发激活通知）
             PolicyVersion rolledBackVersion = versionService.rollbackToVersion(
                 policyId,
-                request.targetVersion()
+                request.targetVersion(),
+                performedBy
             );
 
             auditEventPublisher.fireAsync(

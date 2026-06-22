@@ -271,7 +271,11 @@ public class AnomalyActionExecutor {
                 );
             }
 
-            policyVersionService.rollbackToVersion(anomaly.policyId, targetVersion);
+            // 系统自动回滚：performedBy 用明确的系统标识（区别于人工回滚）。
+            // 注意：rollbackToVersion 现要求目标版本 status==APPROVED，自动回滚到
+            // 未审批版本会抛 IllegalStateException → 下方 catch 记为失败（正确：
+            // 不允许把未审批版本当应急目标）。
+            policyVersionService.rollbackToVersion(anomaly.policyId, targetVersion, "system:anomaly-auto-rollback");
 
             LOG.infof("异常 %d 触发自动回滚: %s from %d to %d",
                 action.anomalyId, anomaly.policyId, fromVersion, targetVersion);

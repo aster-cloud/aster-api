@@ -72,6 +72,20 @@ public class PolicyRollbackResourceTest {
             "test-user",
             "Version 3"
         );
+
+        // 回滚只接受已审批版本（堵住未审批草稿经回滚旁路上线的治理缺口）。
+        // v1/v2 模拟"曾经正常审批激活过的历史版本"→ status=APPROVED，可作为回滚目标。
+        // v3 故意保持 createVersion 默认的 DRAFT，用于断言"未审批版本回滚被拒"。
+        markApproved(v1);
+        markApproved(v2);
+    }
+
+    /** 把版本直接标记为 APPROVED（模拟已走完审批流，避开 planGate 复杂度，聚焦回滚语义）。 */
+    @Transactional
+    void markApproved(PolicyVersion version) {
+        PolicyVersion managed = PolicyVersion.findById(version.id);
+        managed.status = io.aster.policy.entity.VersionStatus.APPROVED;
+        managed.persist();
     }
 
     // ==================== 成功回滚测试 ====================
@@ -149,6 +163,42 @@ public class PolicyRollbackResourceTest {
             .body("success", is(false))
             .body("message", containsString("版本不存在"))
             .body("activeVersion", nullValue());
+    }
+
+    // ==================== 发布治理：未审批版本拒绝回滚（G5 修复） ====================
+
+    /**
+     * 回滚到未审批（DRAFT）版本必须被拒绝。
+     *
+     * <p>这是发布治理的核心不变量：未经审批的草稿（含 AI 起草的 ai_draft）不得经
+     * 回滚旁路绕过 DRAFT→SUBMITTED→APPROVED→ACTIVE 状态机直接上线。v3 在 setUp 中
+     * 保持 createVersion 默认的 DRAFT 状态。回滚被拒后，当前活跃版本不应被改动。
+     */
+    @Test
+    void testRollbackToUnapprovedVersionRejected() {
+        // 先把 v2（APPROVED）激活为基线活跃版本
+        RollbackRequest toV2 = new RollbackRequest(v2.version, "Activate approved v2");
+        given()
+            .contentType(APPLICATION_JSON).body(toV2)
+            .header("X-Tenant-Id", "test-tenant").header("X-User-Id", "test-user")
+        .when().post("/api/v1/policies/" + testPolicyId + "/rollback")
+        .then().statusCode(200).body("success", is(true));
+
+        // 尝试回滚到未审批的 v3（DRAFT）→ 必须失败
+        RollbackRequest toV3 = new RollbackRequest(v3.version, "Try rollback to unapproved draft");
+        given()
+            .contentType(APPLICATION_JSON).body(toV3)
+            .header("X-Tenant-Id", "test-tenant").header("X-User-Id", "test-user")
+        .when().post("/api/v1/policies/" + testPolicyId + "/rollback")
+        .then()
+            .statusCode(200)
+            .body("success", is(false))
+            .body("message", containsString("已审批"));
+
+        // 被拒后活跃版本仍是 v2，未被未审批的 v3 替换
+        PolicyVersion active = policyVersionService.getActiveVersion(testPolicyId);
+        assertNotNull(active);
+        assertEquals(v2.version, active.version, "回滚被拒后活跃版本不应改变");
     }
 
     // ==================== 参数验证失败测试 ====================

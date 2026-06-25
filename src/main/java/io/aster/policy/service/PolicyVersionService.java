@@ -105,6 +105,7 @@ public class PolicyVersionService {
      * @param aliasSet        结构化别名集，null/空=无用户别名
      * @param identifierIndex 领域词汇索引（别名↔标识符碰撞校验），可为 null
      */
+    @Transactional
     public PolicyVersion createVersion(UUID catalogId, String sourceCnl, String locale,
                                        String sourceKind, String authorRole,
                                        java.util.Map<aster.core.lexicon.SemanticTokenKind, java.util.List<String>> aliasSet,
@@ -128,6 +129,7 @@ public class PolicyVersionService {
      *
      * @param aliasSetJson 已规范化的别名 JSON，null/空=无用户别名
      */
+    @Transactional
     public PolicyVersion createVersion(UUID catalogId, String sourceCnl, String locale,
                                        String sourceKind, String authorRole, String aliasSetJson) {
         PolicyCatalog catalog = PolicyCatalog.findById(catalogId);

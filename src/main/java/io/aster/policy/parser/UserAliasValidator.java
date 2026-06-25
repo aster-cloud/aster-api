@@ -1,10 +1,12 @@
 package io.aster.policy.parser;
 
+import aster.core.identifier.IdentifierIndex;
 import aster.core.lexicon.Lexicon;
 import aster.core.lexicon.LexiconRegistry;
 import aster.core.lexicon.SemanticTokenKind;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -62,33 +64,53 @@ public final class UserAliasValidator {
         }
     }
 
-    /**
-     * 校验用户 aliasSet（针对给定 locale 的基础 lexicon）。
-     *
-     * @param aliasSet 用户别名，null/空视为合法（无别名）
-     * @param locale   基础语言代码（用于取规范拼写做不遮蔽校验）
-     */
+    /** 兼容重载：不带领域词汇索引。 */
     public static Result validate(Map<SemanticTokenKind, List<String>> aliasSet, String locale) {
+        return validate(aliasSet, locale, null);
+    }
+
+    /**
+     * 校验用户 aliasSet（针对给定 locale 的基础 lexicon + 可选领域词汇索引）。
+     *
+     * <p>校验完整识别命名空间（Codex 复核修正）：base 规范拼写 + base 别名 + 用户别名互不
+     * 遮蔽 + 不撞领域词汇标识符。所有比较走统一归一（trim + 折叠空白 + lowercase ROOT）。
+     *
+     * @param aliasSet        用户别名，null/空视为合法（无别名）
+     * @param locale          基础语言代码（取规范拼写/别名做不遮蔽校验）
+     * @param identifierIndex 领域词汇索引，null 表示不做别名↔标识符碰撞校验
+     */
+    public static Result validate(Map<SemanticTokenKind, List<String>> aliasSet, String locale,
+                                  IdentifierIndex identifierIndex) {
         if (aliasSet == null || aliasSet.isEmpty()) {
             return Result.ok();
         }
 
         List<String> errors = new ArrayList<>();
-
-        // 取基础 lexicon 的规范拼写集（lowercase）用于不遮蔽校验
         Lexicon base = resolveBase(locale);
-        Set<String> canonicalLower = new java.util.HashSet<>();
+
+        // 占用集（归一后）：base 规范拼写 + base 已有别名。别名不得遮蔽其中任一。
+        Set<String> reserved = new HashSet<>();
         for (String kw : base.getKeywords().values()) {
             if (kw != null && !kw.isBlank()) {
-                canonicalLower.add(kw.toLowerCase(Locale.ROOT));
+                reserved.add(normalize(kw));
+            }
+        }
+        Map<SemanticTokenKind, List<String>> baseAliases = base.getAliases();
+        if (baseAliases != null) {
+            for (List<String> list : baseAliases.values()) {
+                for (String a : list) {
+                    if (a != null && !a.isBlank()) {
+                        reserved.add(normalize(a));
+                    }
+                }
             }
         }
 
-        Set<String> seenAlias = new java.util.HashSet<>();
+        Set<String> seenAlias = new HashSet<>();
         for (Map.Entry<SemanticTokenKind, List<String>> e : aliasSet.entrySet()) {
             SemanticTokenKind kind = e.getKey();
 
-            // 铁律 1：白名单
+            // 铁律 1：白名单（deny-by-default）
             if (!ALLOWED_KINDS.contains(kind)) {
                 errors.add("不允许为 " + kind + " 自定义别名（仅低风险运算符/比较类可自定义，"
                     + "防止误导审批的语义滥用）");
@@ -104,26 +126,35 @@ public final class UserAliasValidator {
                     errors.add(kind + " 的别名不能为空");
                     continue;
                 }
-                String trimmed = alias.trim();
-                String lower = trimmed.toLowerCase(Locale.ROOT);
+                String norm = normalize(alias);
 
-                // 铁律 2：仅多词（含空格）
-                if (!trimmed.contains(" ")) {
+                // 铁律 2：仅多词（按归一后的真实分词，≥2 个非空 token）
+                if (norm.indexOf(' ') < 0) {
                     errors.add("别名 '" + alias + "'（" + kind + "）必须是多词短语；"
                         + "单词别名会占用标识符命名空间，破坏用户空间");
                 }
-                // 不遮蔽规范拼写
-                if (canonicalLower.contains(lower)) {
-                    errors.add("别名 '" + alias + "'（" + kind + "）与某规范关键词同形，禁止遮蔽");
+                // 不遮蔽 base 规范拼写 / base 别名
+                if (reserved.contains(norm)) {
+                    errors.add("别名 '" + alias + "'（" + kind + "）与某规范关键词或已有别名同形，禁止遮蔽");
                 }
-                // 别名间不重复
-                if (!seenAlias.add(lower)) {
+                // 用户别名间不重复（跨 kind）
+                if (!seenAlias.add(norm)) {
                     errors.add("别名 '" + alias + "' 在多个 kind 间重复定义");
+                }
+                // 不撞领域词汇标识符（关键词翻译先于标识符翻译 → 别名会抢赢用户字段名）
+                if (identifierIndex != null && identifierIndex.hasMapping(norm)) {
+                    errors.add("别名 '" + alias + "'（" + kind + "）与领域词汇标识符同形，"
+                        + "会让关键词抢赢用户标识符，禁止");
                 }
             }
         }
 
         return errors.isEmpty() ? Result.ok() : new Result(false, errors);
+    }
+
+    /** 统一归一：trim + 折叠所有空白为单个 ASCII 空格 + lowercase(ROOT)。 */
+    private static String normalize(String s) {
+        return s.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 
     private static Lexicon resolveBase(String locale) {
@@ -134,6 +165,13 @@ public final class UserAliasValidator {
         String norm = locale.toLowerCase(Locale.ROOT).replace('_', '-');
         if (registry.has(norm)) {
             return registry.getOrThrow(norm);
+        }
+        // 与 InProcessCnlParser.getLexiconForLocale 一致的前缀 fallback（避免校验用错 locale）
+        if (norm.startsWith("zh") && registry.has("zh-cn")) {
+            return registry.getOrThrow("zh-cn");
+        }
+        if (norm.startsWith("de") && registry.has("de-de")) {
+            return registry.getOrThrow("de-de");
         }
         return registry.getDefault();
     }

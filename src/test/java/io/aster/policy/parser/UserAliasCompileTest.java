@@ -27,8 +27,9 @@ class UserAliasCompileTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private static JsonNode lowerToIr(String source, Map<SemanticTokenKind, List<String>> aliasSet) {
+        // 测编译机制本身：用 unsafe 入口（不校验）；校验闸由 UserAliasValidatorTest 覆盖。
         InProcessCnlParser.ParseResult pr =
-            InProcessCnlParser.parse(source, "en-US", null, aliasSet);
+            InProcessCnlParser.parseUnsafeWithAliases(source, "en-US", null, aliasSet);
         Module ast = pr.module();
         CoreModel.Module core = new CoreLowering().lowerModule(ast);
         return stripOrigin(MAPPER.valueToTree(core));

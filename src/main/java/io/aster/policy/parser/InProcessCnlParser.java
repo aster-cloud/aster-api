@@ -77,24 +77,42 @@ public class InProcessCnlParser {
      * @throws CnlParseException 解析失败时抛出
      */
     public static ParseResult parse(String source, String locale, IdentifierIndex identifierIndex) {
-        return parse(source, locale, identifierIndex, null);
+        return parseUnsafeWithAliases(source, locale, identifierIndex, null);
     }
 
     /**
-     * 解析 CNL 源代码（支持多语言 + 领域词汇翻译 + 用户自定义关键词别名）。
+     * 受控编译入口（ADR 0022 方案 D）：**先强制校验** aliasSet，再注入编译。
      *
-     * <p>ADR 0022 方案 D：发布的策略可携带版本固化的 aliasSet（用户自定义关键词别名）。
-     * 编译期把 aliasSet 经 {@link AliasOverlayLexicon} 注入基础 lexicon，Canonicalizer
-     * 在识别侧把别名归一成规范拼写后再进下游 → 用别名与规范拼写写的同一逻辑产出**同一
-     * Core IR**。aliasSet 为 null/空时行为与不带别名完全一致（向后兼容）。
+     * <p>这是生产路径应调用的方法。{@link UserAliasValidator} 强制执行白名单（只允许低风险
+     * 运算符/比较 kind）、仅多词、不遮蔽规范拼写/base 别名、不撞领域词汇——校验失败抛
+     * {@link CnlParseException}，绝不让未经校验的 aliasSet 进入编译（堵 Codex 复核的
+     * Critical-1：校验必须前置，不能靠调用方纪律）。
      *
-     * <p>注意：别名仅在编译期生效；runtime（{@code /evaluate}）跑已编译的 Core IR，不涉及
-     * 别名。aliasSet 的可信性由调用方保证（应来自不可变的版本快照、经审批、进哈希覆盖）。
+     * @param aliasSet 用户自定义别名（应来自不可变版本快照、经审批、进哈希覆盖）
+     * @param identifierIndex 领域词汇索引（用于别名↔标识符碰撞校验），可为 null
+     */
+    public static ParseResult parseWithUserAliases(String source, String locale,
+                                                   IdentifierIndex identifierIndex,
+                                                   Map<SemanticTokenKind, List<String>> aliasSet) {
+        UserAliasValidator.Result vr = UserAliasValidator.validate(aliasSet, locale, identifierIndex);
+        if (!vr.valid()) {
+            throw new CnlParseException("用户自定义别名校验失败: " + String.join("; ", vr.errors()));
+        }
+        return parseUnsafeWithAliases(source, locale, identifierIndex, aliasSet);
+    }
+
+    /**
+     * 底层别名注入解析（**不校验** aliasSet）。
+     *
+     * <p>⚠ unsafe：直接信任传入的 aliasSet。除测试/已校验的内部调用外，生产代码应用
+     * {@link #parseWithUserAliases}（前置 {@link UserAliasValidator}）。别名经
+     * {@link AliasOverlayLexicon} 叠加基础 lexicon，Canonicalizer 识别侧归一成规范拼写
+     * 后进下游 → 别名版与规范版同一 Core IR。aliasSet 为 null/空时行为与不带别名一致。
      *
      * @param aliasSet kind → 别名列表，null/空表示无用户别名
      */
-    public static ParseResult parse(String source, String locale, IdentifierIndex identifierIndex,
-                                    Map<SemanticTokenKind, List<String>> aliasSet) {
+    static ParseResult parseUnsafeWithAliases(String source, String locale, IdentifierIndex identifierIndex,
+                                              Map<SemanticTokenKind, List<String>> aliasSet) {
         if (source == null || source.isBlank()) {
             throw new CnlParseException("CNL 源代码不能为空");
         }
@@ -243,7 +261,7 @@ public class InProcessCnlParser {
             return LexiconRegistry.getInstance().getDefault();
         }
 
-        String normalizedLocale = locale.toLowerCase().replace("_", "-");
+        String normalizedLocale = locale.toLowerCase(java.util.Locale.ROOT).replace("_", "-");
 
         // 优先尝试从 LexiconRegistry 获取（支持动态注册的 Lexicon）
         LexiconRegistry registry = LexiconRegistry.getInstance();

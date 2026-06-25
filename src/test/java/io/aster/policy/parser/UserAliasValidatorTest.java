@@ -69,4 +69,31 @@ class UserAliasValidatorTest {
         assertTrue(UserAliasValidator.validate(null, "en-US").valid());
         assertTrue(UserAliasValidator.validate(Map.of(), "en-US").valid());
     }
+
+    @Test
+    void multiSpaceAliasIsNormalizedNotBypassed() {
+        // "scaled  by"（多空格）归一后 = "scaled by"（多词合法）；归一保证判重/匹配一致
+        var r = UserAliasValidator.validate(
+            Map.of(SemanticTokenKind.TIMES, List.of("scaled  by")), "en-US");
+        assertTrue(r.valid(), () -> r.errors().toString());
+    }
+
+    @Test
+    void gate_parseWithUserAliasesRejectsSensitiveKind() {
+        // Critical-1：受控入口必须在编译前强制校验，敏感 kind 别名直接抛异常
+        String src = "Module M.\n\nRule p given x as Int, produce Int:\n  Return x times 2.";
+        var ex = org.junit.jupiter.api.Assertions.assertThrows(
+            InProcessCnlParser.CnlParseException.class,
+            () -> InProcessCnlParser.parseWithUserAliases(
+                src, "en-US", null, Map.of(SemanticTokenKind.RETURN, List.of("approve as"))));
+        assertTrue(ex.getMessage().contains("用户自定义别名校验失败"));
+    }
+
+    @Test
+    void gate_parseWithUserAliasesAcceptsValidAlias() {
+        String src = "Module M.\n\nRule p given x as Int, produce Int:\n  Return x multiplied by 2.";
+        var pr = InProcessCnlParser.parseWithUserAliases(
+            src, "en-US", null, Map.of(SemanticTokenKind.TIMES, List.of("multiplied by")));
+        org.junit.jupiter.api.Assertions.assertNotNull(pr.module());
+    }
 }

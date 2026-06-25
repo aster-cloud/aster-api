@@ -6,6 +6,8 @@ import aster.core.lexicon.Lexicon;
 import aster.core.lexicon.PunctuationConfig;
 import aster.core.lexicon.SemanticTokenKind;
 
+import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
@@ -25,25 +27,62 @@ import java.util.Map;
 public final class AliasOverlayLexicon implements Lexicon {
 
     private final Lexicon base;
+    /** base.getAliases() 与 user aliasSet 合并后的不可变快照（深拷贝）。 */
     private final Map<SemanticTokenKind, List<String>> aliases;
 
-    private AliasOverlayLexicon(Lexicon base, Map<SemanticTokenKind, List<String>> aliases) {
+    private AliasOverlayLexicon(Lexicon base, Map<SemanticTokenKind, List<String>> merged) {
         this.base = base;
-        this.aliases = Map.copyOf(aliases);
+        this.aliases = merged;
     }
 
     /**
      * 用 aliasSet 包裹基础 lexicon。aliasSet 为空/null 时直接返回基础 lexicon（零开销，
      * 不引入额外装饰层）。
+     *
+     * <p>合并语义（Codex 复核修正）：**叠加**而非替换——base.getAliases() 先入，user
+     * aliasSet 后入，对同一 kind 去重合并。深拷贝（含嵌套 List）保证版本快照不可变。
+     * base alias 与 user alias 的拼写冲突由 {@link UserAliasValidator} 在前置校验拦截，
+     * 此处合并不静默丢弃任一侧。
      */
     public static Lexicon wrap(Lexicon base, Map<SemanticTokenKind, List<String>> aliasSet) {
         if (base == null) {
             throw new IllegalArgumentException("base lexicon required");
         }
-        if (aliasSet == null || aliasSet.isEmpty()) {
+        boolean userEmpty = aliasSet == null || aliasSet.isEmpty();
+        Map<SemanticTokenKind, List<String>> baseAliases = base.getAliases();
+        boolean baseEmpty = baseAliases == null || baseAliases.isEmpty();
+        // 用户与 base 都无别名 → 直接返回 base（零开销）。
+        if (userEmpty && baseEmpty) {
             return base;
         }
-        return new AliasOverlayLexicon(base, aliasSet);
+
+        Map<SemanticTokenKind, List<String>> merged = new EnumMap<>(SemanticTokenKind.class);
+        if (!baseEmpty) {
+            for (Map.Entry<SemanticTokenKind, List<String>> e : baseAliases.entrySet()) {
+                if (e.getValue() != null && !e.getValue().isEmpty()) {
+                    merged.put(e.getKey(), new ArrayList<>(e.getValue()));
+                }
+            }
+        }
+        if (!userEmpty) {
+            for (Map.Entry<SemanticTokenKind, List<String>> e : aliasSet.entrySet()) {
+                if (e.getValue() == null || e.getValue().isEmpty()) {
+                    continue;
+                }
+                List<String> list = merged.computeIfAbsent(e.getKey(), k -> new ArrayList<>());
+                for (String a : e.getValue()) {
+                    if (a != null && !a.isBlank() && !list.contains(a)) {
+                        list.add(a);
+                    }
+                }
+            }
+        }
+        // 深拷贝为不可变
+        Map<SemanticTokenKind, List<String>> immutable = new EnumMap<>(SemanticTokenKind.class);
+        for (Map.Entry<SemanticTokenKind, List<String>> e : merged.entrySet()) {
+            immutable.put(e.getKey(), List.copyOf(e.getValue()));
+        }
+        return new AliasOverlayLexicon(base, Map.copyOf(immutable));
     }
 
     @Override

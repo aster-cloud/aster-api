@@ -96,13 +96,37 @@ public class PolicyVersionService {
     }
 
     /**
-     * 创建版本并冻结用户自定义别名集（ADR 0022 方案 D）。
+     * 创建版本并冻结用户自定义别名集（ADR 0022 方案 D）——**结构化入口（推荐）**。
      *
-     * <p>aliasSetJson 应是已校验（{@link io.aster.policy.parser.UserAliasValidator}）的规范
-     * 别名 JSON。版本持久化时一并冻结 alias_set + source_envelope_sha256（覆盖完整编译输入），
-     * 使"当时用哪套别名编译"可审计、可复现、防替换篡改（Codex 复核 C1）。
+     * <p>aliasSet 经 {@link io.aster.policy.parser.UserAliasValidator#validate} 强制校验
+     * （白名单/多词/不遮蔽/不撞领域词汇），再用 {@code canonicalJson} 确定性序列化后冻结。
+     * 这保证同一别名集总产出同一 source envelope（可复现/跨租户一致）。
      *
-     * @param aliasSetJson 版本冻结的用户别名 JSON（kind→[别名,...]），null=无用户别名
+     * @param aliasSet        结构化别名集，null/空=无用户别名
+     * @param identifierIndex 领域词汇索引（别名↔标识符碰撞校验），可为 null
+     */
+    public PolicyVersion createVersion(UUID catalogId, String sourceCnl, String locale,
+                                       String sourceKind, String authorRole,
+                                       java.util.Map<aster.core.lexicon.SemanticTokenKind, java.util.List<String>> aliasSet,
+                                       aster.core.identifier.IdentifierIndex identifierIndex) {
+        io.aster.policy.parser.UserAliasValidator.Result vr =
+            io.aster.policy.parser.UserAliasValidator.validate(aliasSet, locale, identifierIndex);
+        if (!vr.valid()) {
+            throw new IllegalArgumentException("用户自定义别名校验失败: " + String.join("; ", vr.errors()));
+        }
+        String canonical = io.aster.policy.parser.UserAliasValidator.canonicalJson(aliasSet);
+        return createVersion(catalogId, sourceCnl, locale, sourceKind, authorRole, canonical);
+    }
+
+    /**
+     * 创建版本并冻结用户自定义别名集（ADR 0022 方案 D）——String 入口。
+     *
+     * <p>aliasSetJson 必须**已是规范形**（{@code canonicalJson} 输出）。本方法对其做规范性
+     * 断言（重新规范化后须逐字节相同），不匹配则拒绝——杜绝非确定性/未校验 JSON 进入快照
+     * （Codex 持久化复核 High：service 必须保证 canonical，不能接任意 raw string）。版本持久化时
+     * 冻结 alias_set + source_envelope_sha256（覆盖完整编译输入），可审计/可复现/防替换篡改。
+     *
+     * @param aliasSetJson 已规范化的别名 JSON，null/空=无用户别名
      */
     public PolicyVersion createVersion(UUID catalogId, String sourceCnl, String locale,
                                        String sourceKind, String authorRole, String aliasSetJson) {
@@ -110,6 +134,9 @@ public class PolicyVersionService {
         if (catalog == null) {
             throw new IllegalArgumentException("策略目录不存在: catalogId=" + catalogId);
         }
+
+        // 规范性断言：传入 JSON 必须等于其重新规范化结果（防非确定性/未校验 JSON 进快照）。
+        String normalizedAliasJson = canonicalizeAliasJson(aliasSetJson, locale);
 
         String policyId = catalog.moduleName + "." + catalog.functionName;
         PolicyVersion version = new PolicyVersion(
@@ -125,8 +152,8 @@ public class PolicyVersionService {
         version.sourceKind = normalizeSourceKind(sourceKind);
         version.authorRole = normalizeAuthorRole(authorRole);
         version.active = false;
-        // 方案 D：冻结别名集 + 计算覆盖完整编译输入的信封哈希。
-        version.aliasSet = (aliasSetJson == null || aliasSetJson.isBlank()) ? null : aliasSetJson;
+        // 方案 D：冻结规范化别名集 + 计算覆盖完整编译输入的信封哈希。
+        version.aliasSet = normalizedAliasJson;
         version.sourceEnvelopeSha256 = PolicyVersion.computeSourceEnvelope(
             sourceCnl, version.aliasSet, locale, toolchainIdentity());
         version.persist();
@@ -137,6 +164,36 @@ public class PolicyVersionService {
         }
 
         return version;
+    }
+
+    /**
+     * 校验传入 aliasSetJson 已是规范形并返回之（null/空→null）。
+     *
+     * <p>解析 JSON→结构化→{@code canonicalJson} 重新序列化，与传入值逐字节比对：不等则拒绝。
+     * 保证存进快照的 alias_set 永远是确定性规范形（Codex 持久化复核 High）。
+     */
+    private static String canonicalizeAliasJson(String aliasSetJson, String locale) {
+        if (aliasSetJson == null || aliasSetJson.isBlank()) {
+            return null;
+        }
+        java.util.Map<aster.core.lexicon.SemanticTokenKind, java.util.List<String>> parsed;
+        try {
+            java.util.Map<String, java.util.List<String>> raw = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readValue(aliasSetJson,
+                    new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, java.util.List<String>>>() {});
+            parsed = new java.util.EnumMap<>(aster.core.lexicon.SemanticTokenKind.class);
+            for (var e : raw.entrySet()) {
+                parsed.put(aster.core.lexicon.SemanticTokenKind.valueOf(e.getKey()), e.getValue());
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException("aliasSet JSON 非法或含未知 kind: " + e.getMessage());
+        }
+        String canonical = io.aster.policy.parser.UserAliasValidator.canonicalJson(parsed);
+        if (!aliasSetJson.equals(canonical)) {
+            throw new IllegalArgumentException(
+                "aliasSet JSON 非规范形，请用 UserAliasValidator.canonicalJson 序列化后提交");
+        }
+        return canonical;
     }
 
     /**

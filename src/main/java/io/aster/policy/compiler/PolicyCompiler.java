@@ -167,29 +167,35 @@ public class PolicyCompiler {
 
     /**
      * 解析版本冻结的 aliasSet JSON（{@code {"TIMES":["multiplied by"],...}}）为
-     * {@code Map<SemanticTokenKind,List<String>>}。null/空/非法 → 返回空（不抛，
-     * 让编译走无别名路径并由上层校验/审计发现异常）。
+     * {@code Map<SemanticTokenKind,List<String>>}。
+     *
+     * <p><b>fail-closed</b>（Codex 持久化复核 C2-a）：非法 JSON / 未知 kind 一律抛异常，
+     * **绝不**回落空别名。否则 alias_set 腐化或被篡改后，runtime 会静默用无别名重编译，
+     * 正好回到 C2 的原始风险（带别名策略被无别名重解释）。null/空才视为"本就无别名"。
      */
     private static Map<SemanticTokenKind, List<String>> parseAliasSetJson(String json) {
         if (json == null || json.isBlank()) {
             return Map.of();
         }
+        Map<String, List<String>> raw;
         try {
-            Map<String, List<String>> raw = MAPPER.readValue(json,
+            raw = MAPPER.readValue(json,
                 new com.fasterxml.jackson.core.type.TypeReference<Map<String, List<String>>>() {});
-            Map<SemanticTokenKind, List<String>> out = new java.util.EnumMap<>(SemanticTokenKind.class);
-            for (Map.Entry<String, List<String>> e : raw.entrySet()) {
-                try {
-                    out.put(SemanticTokenKind.valueOf(e.getKey()), List.copyOf(e.getValue()));
-                } catch (IllegalArgumentException ignored) {
-                    // 未知 kind 忽略（前向兼容）
-                }
-            }
-            return out;
         } catch (Exception e) {
-            LOG.warnf("无法解析 aliasSet JSON，按无别名编译: %s", e.getMessage());
-            return Map.of();
+            throw new IllegalStateException("版本 alias_set JSON 损坏，拒绝编译（fail-closed）: " + e.getMessage(), e);
         }
+        Map<SemanticTokenKind, List<String>> out = new java.util.EnumMap<>(SemanticTokenKind.class);
+        for (Map.Entry<String, List<String>> e : raw.entrySet()) {
+            SemanticTokenKind kind;
+            try {
+                kind = SemanticTokenKind.valueOf(e.getKey());
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalStateException(
+                    "版本 alias_set 含未知 kind '" + e.getKey() + "'，拒绝编译（fail-closed）", ex);
+            }
+            out.put(kind, List.copyOf(e.getValue()));
+        }
+        return out;
     }
 
     private CompilationResult buildSuccessResultFromArtifact(PolicyArtifact artifact) {

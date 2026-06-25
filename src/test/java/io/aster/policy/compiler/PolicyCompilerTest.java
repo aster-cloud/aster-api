@@ -86,6 +86,27 @@ class PolicyCompilerTest {
         return version;
     }
 
+    @Test
+    void compileWithAliasSetProducesSameResultAsCanonical() {
+        // 方案 D：带用户别名的动态编译与规范拼写产出同一 Core IR JSON
+        String aliasSrc = "Module M.\n\nRule p given x as Int, produce Int:\n  Return x multiplied by 3.";
+        String canonSrc = "Module M.\n\nRule p given x as Int, produce Int:\n  Return x times 3.";
+        CompilationResult aliased = policyCompiler.compile(
+            aliasSrc, "en-US", "{\"TIMES\":[\"multiplied by\"]}");
+        CompilationResult canon = policyCompiler.compile(canonSrc, "en-US", null);
+        assertThat(aliased.isSuccess()).isTrue();
+        assertThat(canon.isSuccess()).isTrue();
+        assertThat(aliased.getCoreJson()).isEqualTo(canon.getCoreJson());
+    }
+
+    @Test
+    void compileFailsClosedOnCorruptAliasSetJson() {
+        // C2-a fail-closed：损坏的 alias_set → 编译失败（不静默回落无别名成功编译）
+        String src = "Module M.\n\nRule p given x as Int, produce Int:\n  Return x times 3.";
+        CompilationResult result = policyCompiler.compile(src, "en-US", "{not valid json");
+        assertThat(result.isSuccess()).isFalse();
+    }
+
     private PolicyArtifact createArtifact(long versionId, String json) {
         PolicyArtifact artifact = new PolicyArtifact();
         artifact.id = UUID.randomUUID();

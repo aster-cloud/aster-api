@@ -52,6 +52,13 @@ public class PolicyVersionService {
     String dualWriteBasePath;
 
     /**
+     * 工具链构建标识（ADR 0022 §11.5 C1/H6）：进入 source envelope，锁定"用哪版引擎编译"。
+     * 部署时应注入镜像 sha/版本（如 wontlost/aster-api:<sha>），使旧版本可识别其原工具链。
+     */
+    @ConfigProperty(name = "aster.runtime.build", defaultValue = "dev")
+    String runtimeBuild;
+
+    /**
      * 创建策略版本。
      *
      * 步骤：
@@ -85,6 +92,20 @@ public class PolicyVersionService {
      */
     @Transactional
     public PolicyVersion createVersion(UUID catalogId, String sourceCnl, String locale, String sourceKind, String authorRole) {
+        return createVersion(catalogId, sourceCnl, locale, sourceKind, authorRole, null);
+    }
+
+    /**
+     * 创建版本并冻结用户自定义别名集（ADR 0022 方案 D）。
+     *
+     * <p>aliasSetJson 应是已校验（{@link io.aster.policy.parser.UserAliasValidator}）的规范
+     * 别名 JSON。版本持久化时一并冻结 alias_set + source_envelope_sha256（覆盖完整编译输入），
+     * 使"当时用哪套别名编译"可审计、可复现、防替换篡改（Codex 复核 C1）。
+     *
+     * @param aliasSetJson 版本冻结的用户别名 JSON（kind→[别名,...]），null=无用户别名
+     */
+    public PolicyVersion createVersion(UUID catalogId, String sourceCnl, String locale,
+                                       String sourceKind, String authorRole, String aliasSetJson) {
         PolicyCatalog catalog = PolicyCatalog.findById(catalogId);
         if (catalog == null) {
             throw new IllegalArgumentException("策略目录不存在: catalogId=" + catalogId);
@@ -104,6 +125,10 @@ public class PolicyVersionService {
         version.sourceKind = normalizeSourceKind(sourceKind);
         version.authorRole = normalizeAuthorRole(authorRole);
         version.active = false;
+        // 方案 D：冻结别名集 + 计算覆盖完整编译输入的信封哈希。
+        version.aliasSet = (aliasSetJson == null || aliasSetJson.isBlank()) ? null : aliasSetJson;
+        version.sourceEnvelopeSha256 = PolicyVersion.computeSourceEnvelope(
+            sourceCnl, version.aliasSet, locale, toolchainIdentity());
         version.persist();
 
         // 双写：同时写入静态文件作为兜底
@@ -112,6 +137,15 @@ public class PolicyVersionService {
         }
 
         return version;
+    }
+
+    /**
+     * 工具链身份串：进 source envelope，锁定编译产物所依赖的引擎版本（ADR 0022 §11.5 H6）。
+     * 含 lexicon/canonicalizer ABI 版本 + 运行时构建标识。引擎升级若改了归一逻辑，
+     * envelope 会变 → 旧版本可识别"非原工具链重编可能产出不同 IR"，避免静默复现失败。
+     */
+    private String toolchainIdentity() {
+        return "abi=" + aster.core.lexicon.LexiconAbiVersion.V1.version + ";build=" + runtimeBuild;
     }
 
     /**

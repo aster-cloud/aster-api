@@ -170,6 +170,23 @@ public class PolicyVersion extends PanacheEntityBase {
     public String prevHash;
 
     /**
+     * 该版本编译时冻结的用户自定义关键词别名集（ADR 0022 方案 D）。
+     * JSON 文本：{@code {"TIMES":["multiplied by"], ...}}。NULL=无用户别名。
+     * 不可变：版本一经创建即冻结；rollback 激活目标版本行=自动用其冻结别名（无需 copy）。
+     */
+    @Column(name = "alias_set", columnDefinition = "TEXT")
+    public String aliasSet;
+
+    /**
+     * 完整编译输入的 SHA-256（ADR 0022 §11.5 C1）。
+     * 覆盖 content + aliasSet + locale + 工具链身份，防"源码哈希对得上、别名被替换"篡改。
+     * 与只哈希 content 的 {@link #sourceHash} 互补：sourceHash 是版本身份/链，
+     * sourceEnvelopeSha256 是完整编译输入的审计真相。NULL=本特性前创建的旧版本。
+     */
+    @Column(name = "source_envelope_sha256", length = 64)
+    public String sourceEnvelopeSha256;
+
+    /**
      * 版本状态
      * DRAFT/SUBMITTED/APPROVED/REJECTED/DEPRECATED/ARCHIVED
      */
@@ -345,6 +362,44 @@ public class PolicyVersion extends PanacheEntityBase {
             return java.util.HexFormat.of().formatHex(hash);
         } catch (Exception e) {
             throw new RuntimeException("Failed to compute source hash", e);
+        }
+    }
+
+    /**
+     * 计算完整编译输入的 SHA-256 信封哈希（ADR 0022 §11.5 C1）。
+     *
+     * <p>覆盖决定编译产物的全部输入，防"源码哈希对得上、别名被替换"篡改：
+     * content + aliasSet（规范 JSON）+ locale + 工具链身份。用**确定性字段序列**
+     * （固定字段顺序 + 长度前缀分隔，杜绝字段间歧义/注入），UTF-8 + SHA-256。
+     *
+     * <p>aliasSet 应已是规范形（{@code UserAliasValidator} 保证 alias==normalize(alias)），
+     * 这里只对传入字符串做 null 归一与长度前缀，不再二次解析。
+     *
+     * @param content        源码文本
+     * @param aliasSetJson   版本冻结的 aliasSet JSON（null 视为空）
+     * @param locale         编译 locale
+     * @param toolchainId     工具链身份串（compiler/canonicalizer/lexicon/validator 版本+hash）
+     */
+    public static String computeSourceEnvelope(String content, String aliasSetJson,
+                                               String locale, String toolchainId) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            // 长度前缀分隔：每段写 "<len>:<utf8bytes>"，避免拼接歧义（如 a|b vs ""|a|b）。
+            for (String field : new String[]{
+                content == null ? "" : content,
+                aliasSetJson == null ? "" : aliasSetJson,
+                locale == null ? "" : locale,
+                toolchainId == null ? "" : toolchainId
+            }) {
+                byte[] b = field.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                digest.update(Integer.toString(b.length).getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                digest.update((byte) ':');
+                digest.update(b);
+                digest.update((byte) '|');
+            }
+            return java.util.HexFormat.of().formatHex(digest.digest());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute source envelope", e);
         }
     }
 

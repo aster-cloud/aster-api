@@ -188,6 +188,14 @@ public class PolicyVersionService {
         } catch (Exception e) {
             throw new IllegalArgumentException("aliasSet JSON 非法或含未知 kind: " + e.getMessage());
         }
+        // 语义校验（Codex 三轮复核：String 入口也必须校验，不能只验 canonical 形）。
+        // 白名单/多词/不遮蔽——撞领域词汇的碰撞校验需 IdentifierIndex，请用结构化入口
+        // createVersion(...Map, IdentifierIndex)；此处至少挡敏感 kind/单词/遮蔽。
+        io.aster.policy.parser.UserAliasValidator.Result vr =
+            io.aster.policy.parser.UserAliasValidator.validate(parsed, locale, null);
+        if (!vr.valid()) {
+            throw new IllegalArgumentException("用户自定义别名校验失败: " + String.join("; ", vr.errors()));
+        }
         String canonical = io.aster.policy.parser.UserAliasValidator.canonicalJson(parsed);
         if (!aliasSetJson.equals(canonical)) {
             throw new IllegalArgumentException(

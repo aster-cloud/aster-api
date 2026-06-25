@@ -6,6 +6,7 @@ import aster.core.canonicalizer.Canonicalizer;
 import aster.core.identifier.IdentifierIndex;
 import aster.core.lexicon.Lexicon;
 import aster.core.lexicon.LexiconRegistry;
+import aster.core.lexicon.SemanticTokenKind;
 import aster.core.parser.AstBuilder;
 import aster.core.parser.AsterCustomLexer;
 import aster.core.parser.AsterParser;
@@ -15,6 +16,7 @@ import org.antlr.v4.runtime.CommonTokenStream;
 import org.jboss.logging.Logger;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 内嵌 CNL 解析器
@@ -75,13 +77,31 @@ public class InProcessCnlParser {
      * @throws CnlParseException 解析失败时抛出
      */
     public static ParseResult parse(String source, String locale, IdentifierIndex identifierIndex) {
+        return parse(source, locale, identifierIndex, null);
+    }
+
+    /**
+     * 解析 CNL 源代码（支持多语言 + 领域词汇翻译 + 用户自定义关键词别名）。
+     *
+     * <p>ADR 0022 方案 D：发布的策略可携带版本固化的 aliasSet（用户自定义关键词别名）。
+     * 编译期把 aliasSet 经 {@link AliasOverlayLexicon} 注入基础 lexicon，Canonicalizer
+     * 在识别侧把别名归一成规范拼写后再进下游 → 用别名与规范拼写写的同一逻辑产出**同一
+     * Core IR**。aliasSet 为 null/空时行为与不带别名完全一致（向后兼容）。
+     *
+     * <p>注意：别名仅在编译期生效；runtime（{@code /evaluate}）跑已编译的 Core IR，不涉及
+     * 别名。aliasSet 的可信性由调用方保证（应来自不可变的版本快照、经审批、进哈希覆盖）。
+     *
+     * @param aliasSet kind → 别名列表，null/空表示无用户别名
+     */
+    public static ParseResult parse(String source, String locale, IdentifierIndex identifierIndex,
+                                    Map<SemanticTokenKind, List<String>> aliasSet) {
         if (source == null || source.isBlank()) {
             throw new CnlParseException("CNL 源代码不能为空");
         }
 
         try {
-            // 1. 根据 locale 获取对应的 Lexicon 并规范化源代码
-            Lexicon lexicon = getLexiconForLocale(locale);
+            // 1. 根据 locale 获取对应的 Lexicon，并叠加用户自定义别名（方案 D）后规范化源代码
+            Lexicon lexicon = AliasOverlayLexicon.wrap(getLexiconForLocale(locale), aliasSet);
 
             // 所有语言都需要规范化，因为即使是英语也需要将关键词运算符（如 "greater than"）翻译为符号（如 ">"）
             // ANTLR 解析器只支持符号运算符，不支持关键词形式

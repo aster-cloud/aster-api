@@ -58,6 +58,20 @@ class PolicyVersionEnvelopeVerifierTest {
     }
 
     @Test
+    void selfConsistentFullTamperPassesVerify_documentedLimitation() {
+        // 威胁边界（勿夸大）：攻击者同时改 content + alias_set 并**重算** envelope，使四者自洽
+        // → verifier 会"通过"。这是本校验器的已知边界，防全套自洽篡改须靠外部锚定/审计链。
+        PolicyVersion v = versionWith("Module M.", "{\"TIMES\":[\"multiplied by\"]}", "en-US", "abi=1.0;core=dev");
+        // 全套篡改：改 content + alias_set，并同步重算 envelope（攻击者有 DB 写权限即可）
+        v.content = "Module Evil.";
+        v.aliasSet = "{\"TIMES\":[\"scaled by\"]}";
+        v.sourceEnvelopeSha256 = PolicyVersion.computeSourceEnvelope(
+            v.content, v.aliasSet, v.locale, v.sourceToolchainId);
+        // verifier 重算与篡改后字段自洽 → INTACT（本校验器**防不住**全套自洽篡改）
+        assertEquals(PolicyVersionEnvelopeVerifier.VerifyResult.Status.INTACT, verifier.verify(v).status());
+    }
+
+    @Test
     void skippedWhenLegacyNoEnvelope() {
         PolicyVersion v = new PolicyVersion();
         v.id = 2L;

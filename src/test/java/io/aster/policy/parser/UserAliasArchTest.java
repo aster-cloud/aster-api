@@ -1,11 +1,13 @@
 package io.aster.policy.parser;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -24,16 +26,28 @@ class UserAliasArchTest {
             .importPackages("io.aster");
 
     @Test
+    void unsafeParseMethodSignatureExists() {
+        // 防 ArchUnit 假绿：先用反射确认目标方法签名真实存在。若 unsafe 方法被重命名/改签名，
+        // 这里立即失败提示更新规则，而非让下面的规则因匹配不到而静默通过。
+        assertDoesNotThrow(() -> InProcessCnlParser.class.getDeclaredMethod(
+                "parseUnsafeWithAliases",
+                String.class, String.class,
+                aster.core.identifier.IdentifierIndex.class, Map.class),
+            "parseUnsafeWithAliases 签名变更：请同步更新 ArchUnit 规则");
+    }
+
+    @Test
     void noProductionCodeOutsideParserMayCallUnsafeAliasParse() {
         // 仅 InProcessCnlParser 自身（受控入口 parseWithUserAliases → unsafe）可调 unsafe 原语。
         // 其它任何生产类调用 = 绕过 UserAliasValidator 强制校验 = 架构违规。
+        // 精确按 FQCN 排除该类（不用 simpleName 后缀匹配，避免误放行同名结尾的其它类）。
         ArchRule rule = noClasses()
                 .that()
-                .haveSimpleNameNotEndingWith("InProcessCnlParser")
+                .doNotHaveFullyQualifiedName(InProcessCnlParser.class.getName())
                 .should()
                 .callMethod(InProcessCnlParser.class, "parseUnsafeWithAliases",
                         String.class, String.class,
-                        aster.core.identifier.IdentifierIndex.class, java.util.Map.class)
+                        aster.core.identifier.IdentifierIndex.class, Map.class)
                 .allowEmptyShould(true)
                 .because("生产路径必须走 parseWithUserAliases（强制 UserAliasValidator 校验），"
                         + "parseUnsafeWithAliases 仅供 parser 受控入口/测试使用（ADR 0022 §11.5）");

@@ -22,7 +22,12 @@ public record PolicyApprovalView(
     String aliasSource,
     String canonicalSource,
     List<AliasLegendEntry> aliasLegend,
-    String irSummary
+    String irSummary,
+    /**
+     * 审批告警：非空时审批者**必须**注意。如 aliasSet 损坏无法解析——视图绝不静默隐藏
+     * 损坏的编译输入（Codex 复核：审批视图不应吞异常，否则审批者看不到异常状态）。
+     */
+    List<String> warnings
 ) {
     /** 别名对照条目：别名 → 它归一到的规范关键词（+ 语义 kind）。 */
     public record AliasLegendEntry(String alias, String canonicalKeyword, String kind) {}

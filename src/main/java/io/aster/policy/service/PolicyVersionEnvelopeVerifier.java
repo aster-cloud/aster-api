@@ -10,9 +10,15 @@ import java.util.List;
  *
  * <p>哈希链（{@code prevHash → chainLink}）能检测"有后继版本的历史行"被篡改，但**最新行**
  * （链尾）被改 {@code alias_set + source_envelope_sha256} 时无后继 prevHash 可断链。本校验器
- * **重算** envelope 与存储值比对，覆盖任意行（含链尾）的篡改检测——这就是 tip-anchor。
+ * **重算** envelope 与存储值比对，检测**非自洽/部分篡改**——含链尾最新行。
  *
- * <p>用**创建时**的工具链身份（{@link PolicyVersion#sourceToolchainId}）重算，把"篡改"与
+ * <p><b>威胁边界（必须明确，勿夸大）</b>：本校验器检测的是"改了 content/alias_set/locale/
+ * toolchain 之一但**没同步重算** envelope"的篡改（即字段间不自洽）。它**防不住**有 DB 写权限的
+ * 攻击者**同时**改 content + alias_set + source_envelope_sha256 + source_toolchain_id 使四者
+ * 自洽——重算会"通过"。防全套自洽篡改需**外部锚定**：append-only 审计链、DB trigger+审计、
+ * 行签名、或把 envelope/链尾写入外部 WORM 存储/不可变账本（属生产安全增强，见跨仓清单）。
+ *
+ * <p>用**创建时**的工具链身份（{@link PolicyVersion#sourceToolchainId}）重算，把"非自洽篡改"与
  * "引擎升级"区分开：toolchain 不变时 envelope 必须逐字节相等，否则即篡改；toolchain 缺失
  * （旧版本）则跳过（无法重算，留给哈希链覆盖）。
  */

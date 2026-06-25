@@ -36,7 +36,8 @@ public class PolicyApprovalViewService {
      * 为某版本装配审批视图。
      */
     public PolicyApprovalView build(PolicyVersion v) {
-        Map<SemanticTokenKind, List<String>> aliasSet = parseAliasSet(v.aliasSet);
+        List<String> warnings = new ArrayList<>();
+        Map<SemanticTokenKind, List<String>> aliasSet = parseAliasSet(v.aliasSet, warnings);
         Lexicon base = resolveLexicon(v.locale);
         // 注入别名后 canonicalize：这是引擎实际看到的规范源码（别名已归一成规范拼写）。
         Lexicon effective = AliasOverlayLexicon.wrap(base, aliasSet);
@@ -62,10 +63,14 @@ public class PolicyApprovalViewService {
             irSummary = "compile failed: " + String.join("; ", cr.getErrors());
         }
 
-        return new PolicyApprovalView(v.content, canonicalSource, legend, irSummary);
+        return new PolicyApprovalView(v.content, canonicalSource, legend, irSummary, warnings);
     }
 
-    private static Map<SemanticTokenKind, List<String>> parseAliasSet(String json) {
+    /**
+     * 解析 aliasSet；损坏时**不静默吞**——记入 warnings 让审批者看到异常状态（Codex 复核 H4）。
+     * 返回空对照（编译路径已 fail-closed，此处只读展示不抛），但 warnings 会高亮损坏。
+     */
+    private static Map<SemanticTokenKind, List<String>> parseAliasSet(String json, List<String> warnings) {
         if (json == null || json.isBlank()) {
             return Map.of();
         }
@@ -74,11 +79,16 @@ public class PolicyApprovalViewService {
                 new TypeReference<Map<String, List<String>>>() {});
             Map<SemanticTokenKind, List<String>> out = new java.util.EnumMap<>(SemanticTokenKind.class);
             for (Map.Entry<String, List<String>> e : raw.entrySet()) {
-                out.put(SemanticTokenKind.valueOf(e.getKey()), List.copyOf(e.getValue()));
+                try {
+                    out.put(SemanticTokenKind.valueOf(e.getKey()), List.copyOf(e.getValue()));
+                } catch (IllegalArgumentException unknownKind) {
+                    warnings.add("aliasSet 含未知 kind '" + e.getKey() + "'，对照表已忽略该项");
+                }
             }
             return out;
         } catch (Exception e) {
-            // 审批视图是只读展示：损坏的 aliasSet 不抛（编译路径已 fail-closed），仅显示空对照。
+            warnings.add("⚠ aliasSet 无法解析（疑似损坏）：" + e.getMessage()
+                + " —— 审批前请核实该版本编译输入完整性");
             return Map.of();
         }
     }

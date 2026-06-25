@@ -154,10 +154,12 @@ public class PolicyVersionService {
         version.sourceKind = normalizeSourceKind(sourceKind);
         version.authorRole = normalizeAuthorRole(authorRole);
         version.active = false;
-        // 方案 D：冻结规范化别名集 + 计算覆盖完整编译输入的信封哈希。
+        // 方案 D：冻结规范化别名集 + 计算覆盖完整编译输入的信封哈希 + 记录工具链身份。
         version.aliasSet = normalizedAliasJson;
+        String toolchain = toolchainIdentity();
+        version.sourceToolchainId = toolchain;
         version.sourceEnvelopeSha256 = PolicyVersion.computeSourceEnvelope(
-            sourceCnl, version.aliasSet, locale, toolchainIdentity());
+            sourceCnl, version.aliasSet, locale, toolchain);
         version.persist();
 
         // 双写：同时写入静态文件作为兜底
@@ -208,11 +210,28 @@ public class PolicyVersionService {
 
     /**
      * 工具链身份串：进 source envelope，锁定编译产物所依赖的引擎版本（ADR 0022 §11.5 H6）。
-     * 含 lexicon/canonicalizer ABI 版本 + 运行时构建标识。引擎升级若改了归一逻辑，
-     * envelope 会变 → 旧版本可识别"非原工具链重编可能产出不同 IR"，避免静默复现失败。
+     *
+     * <p>含 4 个维度，引擎任一维度升级（改归一/降级逻辑）→ envelope 变 → 旧版本可识别
+     * "非原工具链重编可能产出不同 IR"，避免静默复现失败：
+     * <ul>
+     *   <li>abi —— lexicon SPI ABI 版本（{@link aster.core.lexicon.LexiconAbiVersion}）</li>
+     *   <li>core —— aster-lang-core 引擎实现版本（Canonicalizer/Parser/CoreLowering 所在 jar
+     *       的 Implementation-Version，从 MANIFEST 读；includeBuild 源码模式下为 dev）</li>
+     *   <li>validator —— 用户别名校验器版本（白名单/校验规则变更须反映到 envelope）</li>
+     *   <li>build —— 运行时构建标识（部署注入镜像 sha，{@code aster.runtime.build}）</li>
+     * </ul>
      */
     private String toolchainIdentity() {
-        return "abi=" + aster.core.lexicon.LexiconAbiVersion.V1.version + ";build=" + runtimeBuild;
+        return "abi=" + aster.core.lexicon.LexiconAbiVersion.V1.version
+            + ";core=" + coreEngineVersion()
+            + ";validator=" + io.aster.policy.parser.UserAliasValidator.VERSION
+            + ";build=" + runtimeBuild;
+    }
+
+    /** 读 aster-lang-core 引擎实现版本（jar MANIFEST Implementation-Version），缺失→"dev"。 */
+    private static String coreEngineVersion() {
+        String v = aster.core.canonicalizer.Canonicalizer.class.getPackage().getImplementationVersion();
+        return (v == null || v.isBlank()) ? "dev" : v;
     }
 
     /**

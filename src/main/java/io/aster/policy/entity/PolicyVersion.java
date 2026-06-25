@@ -187,6 +187,14 @@ public class PolicyVersion extends PanacheEntityBase {
     public String sourceEnvelopeSha256;
 
     /**
+     * envelope 计算所用的工具链身份串（abi/core/validator/build）。
+     * 供 tip-anchor verifier 用**创建时**的工具链重算 envelope 验证最新行（无后继断链），
+     * 区分篡改与引擎升级。NULL=本特性前创建的旧版本。不可变。
+     */
+    @Column(name = "source_toolchain_id", length = 256, updatable = false)
+    public String sourceToolchainId;
+
+    /**
      * 版本状态
      * DRAFT/SUBMITTED/APPROVED/REJECTED/DEPRECATED/ARCHIVED
      */

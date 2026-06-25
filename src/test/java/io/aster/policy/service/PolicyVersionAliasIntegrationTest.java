@@ -73,22 +73,59 @@ class PolicyVersionAliasIntegrationTest extends BasePolicyVersionServiceTest {
 
     @Test
     void rollbackCarriesFrozenAliasSet() {
-        // C2：v1 带别名 → 升 v2 无别名 → rollback 到 v1 激活的是 v1 行（带其冻结别名）
+        // C2 真流程：v1 带别名(审批+激活) → v2 无别名(审批+激活，活跃切到 v2) → rollback 到 v1。
+        // 断言 rollback 激活的是 v1 行（带其冻结别名）+ catalog 指针回退到 v1。
         Map<SemanticTokenKind, List<String>> aliasSet =
             Map.of(SemanticTokenKind.TIMES, List.of("multiplied by"));
         PolicyVersion v1 = versionService.createVersion(
             catalog.id, SRC, "en-US", "manual", "owner", aliasSet, null);
-        String policyId = v1.policyId;
-        // 审批并激活 v1
+        // 显式 version 号避免同毫秒撞号（@PrePersist 用 epoch-milli）
+        setVersionNumber(v1.id, 3001L);
         versionService.submitForApproval(v1.id, "owner");
         versionService.approveVersion(v1.id, "approver");
         versionService.activateVersion(v1.id, "approver");
 
-        // rollback 到 v1（激活已存行）→ 该行 aliasSet 不变
-        PolicyVersion rolled = versionService.rollbackToVersion(policyId, v1.version, "admin");
-        assertEquals(v1.id, rolled.id);
-        PolicyVersion reloaded = PolicyVersion.findById(rolled.id);
-        assertNotNull(reloaded.aliasSet, "rollback 后版本仍带其冻结的 aliasSet（不重读当前配置）");
-        assertTrue(reloaded.aliasSet.contains("multiplied by"));
+        // v2：无别名，审批+激活 → 活跃切到 v2，catalog.defaultVersionId=v2
+        PolicyVersion v2 = versionService.createVersion(
+            catalog.id, SRC.replace("multiplied by", "times"), "en-US");
+        setVersionNumber(v2.id, 3002L);
+        versionService.submitForApproval(v2.id, "owner");
+        versionService.approveVersion(v2.id, "approver");
+        versionService.activateVersion(v2.id, "approver");
+        // 前置：在独立事务读，避免把 catalog 实例放进 L1 缓存影响后续 fresh read
+        assertEquals(v2.id, freshCatalogDefault(), "前置：激活 v2 后 catalog 指向 v2");
+
+        // rollback 到 v1（激活已存行，不重编译/不读当前配置）
+        PolicyVersion rolled = versionService.rollbackToVersion(v1.policyId, 3001L, "admin");
+        assertEquals(v1.id, rolled.id, "回滚返回 version=3001 的 v1");
+
+        // v1 行的 aliasSet 完好（端到端证明 rollback 携带冻结别名）。fresh read 避免 L1 缓存。
+        PolicyVersion v1After = freshVersion(v1.id);
+        assertNotNull(v1After.aliasSet, "rollback 后 v1 仍带其冻结 aliasSet");
+        assertTrue(v1After.aliasSet.contains("multiplied by"));
+        assertEquals(Boolean.TRUE, v1After.active, "v1 应重新激活");
+        // catalog 指针回退到 v1（fresh tx 读，避免命中 L1 缓存里的旧 v2 指针）
+        assertEquals(v1.id, freshCatalogDefault(), "rollback 后 catalog 指针应回退到 v1");
+        // v2 已停用
+        assertEquals(Boolean.FALSE, freshVersion(v2.id).active, "v2 应停用");
+    }
+
+    private Long freshCatalogDefault() {
+        return io.quarkus.narayana.jta.QuarkusTransaction.requiringNew()
+            .call(() -> io.aster.policy.entity.PolicyCatalog.<io.aster.policy.entity.PolicyCatalog>findById(catalog.id).defaultVersionId);
+    }
+
+    private PolicyVersion freshVersion(Long id) {
+        return io.quarkus.narayana.jta.QuarkusTransaction.requiringNew()
+            .call(() -> PolicyVersion.<PolicyVersion>findById(id));
+    }
+
+    /** 显式设 version 号（避免同毫秒撞号），独立 tx 提交。 */
+    void setVersionNumber(Long versionPk, long versionNumber) {
+        io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> {
+            PolicyVersion v = PolicyVersion.findById(versionPk);
+            v.version = versionNumber;
+            v.persist();
+        });
     }
 }

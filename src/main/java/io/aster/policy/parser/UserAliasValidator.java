@@ -128,6 +128,16 @@ public final class UserAliasValidator {
                 }
                 String norm = normalize(alias);
 
+                // 铁律 0：提交值必须已是规范空白形（trim + 单 ASCII 空格分词）。
+                // 否则 Canonicalizer 把源码空白折叠成单空格，而 overlay 注入的 raw 别名
+                // （如 "scaled  by" 双空格）做 translation key 匹配不到 → 校验过但编译不生效。
+                // 要求 alias == normalize(alias)，保证注入值即匹配值（可审计、无隐藏分歧）。
+                if (!alias.equals(norm)) {
+                    errors.add("别名 '" + alias + "'（" + kind + "）含非规范空白/大小写；"
+                        + "请提交规范形 '" + norm + "'（前后无空格、词间单个空格、小写）");
+                    continue;
+                }
+
                 // 铁律 2：仅多词（按归一后的真实分词，≥2 个非空 token）
                 if (norm.indexOf(' ') < 0) {
                     errors.add("别名 '" + alias + "'（" + kind + "）必须是多词短语；"

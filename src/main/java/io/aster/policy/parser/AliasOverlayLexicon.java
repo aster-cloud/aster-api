@@ -15,7 +15,8 @@ import java.util.Map;
  * 别名覆盖装饰器（ADR 0022 方案 D）。
  *
  * <p>把一个基础 lexicon（en-US/zh-CN/…）与一组**用户自定义别名**（aliasSet）组合：
- * 除 {@link #getAliases()} 返回 aliasSet 外，其余全部透传基础 lexicon。
+ * {@link #getAliases()} 返回 base 别名与 user 别名的**合并快照**（深拷贝、不可变），
+ * 其余全部透传基础 lexicon。
  *
  * <p>设计原则（与 ADR 0022 §3 核心不变式一致）：别名只在**识别侧**。Canonicalizer
  * 读 {@code getAliases()} 把别名归一成规范拼写后再进下游 → 用别名与规范拼写写的同一

@@ -67,4 +67,18 @@ class SourceEnvelopeTest {
         String emptyAlias = PolicyVersion.computeSourceEnvelope(CONTENT, "", "en-US", "tc");
         assertEquals(nullAlias, emptyAlias, "null 与空串别名等价（都=无别名）");
     }
+
+    @Test
+    void chainLinkUsesEnvelopeWhenPresent() {
+        // C1-a：带 envelope 的版本，链接用 envelope（进哈希链）；否则回落 sourceHash。
+        PolicyVersion withEnv = new PolicyVersion();
+        withEnv.sourceHash = "aaaa";
+        withEnv.sourceEnvelopeSha256 = "bbbb";
+        assertEquals("bbbb", withEnv.chainLink(), "有 envelope → 链接=envelope");
+
+        PolicyVersion noEnv = new PolicyVersion();
+        noEnv.sourceHash = "aaaa";
+        noEnv.sourceEnvelopeSha256 = null;
+        assertEquals("aaaa", noEnv.chainLink(), "无 envelope → 回落 sourceHash（向后兼容）");
+    }
 }

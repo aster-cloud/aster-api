@@ -3,8 +3,12 @@ package io.aster.policy.compiler;
 import aster.core.ast.Module;
 import aster.core.ir.CoreModel;
 import aster.core.lowering.CoreLowering;
+import aster.core.lexicon.SemanticTokenKind;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.aster.common.JacksonMappers;
+
+import java.util.List;
+import java.util.Map;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.aster.policy.entity.PolicyArtifact;
 import io.aster.policy.entity.PolicyVersion;
@@ -48,14 +52,31 @@ public class PolicyCompiler {
      * @return 编译结果
      */
     public CompilationResult compile(String sourceCnl, String locale) {
+        return compile(sourceCnl, locale, null);
+    }
+
+    /**
+     * 从 CNL 源代码编译为 Core IR JSON，支持版本冻结的用户自定义别名（ADR 0022 方案 D）。
+     *
+     * <p>aliasSetJson 非空时经 {@link InProcessCnlParser#parseWithUserAliases}（**强制校验**
+     * 别名）注入编译——保证动态编译路径与版本快照的别名一致，不会丢别名重解释
+     * （Codex 持久化复核 C2-a：runtime fallback 必须带 aliasSet，否则带别名策略求值
+     * 用无别名重解释→编译失败/语义错）。aliasSetJson 为 null/空时与旧行为一致。
+     *
+     * @param aliasSetJson 版本冻结的别名 JSON（kind→[别名,...]），null=无用户别名
+     */
+    public CompilationResult compile(String sourceCnl, String locale, String aliasSetJson) {
         if (sourceCnl == null || sourceCnl.isBlank()) {
             return CompilationResult.failure("CNL 源代码不能为空");
         }
 
         try {
-            // 1. 解析 CNL → AST
-            LOG.debugf("解析 CNL 源代码... locale=%s", locale);
-            InProcessCnlParser.ParseResult parseResult = InProcessCnlParser.parse(sourceCnl, locale);
+            // 1. 解析 CNL → AST（带版本冻结的用户别名，经强制校验）
+            LOG.debugf("解析 CNL 源代码... locale=%s, hasAliases=%b", locale, aliasSetJson != null && !aliasSetJson.isBlank());
+            Map<SemanticTokenKind, List<String>> aliasSet = parseAliasSetJson(aliasSetJson);
+            InProcessCnlParser.ParseResult parseResult = (aliasSet == null || aliasSet.isEmpty())
+                ? InProcessCnlParser.parse(sourceCnl, locale)
+                : InProcessCnlParser.parseWithUserAliases(sourceCnl, locale, null, aliasSet);
             Module astModule = parseResult.module();
 
             // 2. 降级 AST → Core IR
@@ -139,8 +160,36 @@ public class PolicyCompiler {
             return CompilationResult.failure(String.format("策略版本 %d 没有可用的 CNL 源代码", policyVersionId));
         }
 
-        LOG.infof("动态编译 CNL 源代码: versionId=%d, locale=%s", policyVersionId, version.locale);
-        return compile(version.content, version.locale);
+        LOG.infof("动态编译 CNL 源代码: versionId=%d, locale=%s, hasAliases=%b",
+            policyVersionId, version.locale, version.aliasSet != null);
+        return compile(version.content, version.locale, version.aliasSet);
+    }
+
+    /**
+     * 解析版本冻结的 aliasSet JSON（{@code {"TIMES":["multiplied by"],...}}）为
+     * {@code Map<SemanticTokenKind,List<String>>}。null/空/非法 → 返回空（不抛，
+     * 让编译走无别名路径并由上层校验/审计发现异常）。
+     */
+    private static Map<SemanticTokenKind, List<String>> parseAliasSetJson(String json) {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        try {
+            Map<String, List<String>> raw = MAPPER.readValue(json,
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String, List<String>>>() {});
+            Map<SemanticTokenKind, List<String>> out = new java.util.EnumMap<>(SemanticTokenKind.class);
+            for (Map.Entry<String, List<String>> e : raw.entrySet()) {
+                try {
+                    out.put(SemanticTokenKind.valueOf(e.getKey()), List.copyOf(e.getValue()));
+                } catch (IllegalArgumentException ignored) {
+                    // 未知 kind 忽略（前向兼容）
+                }
+            }
+            return out;
+        } catch (Exception e) {
+            LOG.warnf("无法解析 aliasSet JSON，按无别名编译: %s", e.getMessage());
+            return Map.of();
+        }
     }
 
     private CompilationResult buildSuccessResultFromArtifact(PolicyArtifact artifact) {

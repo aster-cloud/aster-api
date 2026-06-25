@@ -174,7 +174,7 @@ public class PolicyVersion extends PanacheEntityBase {
      * JSON 文本：{@code {"TIMES":["multiplied by"], ...}}。NULL=无用户别名。
      * 不可变：版本一经创建即冻结；rollback 激活目标版本行=自动用其冻结别名（无需 copy）。
      */
-    @Column(name = "alias_set", columnDefinition = "TEXT")
+    @Column(name = "alias_set", columnDefinition = "TEXT", updatable = false)
     public String aliasSet;
 
     /**
@@ -183,7 +183,7 @@ public class PolicyVersion extends PanacheEntityBase {
      * 与只哈希 content 的 {@link #sourceHash} 互补：sourceHash 是版本身份/链，
      * sourceEnvelopeSha256 是完整编译输入的审计真相。NULL=本特性前创建的旧版本。
      */
-    @Column(name = "source_envelope_sha256", length = 64)
+    @Column(name = "source_envelope_sha256", length = 64, updatable = false)
     public String sourceEnvelopeSha256;
 
     /**
@@ -404,11 +404,28 @@ public class PolicyVersion extends PanacheEntityBase {
     }
 
     /**
-     * 查找前序版本的源码哈希
+     * 查找前序版本的链接哈希（{@link #chainLink()}）。
+     *
+     * <p>链接 = envelope（存在时）否则 sourceHash → 前序版本若带别名，其 envelope 进链，
+     * 篡改 alias_set 会断链（ADR 0022 §11.5 C1：envelope 必须进哈希链，否则改 alias_set+
+     * 同步改 source_envelope_sha256 链不变=篡改隐形）。旧版本无 envelope 时回落 sourceHash，
+     * 向后兼容。
      */
     private static String findPreviousVersionHash(String policyId) {
         PolicyVersion prev = find("policyId = ?1 ORDER BY version DESC", policyId).firstResult();
-        return prev != null ? prev.sourceHash : null;
+        return prev != null ? prev.chainLink() : null;
+    }
+
+    /**
+     * 版本链接哈希：进入下一版本 {@link #prevHash} 的值。
+     *
+     * <p>带 envelope 的版本用 envelope（覆盖 content+aliasSet+locale+工具链），否则用
+     * content-only sourceHash。这让 alias_set 篡改对版本链可见——篡改者即使同步改
+     * source_envelope_sha256，下一版本的 prevHash 已固化旧 envelope，对账即断链。
+     */
+    public String chainLink() {
+        return (sourceEnvelopeSha256 != null && !sourceEnvelopeSha256.isBlank())
+            ? sourceEnvelopeSha256 : sourceHash;
     }
 
     /**

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -167,6 +168,27 @@ class UserAliasValidatorTest {
             1, wrapped.getAliases().get(SemanticTokenKind.TIMES).size());
         org.junit.jupiter.api.Assertions.assertFalse(
             wrapped.getAliases().containsKey(SemanticTokenKind.PLUS));
+    }
+
+    @Test
+    void canonicalJsonIsDeterministicRegardlessOfInputOrder() {
+        // 不同输入顺序/未归一 → 同一规范 JSON（同 envelope，可复现）
+        var a = new java.util.LinkedHashMap<SemanticTokenKind, List<String>>();
+        a.put(SemanticTokenKind.TIMES, List.of("multiplied by"));
+        a.put(SemanticTokenKind.PLUS, List.of("added to"));
+        var b = new java.util.LinkedHashMap<SemanticTokenKind, List<String>>();
+        b.put(SemanticTokenKind.PLUS, List.of("added to"));
+        b.put(SemanticTokenKind.TIMES, List.of("multiplied by"));
+        assertEquals(UserAliasValidator.canonicalJson(a), UserAliasValidator.canonicalJson(b));
+        // 键有序：PLUS 在 TIMES 前
+        assertTrue(UserAliasValidator.canonicalJson(a).indexOf("PLUS")
+            < UserAliasValidator.canonicalJson(a).indexOf("TIMES"));
+    }
+
+    @Test
+    void canonicalJsonNullForEmpty() {
+        org.junit.jupiter.api.Assertions.assertNull(UserAliasValidator.canonicalJson(null));
+        org.junit.jupiter.api.Assertions.assertNull(UserAliasValidator.canonicalJson(Map.of()));
     }
 
     /** 构造一个含单条 field 映射的领域词汇 IdentifierIndex（用于碰撞测试）。 */

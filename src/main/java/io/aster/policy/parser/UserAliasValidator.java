@@ -167,6 +167,45 @@ public final class UserAliasValidator {
         return s.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * 确定性序列化 aliasSet 为规范 JSON（ADR 0022 §11.5，Codex 持久化复核 High）。
+     *
+     * <p>kind 按枚举名排序、每个 kind 的别名列表排序、别名值归一——保证同一别名集**总是**
+     * 产出逐字节相同的 JSON → 同一 source envelope（可复现、跨租户一致）。这是 createVersion
+     * 应使用的 aliasSetJson 来源，杜绝"同语义别名集因 key 顺序/空白不同产生不同 envelope"。
+     * 空/null → null（无别名）。
+     */
+    public static String canonicalJson(Map<SemanticTokenKind, List<String>> aliasSet) {
+        if (aliasSet == null || aliasSet.isEmpty()) {
+            return null;
+        }
+        // TreeMap 按 kind 枚举名排序；每个列表归一+排序+去重。
+        java.util.TreeMap<String, List<String>> sorted = new java.util.TreeMap<>();
+        for (Map.Entry<SemanticTokenKind, List<String>> e : aliasSet.entrySet()) {
+            if (e.getValue() == null || e.getValue().isEmpty()) {
+                continue;
+            }
+            java.util.TreeSet<String> vals = new java.util.TreeSet<>();
+            for (String a : e.getValue()) {
+                if (a != null && !a.isBlank()) {
+                    vals.add(normalize(a));
+                }
+            }
+            if (!vals.isEmpty()) {
+                sorted.put(e.getKey().name(), new ArrayList<>(vals));
+            }
+        }
+        if (sorted.isEmpty()) {
+            return null;
+        }
+        try {
+            // Jackson 对 TreeMap 保持 key 顺序；值已是有序 List。
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(sorted);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to serialize aliasSet", e);
+        }
+    }
+
     private static Lexicon resolveBase(String locale) {
         LexiconRegistry registry = LexiconRegistry.getInstance();
         if (locale == null || locale.isBlank()) {

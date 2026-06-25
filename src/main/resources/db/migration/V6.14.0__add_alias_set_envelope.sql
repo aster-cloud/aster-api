@@ -11,10 +11,10 @@
 --   （compiler/canonicalizer/lexicon/validator 版本），作为审计/可复现的完整真相。
 --   NULL 表示该版本创建早于本特性（向后兼容；新版本应填充）。
 
+-- 合并为单条 ALTER：减少 ACCESS EXCLUSIVE 锁窗口（两条各拿一次锁）。
+-- PG nullable ADD COLUMN 无 DEFAULT 不重写整表，但仍短暂持锁。
 ALTER TABLE policy_versions
-    ADD COLUMN alias_set TEXT;
-
-ALTER TABLE policy_versions
+    ADD COLUMN alias_set TEXT,
     ADD COLUMN source_envelope_sha256 VARCHAR(64);
 
 COMMENT ON COLUMN policy_versions.alias_set IS

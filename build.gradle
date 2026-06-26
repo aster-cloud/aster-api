@@ -139,6 +139,12 @@ tasks.withType(Test) {
     systemProperty 'quarkus.test.flat-class-path', 'true'
     jvmArgs '--add-opens', 'java.base/java.lang=ALL-UNNAMED'
 
+    // 单元 test 任务默认沿用 Gradle 的 512MB 堆——@QuarkusTest 大量加载 + Plan-D
+    // 别名/失败路径测试跑满后峰值内存逼近上限，CI 偶发 "Java heap space"。给一个
+    // 与 integrationTest 一致的 2g 上限（ubuntu runner 有 7GB，余量充足）。
+    // 各任务自有的 maxHeapSize 设定会就地覆盖此默认。
+    maxHeapSize = '2g'
+
     // Testcontainers 配置
     // DOCKER_HOST: 本地开发通过 ~/.testcontainers.properties 配置 Podman socket
     // CI 环境使用默认 Docker socket，不覆盖 DOCKER_HOST

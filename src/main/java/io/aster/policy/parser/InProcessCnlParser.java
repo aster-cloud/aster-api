@@ -6,6 +6,7 @@ import aster.core.canonicalizer.Canonicalizer;
 import aster.core.identifier.IdentifierIndex;
 import aster.core.lexicon.Lexicon;
 import aster.core.lexicon.LexiconRegistry;
+import aster.core.lexicon.SemanticTokenKind;
 import aster.core.parser.AstBuilder;
 import aster.core.parser.AsterCustomLexer;
 import aster.core.parser.AsterParser;
@@ -15,6 +16,7 @@ import org.antlr.v4.runtime.CommonTokenStream;
 import org.jboss.logging.Logger;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 内嵌 CNL 解析器
@@ -75,13 +77,49 @@ public class InProcessCnlParser {
      * @throws CnlParseException 解析失败时抛出
      */
     public static ParseResult parse(String source, String locale, IdentifierIndex identifierIndex) {
+        return parseUnsafeWithAliases(source, locale, identifierIndex, null);
+    }
+
+    /**
+     * 受控编译入口（ADR 0022 方案 D）：**先强制校验** aliasSet，再注入编译。
+     *
+     * <p>这是生产路径应调用的方法。{@link UserAliasValidator} 强制执行白名单（只允许低风险
+     * 运算符/比较 kind）、仅多词、不遮蔽规范拼写/base 别名、不撞领域词汇——校验失败抛
+     * {@link CnlParseException}，绝不让未经校验的 aliasSet 进入编译（堵 Codex 复核的
+     * Critical-1：校验必须前置，不能靠调用方纪律）。
+     *
+     * @param aliasSet 用户自定义别名（应来自不可变版本快照、经审批、进哈希覆盖）
+     * @param identifierIndex 领域词汇索引（用于别名↔标识符碰撞校验），可为 null
+     */
+    public static ParseResult parseWithUserAliases(String source, String locale,
+                                                   IdentifierIndex identifierIndex,
+                                                   Map<SemanticTokenKind, List<String>> aliasSet) {
+        UserAliasValidator.Result vr = UserAliasValidator.validate(aliasSet, locale, identifierIndex);
+        if (!vr.valid()) {
+            throw new CnlParseException("用户自定义别名校验失败: " + String.join("; ", vr.errors()));
+        }
+        return parseUnsafeWithAliases(source, locale, identifierIndex, aliasSet);
+    }
+
+    /**
+     * 底层别名注入解析（**不校验** aliasSet）。
+     *
+     * <p>⚠ unsafe：直接信任传入的 aliasSet。除测试/已校验的内部调用外，生产代码应用
+     * {@link #parseWithUserAliases}（前置 {@link UserAliasValidator}）。别名经
+     * {@link AliasOverlayLexicon} 叠加基础 lexicon，Canonicalizer 识别侧归一成规范拼写
+     * 后进下游 → 别名版与规范版同一 Core IR。aliasSet 为 null/空时行为与不带别名一致。
+     *
+     * @param aliasSet kind → 别名列表，null/空表示无用户别名
+     */
+    static ParseResult parseUnsafeWithAliases(String source, String locale, IdentifierIndex identifierIndex,
+                                              Map<SemanticTokenKind, List<String>> aliasSet) {
         if (source == null || source.isBlank()) {
             throw new CnlParseException("CNL 源代码不能为空");
         }
 
         try {
-            // 1. 根据 locale 获取对应的 Lexicon 并规范化源代码
-            Lexicon lexicon = getLexiconForLocale(locale);
+            // 1. 根据 locale 获取对应的 Lexicon，并叠加用户自定义别名（方案 D）后规范化源代码
+            Lexicon lexicon = AliasOverlayLexicon.wrap(getLexiconForLocale(locale), aliasSet);
 
             // 所有语言都需要规范化，因为即使是英语也需要将关键词运算符（如 "greater than"）翻译为符号（如 ">"）
             // ANTLR 解析器只支持符号运算符，不支持关键词形式
@@ -223,7 +261,7 @@ public class InProcessCnlParser {
             return LexiconRegistry.getInstance().getDefault();
         }
 
-        String normalizedLocale = locale.toLowerCase().replace("_", "-");
+        String normalizedLocale = locale.toLowerCase(java.util.Locale.ROOT).replace("_", "-");
 
         // 优先尝试从 LexiconRegistry 获取（支持动态注册的 Lexicon）
         LexiconRegistry registry = LexiconRegistry.getInstance();

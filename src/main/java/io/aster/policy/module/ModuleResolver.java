@@ -156,6 +156,18 @@ public class ModuleResolver {
             String locale,
             Map<CacheKey, ParsedModule> cache) {
         String content = version.content == null ? "" : version.content;
+
+        // fail-closed（ADR 0022 §11.5，Codex 持久化复核）：带用户别名的版本被跨模块引用时，
+        // 本路径尚未支持注入 aliasSet → 若无别名解析，会用无别名重解释带别名的库模块（静默错解析）。
+        // 在 aliasSet-aware 跨模块解析落地前，拒绝引用带别名的 library 版本，而非静默降级。
+        if (version.aliasSet != null && !version.aliasSet.isBlank()) {
+            throw new ModuleResolutionException(
+                ModuleResolutionException.Code.MODULE_NOT_VISIBLE,
+                "Imported module uses user-defined keyword aliases; cross-module resolution with "
+                    + "aliases is not yet supported (refusing to resolve without them, fail-closed)"
+            );
+        }
+
         CacheKey cacheKey = new CacheKey(tenantId, key.moduleName(), key.version(), sha256(content));
         ParsedModule cached = cache.get(cacheKey);
         if (cached != null) {

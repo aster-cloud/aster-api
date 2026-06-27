@@ -52,6 +52,13 @@ public class PolicyVersionService {
     String dualWriteBasePath;
 
     /**
+     * 工具链构建标识（ADR 0022 §11.5 C1/H6）：进入 source envelope，锁定"用哪版引擎编译"。
+     * 部署时应注入镜像 sha/版本（如 wontlost/aster-api:<sha>），使旧版本可识别其原工具链。
+     */
+    @ConfigProperty(name = "aster.runtime.build", defaultValue = "dev")
+    String runtimeBuild;
+
+    /**
      * 创建策略版本。
      *
      * 步骤：
@@ -85,10 +92,53 @@ public class PolicyVersionService {
      */
     @Transactional
     public PolicyVersion createVersion(UUID catalogId, String sourceCnl, String locale, String sourceKind, String authorRole) {
+        return createVersion(catalogId, sourceCnl, locale, sourceKind, authorRole, null);
+    }
+
+    /**
+     * 创建版本并冻结用户自定义别名集（ADR 0022 方案 D）——**结构化入口（推荐）**。
+     *
+     * <p>aliasSet 经 {@link io.aster.policy.parser.UserAliasValidator#validate} 强制校验
+     * （白名单/多词/不遮蔽/不撞领域词汇），再用 {@code canonicalJson} 确定性序列化后冻结。
+     * 这保证同一别名集总产出同一 source envelope（可复现/跨租户一致）。
+     *
+     * @param aliasSet        结构化别名集，null/空=无用户别名
+     * @param identifierIndex 领域词汇索引（别名↔标识符碰撞校验），可为 null
+     */
+    @Transactional
+    public PolicyVersion createVersion(UUID catalogId, String sourceCnl, String locale,
+                                       String sourceKind, String authorRole,
+                                       java.util.Map<aster.core.lexicon.SemanticTokenKind, java.util.List<String>> aliasSet,
+                                       aster.core.identifier.IdentifierIndex identifierIndex) {
+        io.aster.policy.parser.UserAliasValidator.Result vr =
+            io.aster.policy.parser.UserAliasValidator.validate(aliasSet, locale, identifierIndex);
+        if (!vr.valid()) {
+            throw new IllegalArgumentException("用户自定义别名校验失败: " + String.join("; ", vr.errors()));
+        }
+        String canonical = io.aster.policy.parser.UserAliasValidator.canonicalJson(aliasSet);
+        return createVersion(catalogId, sourceCnl, locale, sourceKind, authorRole, canonical);
+    }
+
+    /**
+     * 创建版本并冻结用户自定义别名集（ADR 0022 方案 D）——String 入口。
+     *
+     * <p>aliasSetJson 必须**已是规范形**（{@code canonicalJson} 输出）。本方法对其做规范性
+     * 断言（重新规范化后须逐字节相同），不匹配则拒绝——杜绝非确定性/未校验 JSON 进入快照
+     * （Codex 持久化复核 High：service 必须保证 canonical，不能接任意 raw string）。版本持久化时
+     * 冻结 alias_set + source_envelope_sha256（覆盖完整编译输入），可审计/可复现/防替换篡改。
+     *
+     * @param aliasSetJson 已规范化的别名 JSON，null/空=无用户别名
+     */
+    @Transactional
+    public PolicyVersion createVersion(UUID catalogId, String sourceCnl, String locale,
+                                       String sourceKind, String authorRole, String aliasSetJson) {
         PolicyCatalog catalog = PolicyCatalog.findById(catalogId);
         if (catalog == null) {
             throw new IllegalArgumentException("策略目录不存在: catalogId=" + catalogId);
         }
+
+        // 规范性断言：传入 JSON 必须等于其重新规范化结果（防非确定性/未校验 JSON 进快照）。
+        String normalizedAliasJson = canonicalizeAliasJson(aliasSetJson, locale);
 
         String policyId = catalog.moduleName + "." + catalog.functionName;
         PolicyVersion version = new PolicyVersion(
@@ -104,6 +154,12 @@ public class PolicyVersionService {
         version.sourceKind = normalizeSourceKind(sourceKind);
         version.authorRole = normalizeAuthorRole(authorRole);
         version.active = false;
+        // 方案 D：冻结规范化别名集 + 计算覆盖完整编译输入的信封哈希 + 记录工具链身份。
+        version.aliasSet = normalizedAliasJson;
+        String toolchain = toolchainIdentity();
+        version.sourceToolchainId = toolchain;
+        version.sourceEnvelopeSha256 = PolicyVersion.computeSourceEnvelope(
+            sourceCnl, version.aliasSet, locale, toolchain);
         version.persist();
 
         // 双写：同时写入静态文件作为兜底
@@ -112,6 +168,70 @@ public class PolicyVersionService {
         }
 
         return version;
+    }
+
+    /**
+     * 校验传入 aliasSetJson 已是规范形并返回之（null/空→null）。
+     *
+     * <p>解析 JSON→结构化→{@code canonicalJson} 重新序列化，与传入值逐字节比对：不等则拒绝。
+     * 保证存进快照的 alias_set 永远是确定性规范形（Codex 持久化复核 High）。
+     */
+    private static String canonicalizeAliasJson(String aliasSetJson, String locale) {
+        if (aliasSetJson == null || aliasSetJson.isBlank()) {
+            return null;
+        }
+        java.util.Map<aster.core.lexicon.SemanticTokenKind, java.util.List<String>> parsed;
+        try {
+            java.util.Map<String, java.util.List<String>> raw = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readValue(aliasSetJson,
+                    new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, java.util.List<String>>>() {});
+            parsed = new java.util.EnumMap<>(aster.core.lexicon.SemanticTokenKind.class);
+            for (var e : raw.entrySet()) {
+                parsed.put(aster.core.lexicon.SemanticTokenKind.valueOf(e.getKey()), e.getValue());
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException("aliasSet JSON 非法或含未知 kind: " + e.getMessage());
+        }
+        // 语义校验（Codex 三轮复核：String 入口也必须校验，不能只验 canonical 形）。
+        // 白名单/多词/不遮蔽——撞领域词汇的碰撞校验需 IdentifierIndex，请用结构化入口
+        // createVersion(...Map, IdentifierIndex)；此处至少挡敏感 kind/单词/遮蔽。
+        io.aster.policy.parser.UserAliasValidator.Result vr =
+            io.aster.policy.parser.UserAliasValidator.validate(parsed, locale, null);
+        if (!vr.valid()) {
+            throw new IllegalArgumentException("用户自定义别名校验失败: " + String.join("; ", vr.errors()));
+        }
+        String canonical = io.aster.policy.parser.UserAliasValidator.canonicalJson(parsed);
+        if (!aliasSetJson.equals(canonical)) {
+            throw new IllegalArgumentException(
+                "aliasSet JSON 非规范形，请用 UserAliasValidator.canonicalJson 序列化后提交");
+        }
+        return canonical;
+    }
+
+    /**
+     * 工具链身份串：进 source envelope，锁定编译产物所依赖的引擎版本（ADR 0022 §11.5 H6）。
+     *
+     * <p>含 4 个维度，引擎任一维度升级（改归一/降级逻辑）→ envelope 变 → 旧版本可识别
+     * "非原工具链重编可能产出不同 IR"，避免静默复现失败：
+     * <ul>
+     *   <li>abi —— lexicon SPI ABI 版本（{@link aster.core.lexicon.LexiconAbiVersion}）</li>
+     *   <li>core —— aster-lang-core 引擎实现版本（Canonicalizer/Parser/CoreLowering 所在 jar
+     *       的 Implementation-Version，从 MANIFEST 读；includeBuild 源码模式下为 dev）</li>
+     *   <li>validator —— 用户别名校验器版本（白名单/校验规则变更须反映到 envelope）</li>
+     *   <li>build —— 运行时构建标识（部署注入镜像 sha，{@code aster.runtime.build}）</li>
+     * </ul>
+     */
+    private String toolchainIdentity() {
+        return "abi=" + aster.core.lexicon.LexiconAbiVersion.V1.version
+            + ";core=" + coreEngineVersion()
+            + ";validator=" + io.aster.policy.parser.UserAliasValidator.VERSION
+            + ";build=" + runtimeBuild;
+    }
+
+    /** 读 aster-lang-core 引擎实现版本（jar MANIFEST Implementation-Version），缺失→"dev"。 */
+    private static String coreEngineVersion() {
+        String v = aster.core.canonicalizer.Canonicalizer.class.getPackage().getImplementationVersion();
+        return (v == null || v.isBlank()) ? "dev" : v;
     }
 
     /**

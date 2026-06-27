@@ -126,4 +126,50 @@ class TrufflePolicyRuntimeTest {
             assertThat(result.success()).isTrue();
         }
     }
+
+    /**
+     * 回归：返回 {@code Err <value>} 的策略，其结果 {@code {_type:"Err", value:...}}
+     * 跨 Polyglot 边界回宿主时，convertValue 会遍历成员逐个 readMember。
+     *
+     * <p>当 Err 的内部表达式缺失/为 null（如下方 Core IR 用 {@code "value"} 键而
+     * Loader 的 Err 模型字段是 {@code expr}，反序列化后内部表达式为 null），结果成员
+     * {@code value} 是 Java null。修复前 AsterMapValue.readMember 透传裸 null 触发
+     * Truffle 后置断言 "Post-condition contract violation for receiver
+     * {_type=Err, value=null} … and return value null"，整个执行崩溃（生产 PR #77/#78
+     * CI 阻塞根因）。修复后内部 null 包成 guest-null，执行不再崩溃。
+     */
+    @Test
+    void shouldHandleErrWithNullInnerValue() {
+        // 复刻生产 seed（V99.0.0 第 45 条）的 Core IR：Err 用 "value" 键 → Loader 的
+        // Err.expr 反序列化为 null → 结果 {_type:"Err", value:null}。
+        String coreJson = """
+            {
+              "name": "aster.test.failure",
+              "decls": [{
+                "kind": "Func",
+                "name": "failingPolicy",
+                "params": [{"name": "input", "type": {"kind": "TypeName", "name": "Int"}}],
+                "ret": {"kind": "TypeName", "name": "Int"},
+                "body": {"statements": [{
+                  "kind": "Return",
+                  "expr": {"kind": "Err", "value": {"kind": "String", "value": "intentional"}}
+                }]}
+              }]
+            }
+            """;
+
+        CompilationMetadata metadata = new CompilationMetadata("failingPolicy", "[\"Int\"]", "Int");
+
+        // 关键断言：不论成功与否，都不得抛出 interop 契约违例的 AssertionError。
+        ExecutionResult result = runtime.execute(coreJson, new Object[]{0}, metadata);
+
+        // 修复后：执行完成（返回 Err 结果 map，其 value 成员被还原为 null）。
+        assertThat(result).isNotNull();
+        assertThat(result.result()).isInstanceOf(java.util.Map.class);
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> map = (java.util.Map<String, Object>) result.result();
+        assertThat(map).containsEntry("_type", "Err");
+        assertThat(map).containsKey("value");
+        assertThat(map.get("value")).isNull();
+    }
 }

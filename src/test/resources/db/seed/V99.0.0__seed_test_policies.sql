@@ -2220,9 +2220,11 @@ ON CONFLICT (tenant_id, module_name, function_name) DO NOTHING;
 INSERT INTO policy_versions (policy_id, version, module_name, function_name, content, active, status, tenant_id, source_hash, locale, created_at, activated_at, activated_by)
 VALUES ('aster.test.failure.failingPolicy.tenant-composition-deep-fail', 1, 'aster.test.failure', 'failingPolicy', '// Test', true, 'APPROVED', 'tenant-composition-deep-fail', 'test-hash-45', 'zh-CN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'system') ON CONFLICT DO NOTHING;
 UPDATE policy_catalog SET default_version_id = (SELECT id FROM policy_versions WHERE policy_id = 'aster.test.failure.failingPolicy.tenant-composition-deep-fail' LIMIT 1) WHERE tenant_id = 'tenant-composition-deep-fail' AND module_name = 'aster.test.failure';
--- failingPolicy 会导致运行时异常，这是预期行为
+-- failingPolicy 故意除以零（div(input, 0)）→ 运行时 BuiltinException，这是预期行为。
+-- 用真运行时错误而非畸形 IR：早先此处误写 Err 用 "value" 键（规范字段是 "expr"）→
+-- 反序列化成 Err null → 仅靠 interop 契约 crash（-ea 下）伪装成失败，掩盖真实意图。
 INSERT INTO policy_artifacts (id, policy_version_id, artifact_type, content, content_sha256, compiler_opts, created_at)
-SELECT 'b0000000-0000-0000-0000-000000000045'::uuid, pv.id, 'CORE_JSON', E'{"name": "aster.test.failure", "decls": [{"kind": "Func", "name": "failingPolicy", "params": [{"name": "input", "type": {"kind": "TypeName", "name": "Int"}}], "ret": {"kind": "TypeName", "name": "Int"}, "body": {"statements": [{"kind": "Return", "expr": {"kind": "Err", "value": {"kind": "String", "value": "Policy evaluation failed intentionally"}}}]}}]}'::bytea, 'test-sha256-45', '{}', CURRENT_TIMESTAMP
+SELECT 'b0000000-0000-0000-0000-000000000045'::uuid, pv.id, 'CORE_JSON', E'{"name": "aster.test.failure", "decls": [{"kind": "Func", "name": "failingPolicy", "params": [{"name": "input", "type": {"kind": "TypeName", "name": "Int"}}], "ret": {"kind": "TypeName", "name": "Int"}, "body": {"statements": [{"kind": "Return", "expr": {"kind": "Call", "target": {"kind": "Name", "name": "div"}, "args": [{"kind": "Name", "name": "input"}, {"kind": "Int", "value": 0}]}}]}}]}'::bytea, 'test-sha256-45', '{}', CURRENT_TIMESTAMP
 FROM policy_versions pv WHERE pv.policy_id = 'aster.test.failure.failingPolicy.tenant-composition-deep-fail' ON CONFLICT DO NOTHING;
 
 -- 46-47. tenant-composition-deep-fail 还需要 determineInterestRateBps 和 calculateUtilizationPenalty
@@ -2289,7 +2291,7 @@ INSERT INTO policy_versions (policy_id, version, module_name, function_name, con
 VALUES ('aster.test.failure.failingPolicy.tenant-execution-failure', 1, 'aster.test.failure', 'failingPolicy', '// Test', true, 'APPROVED', 'tenant-execution-failure', 'test-hash-51', 'zh-CN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'system') ON CONFLICT DO NOTHING;
 UPDATE policy_catalog SET default_version_id = (SELECT id FROM policy_versions WHERE policy_id = 'aster.test.failure.failingPolicy.tenant-execution-failure' LIMIT 1) WHERE tenant_id = 'tenant-execution-failure' AND module_name = 'aster.test.failure';
 INSERT INTO policy_artifacts (id, policy_version_id, artifact_type, content, content_sha256, compiler_opts, created_at)
-SELECT 'b0000000-0000-0000-0000-000000000051'::uuid, pv.id, 'CORE_JSON', E'{"name": "aster.test.failure", "decls": [{"kind": "Func", "name": "failingPolicy", "params": [{"name": "input", "type": {"kind": "TypeName", "name": "Int"}}], "ret": {"kind": "TypeName", "name": "Int"}, "body": {"statements": [{"kind": "Return", "expr": {"kind": "Err", "value": {"kind": "String", "value": "Policy evaluation failed intentionally"}}}]}}]}'::bytea, 'test-sha256-51', '{}', CURRENT_TIMESTAMP
+SELECT 'b0000000-0000-0000-0000-000000000051'::uuid, pv.id, 'CORE_JSON', E'{"name": "aster.test.failure", "decls": [{"kind": "Func", "name": "failingPolicy", "params": [{"name": "input", "type": {"kind": "TypeName", "name": "Int"}}], "ret": {"kind": "TypeName", "name": "Int"}, "body": {"statements": [{"kind": "Return", "expr": {"kind": "Call", "target": {"kind": "Name", "name": "div"}, "args": [{"kind": "Name", "name": "input"}, {"kind": "Int", "value": 0}]}}]}}]}'::bytea, 'test-sha256-51', '{}', CURRENT_TIMESTAMP
 FROM policy_versions pv WHERE pv.policy_id = 'aster.test.failure.failingPolicy.tenant-execution-failure' ON CONFLICT DO NOTHING;
 
 -- tenant-batch-partial
@@ -2300,7 +2302,7 @@ INSERT INTO policy_versions (policy_id, version, module_name, function_name, con
 VALUES ('aster.test.failure.failingPolicy.tenant-batch-partial', 1, 'aster.test.failure', 'failingPolicy', '// Test', true, 'APPROVED', 'tenant-batch-partial', 'test-hash-52', 'zh-CN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'system') ON CONFLICT DO NOTHING;
 UPDATE policy_catalog SET default_version_id = (SELECT id FROM policy_versions WHERE policy_id = 'aster.test.failure.failingPolicy.tenant-batch-partial' LIMIT 1) WHERE tenant_id = 'tenant-batch-partial' AND module_name = 'aster.test.failure';
 INSERT INTO policy_artifacts (id, policy_version_id, artifact_type, content, content_sha256, compiler_opts, created_at)
-SELECT 'b0000000-0000-0000-0000-000000000052'::uuid, pv.id, 'CORE_JSON', E'{"name": "aster.test.failure", "decls": [{"kind": "Func", "name": "failingPolicy", "params": [{"name": "input", "type": {"kind": "TypeName", "name": "Int"}}], "ret": {"kind": "TypeName", "name": "Int"}, "body": {"statements": [{"kind": "Return", "expr": {"kind": "Err", "value": {"kind": "String", "value": "Policy evaluation failed intentionally"}}}]}}]}'::bytea, 'test-sha256-52', '{}', CURRENT_TIMESTAMP
+SELECT 'b0000000-0000-0000-0000-000000000052'::uuid, pv.id, 'CORE_JSON', E'{"name": "aster.test.failure", "decls": [{"kind": "Func", "name": "failingPolicy", "params": [{"name": "input", "type": {"kind": "TypeName", "name": "Int"}}], "ret": {"kind": "TypeName", "name": "Int"}, "body": {"statements": [{"kind": "Return", "expr": {"kind": "Call", "target": {"kind": "Name", "name": "div"}, "args": [{"kind": "Name", "name": "input"}, {"kind": "Int", "value": 0}]}}]}}]}'::bytea, 'test-sha256-52', '{}', CURRENT_TIMESTAMP
 FROM policy_versions pv WHERE pv.policy_id = 'aster.test.failure.failingPolicy.tenant-batch-partial' ON CONFLICT DO NOTHING;
 
 -- 53. 信用卡策略 for tenant-cache-multi (用于 testCacheInvalidationAcrossMultiplePolicies)

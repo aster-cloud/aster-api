@@ -170,6 +170,31 @@ public class PolicyVersion extends PanacheEntityBase {
     public String prevHash;
 
     /**
+     * 该版本编译时冻结的用户自定义关键词别名集（ADR 0022 方案 D）。
+     * JSON 文本：{@code {"TIMES":["multiplied by"], ...}}。NULL=无用户别名。
+     * 不可变：版本一经创建即冻结；rollback 激活目标版本行=自动用其冻结别名（无需 copy）。
+     */
+    @Column(name = "alias_set", columnDefinition = "TEXT", updatable = false)
+    public String aliasSet;
+
+    /**
+     * 完整编译输入的 SHA-256（ADR 0022 §11.5 C1）。
+     * 覆盖 content + aliasSet + locale + 工具链身份，防"源码哈希对得上、别名被替换"篡改。
+     * 与只哈希 content 的 {@link #sourceHash} 互补：sourceHash 是版本身份/链，
+     * sourceEnvelopeSha256 是完整编译输入的审计真相。NULL=本特性前创建的旧版本。
+     */
+    @Column(name = "source_envelope_sha256", length = 64, updatable = false)
+    public String sourceEnvelopeSha256;
+
+    /**
+     * envelope 计算所用的工具链身份串（abi/core/validator/build）。
+     * 供 tip-anchor verifier 用**创建时**的工具链重算 envelope 验证最新行（无后继断链），
+     * 区分篡改与引擎升级。NULL=本特性前创建的旧版本。不可变。
+     */
+    @Column(name = "source_toolchain_id", length = 256, updatable = false)
+    public String sourceToolchainId;
+
+    /**
      * 版本状态
      * DRAFT/SUBMITTED/APPROVED/REJECTED/DEPRECATED/ARCHIVED
      */
@@ -349,11 +374,66 @@ public class PolicyVersion extends PanacheEntityBase {
     }
 
     /**
-     * 查找前序版本的源码哈希
+     * 计算完整编译输入的 SHA-256 信封哈希（ADR 0022 §11.5 C1）。
+     *
+     * <p>覆盖决定编译产物的全部输入，防"源码哈希对得上、别名被替换"篡改：
+     * content + aliasSet（规范 JSON）+ locale + 工具链身份。用**确定性字段序列**
+     * （固定字段顺序 + 长度前缀分隔，杜绝字段间歧义/注入），UTF-8 + SHA-256。
+     *
+     * <p>aliasSet 应已是规范形（{@code UserAliasValidator} 保证 alias==normalize(alias)），
+     * 这里只对传入字符串做 null 归一与长度前缀，不再二次解析。
+     *
+     * @param content        源码文本
+     * @param aliasSetJson   版本冻结的 aliasSet JSON（null 视为空）
+     * @param locale         编译 locale
+     * @param toolchainId     工具链身份串（compiler/canonicalizer/lexicon/validator 版本+hash）
+     */
+    public static String computeSourceEnvelope(String content, String aliasSetJson,
+                                               String locale, String toolchainId) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            // 长度前缀分隔：每段写 "<len>:<utf8bytes>"，避免拼接歧义（如 a|b vs ""|a|b）。
+            for (String field : new String[]{
+                content == null ? "" : content,
+                aliasSetJson == null ? "" : aliasSetJson,
+                locale == null ? "" : locale,
+                toolchainId == null ? "" : toolchainId
+            }) {
+                byte[] b = field.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                digest.update(Integer.toString(b.length).getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                digest.update((byte) ':');
+                digest.update(b);
+                digest.update((byte) '|');
+            }
+            return java.util.HexFormat.of().formatHex(digest.digest());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute source envelope", e);
+        }
+    }
+
+    /**
+     * 查找前序版本的链接哈希（{@link #chainLink()}）。
+     *
+     * <p>链接 = envelope（存在时）否则 sourceHash → 前序版本若带别名，其 envelope 进链，
+     * 篡改 alias_set 会断链（ADR 0022 §11.5 C1：envelope 必须进哈希链，否则改 alias_set+
+     * 同步改 source_envelope_sha256 链不变=篡改隐形）。旧版本无 envelope 时回落 sourceHash，
+     * 向后兼容。
      */
     private static String findPreviousVersionHash(String policyId) {
         PolicyVersion prev = find("policyId = ?1 ORDER BY version DESC", policyId).firstResult();
-        return prev != null ? prev.sourceHash : null;
+        return prev != null ? prev.chainLink() : null;
+    }
+
+    /**
+     * 版本链接哈希：进入下一版本 {@link #prevHash} 的值。
+     *
+     * <p>带 envelope 的版本用 envelope（覆盖 content+aliasSet+locale+工具链），否则用
+     * content-only sourceHash。这让 alias_set 篡改对版本链可见——篡改者即使同步改
+     * source_envelope_sha256，下一版本的 prevHash 已固化旧 envelope，对账即断链。
+     */
+    public String chainLink() {
+        return (sourceEnvelopeSha256 != null && !sourceEnvelopeSha256.isBlank())
+            ? sourceEnvelopeSha256 : sourceHash;
     }
 
     /**

@@ -325,8 +325,13 @@ public class DynamicCnlExecutor {
                 .allowNativeAccess(false)                   // 禁止本地代码访问
                 .build()) {
 
-            // 注册内置函数（如果需要）
-            registerBuiltins();
+            // 内置函数（算术 / 比较 / 逻辑 / 字符串拼接）由 aster-lang-truffle 的
+            // Builtins 静态初始化块权威注册——含 int/double 提升、浮点除法、`+`
+            // dual-mode 字符串拼接、运算符符号→canonical 名归一化。此处不再重复注册：
+            // 历史上 aster-api 维护了一份并行的、仅整数/仅数值的拷贝（registerBuiltins），
+            // 它把字符串强转 Number 而抛 ClassCastException（如 `"Hello, " + name`），
+            // 且 REGISTRY 是共享静态表，重复 register 会**覆盖**掉 truffle 的正确实现。
+            // 删除后由 truffle 唯一负责。
 
             // 评估 Core IR JSON - 返回入口函数的 LambdaValue 或无参函数的执行结果
             Value evalResult = polyglotContext.eval("aster", coreJson);
@@ -401,140 +406,6 @@ public class DynamicCnlExecutor {
         } catch (Exception e) {
             throw new DynamicExecutionException("Polyglot 执行失败: " + e.getMessage(), e);
         }
-    }
-
-    /**
-     * 注册内置函数
-     */
-    private static void registerBuiltins() {
-        // 注册常用内置函数
-        aster.truffle.runtime.Builtins.register("add", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return 0;
-            return ((Number) args[0]).intValue() + ((Number) args[1]).intValue();
-        }));
-
-        aster.truffle.runtime.Builtins.register("sub", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return 0;
-            return ((Number) args[0]).intValue() - ((Number) args[1]).intValue();
-        }));
-
-        aster.truffle.runtime.Builtins.register("mul", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return 0;
-            return ((Number) args[0]).intValue() * ((Number) args[1]).intValue();
-        }));
-
-        aster.truffle.runtime.Builtins.register("div", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return 0;
-            int divisor = ((Number) args[1]).intValue();
-            return divisor == 0 ? 0 : ((Number) args[0]).intValue() / divisor;
-        }));
-
-        aster.truffle.runtime.Builtins.register("eq", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return false;
-            return args[0].equals(args[1]);
-        }));
-
-        aster.truffle.runtime.Builtins.register("gt", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return false;
-            return ((Number) args[0]).doubleValue() > ((Number) args[1]).doubleValue();
-        }));
-
-        aster.truffle.runtime.Builtins.register("gte", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return false;
-            return ((Number) args[0]).doubleValue() >= ((Number) args[1]).doubleValue();
-        }));
-
-        aster.truffle.runtime.Builtins.register("lt", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return false;
-            return ((Number) args[0]).doubleValue() < ((Number) args[1]).doubleValue();
-        }));
-
-        aster.truffle.runtime.Builtins.register("lte", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return false;
-            return ((Number) args[0]).doubleValue() <= ((Number) args[1]).doubleValue();
-        }));
-
-        aster.truffle.runtime.Builtins.register("and", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return false;
-            return (Boolean) args[0] && (Boolean) args[1];
-        }));
-
-        aster.truffle.runtime.Builtins.register("or", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return false;
-            return (Boolean) args[0] || (Boolean) args[1];
-        }));
-
-        aster.truffle.runtime.Builtins.register("not", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 1) return true;
-            return !(Boolean) args[0];
-        }));
-
-        // 注册运算符符号作为别名（支持 +(a, b) 语法）
-        aster.truffle.runtime.Builtins.register("+", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return 0;
-            return ((Number) args[0]).intValue() + ((Number) args[1]).intValue();
-        }));
-
-        aster.truffle.runtime.Builtins.register("-", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return 0;
-            return ((Number) args[0]).intValue() - ((Number) args[1]).intValue();
-        }));
-
-        aster.truffle.runtime.Builtins.register("*", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return 0;
-            return ((Number) args[0]).intValue() * ((Number) args[1]).intValue();
-        }));
-
-        aster.truffle.runtime.Builtins.register("/", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return 0;
-            int divisor = ((Number) args[1]).intValue();
-            return divisor == 0 ? 0 : ((Number) args[0]).intValue() / divisor;
-        }));
-
-        aster.truffle.runtime.Builtins.register("==", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return false;
-            return args[0].equals(args[1]);
-        }));
-
-        aster.truffle.runtime.Builtins.register("!=", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return false;
-            return !args[0].equals(args[1]);
-        }));
-
-        aster.truffle.runtime.Builtins.register(">", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return false;
-            return ((Number) args[0]).doubleValue() > ((Number) args[1]).doubleValue();
-        }));
-
-        aster.truffle.runtime.Builtins.register(">=", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return false;
-            return ((Number) args[0]).doubleValue() >= ((Number) args[1]).doubleValue();
-        }));
-
-        aster.truffle.runtime.Builtins.register("<", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return false;
-            return ((Number) args[0]).doubleValue() < ((Number) args[1]).doubleValue();
-        }));
-
-        aster.truffle.runtime.Builtins.register("<=", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return false;
-            return ((Number) args[0]).doubleValue() <= ((Number) args[1]).doubleValue();
-        }));
-
-        aster.truffle.runtime.Builtins.register("&&", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return false;
-            return (Boolean) args[0] && (Boolean) args[1];
-        }));
-
-        aster.truffle.runtime.Builtins.register("||", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 2) return false;
-            return (Boolean) args[0] || (Boolean) args[1];
-        }));
-
-        aster.truffle.runtime.Builtins.register("!", new aster.truffle.runtime.Builtins.BuiltinDef(args -> {
-            if (args.length < 1) return true;
-            return !(Boolean) args[0];
-        }));
     }
 
     /**

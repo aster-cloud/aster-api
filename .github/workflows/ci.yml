@@ -50,7 +50,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           path: aster-api
 
@@ -62,31 +62,31 @@ jobs:
       # 共享版本目录（aster-lang-platform，ADR 0012）。settings.gradle 导入它，
       # 且 catalog 无法通过 composite includeBuild 替换（在 settings 评估阶段解析），
       # 故必须先发布到 Maven Local。
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: aster-cloud/aster-lang-platform
           path: aster-lang-platform
           token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: aster-cloud/aster-lang-core
           path: aster-lang-core
           token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: aster-cloud/aster-lang-runtime
           path: aster-lang-runtime
           token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: aster-cloud/aster-lang-truffle
           path: aster-lang-truffle
           token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: aster-cloud/aster-lang-validation
           path: aster-lang-validation
@@ -95,7 +95,7 @@ jobs:
       # en/zh/de lexicon SPI 包源：aster-lang-locales（多模块，新坐标
       # aster-lang-locales-{en,zh,de}）。settings.gradle 的 composite includeBuild
       # 把这三个坐标替换到 locales 对应 subproject。旧独立 en/zh/de 仓已归档。
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: aster-cloud/aster-lang-locales
           path: aster-lang-locales
@@ -104,7 +104,7 @@ jobs:
       # Hindi (hi-IN) is now a standalone SPI pack (extracted from core's
       # builtins). aster-api depends on it via runtimeOnly asterLibs.hi +
       # the composite includeBuild, so its source must be present.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: aster-cloud/aster-lang-hi
           path: aster-lang-hi

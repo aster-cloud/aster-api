@@ -200,8 +200,13 @@ jobs:
           list-tests: failed
           max-annotations: 50
 
+      # 诊断制品：组织级 Actions 存储配额是全 repo 共享的，配额耗尽时
+      # upload-artifact 会硬失败（"Artifact storage quota has been hit"）并
+      # 把整个 job 拖挂。test-results 仅供查阅，门禁由上面的测试步骤本身把守，
+      # 故上传降级为非致命。
       - name: Upload Test Results
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: test-results

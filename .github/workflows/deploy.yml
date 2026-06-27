@@ -51,7 +51,7 @@ jobs:
       DB_PASSWORD: "postgres"
       TESTCONTAINERS_RYUK_DISABLED: "true"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           path: aster-api
 
@@ -60,31 +60,31 @@ jobs:
           PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE aster_test;" || true
 
       # 共享版本目录（aster-lang-platform，ADR 0012）—— settings.gradle 依赖它。
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: aster-cloud/aster-lang-platform
           path: aster-lang-platform
           token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: aster-cloud/aster-lang-core
           path: aster-lang-core
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: aster-cloud/aster-lang-runtime
           path: aster-lang-runtime
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: aster-cloud/aster-lang-truffle
           path: aster-lang-truffle
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: aster-cloud/aster-lang-validation
           path: aster-lang-validation
@@ -92,14 +92,14 @@ jobs:
 
       # en/zh/de lexicon SPI 包源：aster-lang-locales（新坐标，composite includeBuild）。
       # 旧独立 en/zh/de 仓已归档。
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: aster-cloud/aster-lang-locales
           path: aster-lang-locales
           token: ${{ secrets.CROSS_REPO_TOKEN }}
 
       # Hindi SPI pack (extracted from core builtins) — composite includeBuild.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: aster-cloud/aster-lang-hi
           path: aster-lang-hi
@@ -135,7 +135,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Download build artifact
         uses: actions/download-artifact@v8

@@ -6,6 +6,9 @@ on:
     paths-ignore:
       - '**.md'
       - '.claude/**'
+      # 治理/工具配置文件不影响构建产物，无需触发部署（避免无害重部署）：
+      - 'renovate.json'
+      - '.github/dependabot.yml'
   workflow_dispatch:
 
 concurrency:

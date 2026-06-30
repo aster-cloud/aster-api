@@ -14,6 +14,9 @@ public record PolicyVersionInfo(
     String functionName,
     Instant createdAt,
     String createdBy,
-    String notes
+    String notes,
+    // G6：版本来源（manual / ai_draft / ai_draft_edited / imported）升格为一等导出字段，
+    // 不再仅存于 DB 列。合规消费者可据此筛选 AI 起草来源，无需解析 metadata。
+    String sourceKind
 ) {
 }

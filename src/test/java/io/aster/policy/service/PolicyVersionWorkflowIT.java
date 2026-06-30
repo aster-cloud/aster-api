@@ -1,11 +1,13 @@
 package io.aster.policy.service;
 
 import io.aster.audit.PostgresAnalyticsTestProfile;
+import io.aster.audit.service.PolicyAuditService;
 import io.aster.billing.PlanGateService;
 import io.aster.billing.PlanInfo;
 import io.aster.billing.PlanLimitException;
 import io.aster.policy.entity.PolicyVersion;
 import io.aster.policy.entity.VersionStatus;
+import io.aster.workflow.WorkflowStateEntity;
 import io.aster.policy.telemetry.NsmEvents;
 import io.aster.policy.telemetry.NsmTelemetry;
 import io.aster.test.PostgresTestResource;
@@ -45,6 +47,9 @@ class PolicyVersionWorkflowIT {
 
     @Inject
     PolicyVersionService versionService;
+
+    @Inject
+    PolicyAuditService auditService;
 
     @InjectMock
     NsmTelemetry nsmTelemetry;
@@ -154,5 +159,37 @@ class PolicyVersionWorkflowIT {
         assertNotNull(result);
         assertEquals(VersionStatus.APPROVED, result.status);
         assertEquals("approver-3", result.approvedBy);
+    }
+
+    /**
+     * G6：版本来源 sourceKind 必须在审计导出（VersionHistoryDTO）里可见，
+     * 不能仅存于 DB 列/metadata。合规消费者据此识别 AI 起草来源。
+     */
+    @Test
+    @Transactional
+    void versionHistory_exportsSourceKind() {
+        PolicyVersion v = new PolicyVersion(
+            "it-wf-srckind-1", "aster.test", "fn5",
+            "Module aster.test.\nRule fn5 given x: Return x.",
+            "tester", null);
+        v.tenantId = "tenant-srckind-1";
+        v.sourceKind = "ai_draft";
+        v.status = VersionStatus.APPROVED;
+        v.locale = "zh";
+        v.persist();
+
+        java.util.UUID workflowId = java.util.UUID.randomUUID();
+        WorkflowStateEntity state = new WorkflowStateEntity();
+        state.workflowId = workflowId;
+        state.status = "COMPLETED";
+        state.tenantId = "tenant-srckind-1";
+        state.policyVersionId = v.id;
+        state.policyActivatedAt = Instant.now();
+        state.persist();
+
+        var history = auditService.getWorkflowVersionHistory(workflowId);
+        assertEquals(1, history.size());
+        assertEquals("ai_draft", history.get(0).sourceKind,
+            "审计导出必须暴露版本来源 sourceKind（G6）");
     }
 }

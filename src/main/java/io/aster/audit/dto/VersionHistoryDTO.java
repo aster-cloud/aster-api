@@ -23,4 +23,10 @@ public class VersionHistoryDTO {
 
     /** 使用时长（毫秒）*/
     public Long durationMs;
+
+    /**
+     * 版本来源（G6）：manual / ai_draft / ai_draft_edited / imported。
+     * 升格为一等审计字段，合规消费者无需解析 metadata 即可识别 AI 起草来源。
+     */
+    public String sourceKind;
 }

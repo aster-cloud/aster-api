@@ -968,7 +968,8 @@ public class PolicyEvaluationResource {
                     v.functionName,
                     v.createdAt,
                     v.createdBy,
-                    v.notes
+                    v.notes,
+                    v.sourceKind // G6：导出版本来源（manual/ai_draft/…），审计可见
                 ))
                 .toList();
         });

@@ -170,6 +170,7 @@ public class PolicyAuditService {
         dto.activatedAt = state.policyActivatedAt;
         dto.deactivatedAt = null; // 当前版本仍在使用
         dto.durationMs = null; // 无停用时间，无法计算时长
+        dto.sourceKind = version.sourceKind; // G6：导出版本来源（manual/ai_draft/…）
 
         return List.of(dto);
     }
@@ -198,6 +199,7 @@ public class PolicyAuditService {
         dto.artifactUri = version.artifactUri;
         dto.runtimeBuild = version.runtimeBuild;
         dto.createdAt = version.createdAt;
+        dto.sourceKind = version.sourceKind; // G6：审计导出统一暴露版本来源
 
         return dto;
     }
@@ -222,6 +224,7 @@ public class PolicyAuditService {
                 dto.version = v.version;
                 dto.runtimeBuild = v.runtimeBuild;
                 dto.activatedAt = v.activatedAt;
+                dto.sourceKind = v.sourceKind; // G6：审计导出统一暴露版本来源
                 return dto;
             })
             .collect(Collectors.toList());

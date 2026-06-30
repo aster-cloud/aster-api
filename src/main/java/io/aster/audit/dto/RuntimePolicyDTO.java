@@ -20,4 +20,10 @@ public class RuntimePolicyDTO {
 
     /** 激活时间 */
     public Instant activatedAt;
+
+    /**
+     * 版本来源（G6）：manual / ai_draft / ai_draft_edited / imported。
+     * 与 VersionHistoryDTO 一致——所有审计导出统一暴露来源，便于合规筛选。
+     */
+    public String sourceKind;
 }

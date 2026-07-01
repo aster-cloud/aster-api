@@ -56,6 +56,7 @@ class VocabularyExecutionTest {
             List.of(IdentifierMapping.field("age", "alter", "Driver")),
             List.of(),
             List.of(),
+            List.of(),
             null
         );
         return IdentifierIndex.build(vocab);

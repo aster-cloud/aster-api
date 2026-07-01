@@ -196,7 +196,7 @@ class UserAliasValidatorTest {
         DomainVocabulary vocab = new DomainVocabulary(
             "test-vocab", "Test Vocab", "en-US", "1.0.0",
             List.of(), List.of(IdentifierMapping.field(canonical, localized, null)),
-            List.of(), List.of(), null);
+            List.of(), List.of(), List.of(), null);
         return IdentifierIndex.build(vocab);
     }
 }

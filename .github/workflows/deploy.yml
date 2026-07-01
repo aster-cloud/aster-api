@@ -134,6 +134,12 @@ jobs:
     needs: build-and-test
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      # 红队 P2-G：cosign keyless 签名需要 OIDC token（把签名绑定到本 CI 的
+      # GitHub Actions 身份 = repo+workflow）。攻击者即便攻破 DockerHub 推入
+      # 投毒镜像，也无法在没有本 CI OIDC 身份的情况下产出通过校验的签名。
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v7
 
@@ -161,6 +167,7 @@ jobs:
           echo "Image tag: ${TAG}"
 
       - name: Build & Push Docker Image
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -171,9 +178,41 @@ jobs:
             wontlost/aster-api:${{ steps.meta.outputs.tag }}
             wontlost/aster-api:jvm-latest
 
+      # 红队 P2-G（Codex 审查后修正）：供应链加固全链锁**同一 by-digest 引用**。
+      # build-push-action 输出刚构建镜像的不可变 digest。sign / verify / rollout 全用
+      # 这个 digest，而不是浮动 tag jvm-latest。修掉 Codex 抓的两个绕过：
+      #   (1) TOCTOU：verify jvm-latest 通过后、K8s 拉取前，tag 仍可被替换 → 现在部署
+      #       直接下发 @sha256:<digest>，不再让 K8s 解析浮动 tag。
+      #   (2) signed-rollback：verify 浮动 tag 只要求"本 workflow 签过"→ 攻击者把
+      #       jvm-latest 指向任意历史上本 workflow 签过的旧 digest 也通过 → 现在只
+      #       verify + 部署"本次刚构建"的 digest，历史 digest 不进入本次 rollout。
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign pushed image digest (keyless)
+        env:
+          COSIGN_YES: "true"
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          test -n "${DIGEST}" || { echo "build 未输出 digest，中止"; exit 1; }
+          # signer 身份 = 本 CI 的 OIDC（Fulcio 证书 + Rekor 透明日志）。
+          cosign sign "wontlost/aster-api@${DIGEST}"
+          echo "signed digest=${DIGEST}"
+
+      # 部署前校验**本次刚构建的 digest**（非浮动 tag）带一份由本仓库本 workflow 签发的
+      # cosign 签名。fail-closed：任何签名/身份不符 → verify 失败 → 部署中止。
+      - name: Verify freshly-built digest signature
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign verify "wontlost/aster-api@${DIGEST}" \
+            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/deploy\.yml@refs/heads/main$" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+
       - name: Deploy to K3S
         env:
           KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           mkdir -p ~/.kube
           # Secret is stored base64-encoded to survive shell/yaml mangling of
@@ -183,5 +222,12 @@ jobs:
           # Sanity check — fail fast with a useful message if decode produced
           # something kubectl can't read.
           kubectl --kubeconfig ~/.kube/config version --client=false --request-timeout=10s
-          kubectl rollout restart deployment/aster-api -n aster-cloud
+          # 下发**已验签的 by-digest 引用**（非浮动 tag）→ 本次上线的 pod 一定运行
+          # 刚构建并验签的内容，堵住 tag TOCTOU。
+          # 注意：ArgoCD 后续对账可能把 image 收敛回 git 里的 jvm-latest（部署模型
+          # 权衡，见 findings P2-G：用户选择保留浮动 tag，未把 digest 写进 git manifest）。
+          # 本步保证「本次 rollout 的 pod = 验签 digest」；长期 pin 需把 digest 写入
+          # ArgoCD 源（deploy 模型变更，本轮不做）。
+          kubectl set image deployment/aster-api \
+            aster-api="wontlost/aster-api@${DIGEST}" -n aster-cloud
           kubectl rollout status deployment/aster-api -n aster-cloud --timeout=300s

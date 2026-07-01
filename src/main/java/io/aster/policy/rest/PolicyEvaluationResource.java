@@ -873,6 +873,10 @@ public class PolicyEvaluationResource {
     @POST
     @Path("/{policyId}/rollback")
     @io.smallrye.common.annotation.Blocking
+    // 红队 P1-E：rollback 是生产突变操作（激活旧版本 = 改变线上决策行为），类级默认
+    // 的 MEMBER 权限偏低。方法级提升到 ADMIN（RoleEnforcementFilter 优先方法注解）。
+    // 结合 P0-A 的租户范围校验：只有本租户的 ADMIN/OWNER 才能回滚本租户策略。
+    @io.aster.policy.security.rbac.RequireRole(io.aster.policy.security.rbac.Role.ADMIN)
     public Uni<RollbackResponse> rollback(
         @PathParam("policyId") String policyId,
         @Valid RollbackRequest request
@@ -884,15 +888,17 @@ public class PolicyEvaluationResource {
             policyId, request.targetVersion(), tenantId);
 
         return Uni.createFrom().item(() -> {
-            // 获取当前活跃版本（用于审计日志）
-            PolicyVersion currentVersion = versionService.getActiveVersion(policyId);
+            // 获取当前活跃版本（用于审计日志）——租户范围，防跨租户探测（P0-A）
+            PolicyVersion currentVersion = versionService.getActiveVersion(policyId, tenantId);
             Long fromVersion = currentVersion != null ? currentVersion.version : null;
 
             // 执行回滚（收敛到正常激活路径：校验 APPROVED + 同步 catalog + 发激活通知）
+            // 传 tenantId：目标版本必须归属当前租户，堵跨租户回滚（P0-A）
             PolicyVersion rolledBackVersion = versionService.rollbackToVersion(
                 policyId,
                 request.targetVersion(),
-                performedBy
+                performedBy,
+                tenantId
             );
 
             auditEventPublisher.fireAsync(
@@ -959,7 +965,8 @@ public class PolicyEvaluationResource {
         LOG.infof("Fetching version history for policy %s (tenant: %s)", policyId, tenantId);
 
         return Uni.createFrom().item(() -> {
-            List<PolicyVersion> versions = versionService.getAllVersions(policyId);
+            // 租户范围：只返回当前租户的版本，防跨租户读别租户版本历史（P0-A）
+            List<PolicyVersion> versions = versionService.getAllVersions(policyId, tenantId);
             return versions.stream()
                 .map(v -> new PolicyVersionInfo(
                     v.version,

@@ -119,7 +119,8 @@ public class PolicyDatabasePerformanceBaselineTest {
             },
             () -> {
                 String status = STATUS_FILTERS[statusCursor.getAndIncrement() % STATUS_FILTERS.length];
-                PagedResult<?> page = auditService.getVersionUsage(versionId, status, 0, 50);
+                // null 租户=内部可信路径，测量底层查询基线（不叠加归属过滤）
+                PagedResult<?> page = auditService.getVersionUsage(versionId, null, status, 0, 50);
                 return page.items.size();
             }
         );
@@ -133,6 +134,7 @@ public class PolicyDatabasePerformanceBaselineTest {
             () -> {
                 PagedResult<?> page = auditService.getVersionTimeline(
                     versionId,
+                    null,
                     dataset.from(),
                     dataset.to(),
                     0,
@@ -148,7 +150,7 @@ public class PolicyDatabasePerformanceBaselineTest {
             iterations,
             () -> {
             },
-            () -> auditService.assessImpact(versionId).totalCount
+            () -> auditService.assessImpact(versionId, null).totalCount
         );
         putMetric("audit_version_impact", impact, metrics, rawSamples, resultSizes);
 
@@ -158,7 +160,7 @@ public class PolicyDatabasePerformanceBaselineTest {
             iterations,
             () -> {
             },
-            () -> auditService.getWorkflowVersionHistory(UUID.fromString(sampleWorkflowId)).size()
+            () -> auditService.getWorkflowVersionHistory(UUID.fromString(sampleWorkflowId), null).size()
         );
         putMetric("audit_workflow_version_history", history, metrics, rawSamples, resultSizes);
 

@@ -90,14 +90,24 @@ public class UsedNonce extends PanacheEntityBase {
      */
     @Transactional
     public static boolean persistIfNotExists(String tenantId, String nonce, String requestHash, Instant expiresAt) {
-        try {
-            UsedNonce usedNonce = new UsedNonce(tenantId, nonce, requestHash, expiresAt);
-            usedNonce.persist();
-            return true;
-        } catch (Exception e) {
-            // 唯一约束冲突，nonce 已存在
-            return false;
-        }
+        // 用原生 INSERT ... ON CONFLICT DO NOTHING：唯一约束冲突时返回 0 行、**不抛异常也不
+        // 中止事务**。此前的 try/catch persist() 在 Postgres 上会因失败 INSERT 把整个事务标记为
+        // aborted → 调用方（NonceService.ensureFresh）随后要写 security_event 记录重放时报
+        // "current transaction is aborted" → 重放本应返回 409 却被掩盖成 500（红队 P0-C IT 暴露）。
+        int inserted = getEntityManager()
+            .createNativeQuery(
+                "INSERT INTO used_nonce (tenant_id, nonce, request_hash, expires_at, created_at) "
+                + "VALUES (?1, ?2, ?3, ?4, ?5) "
+                // 列推断而非约束名：迁移里是匿名 UNIQUE(tenant_id, nonce)（Postgres 自动命名
+                // used_nonce_tenant_id_nonce_key，非 JPA 注解的 uk_used_nonce_tenant_nonce）。
+                + "ON CONFLICT (tenant_id, nonce) DO NOTHING")
+            .setParameter(1, tenantId)
+            .setParameter(2, nonce)
+            .setParameter(3, requestHash)
+            .setParameter(4, expiresAt)
+            .setParameter(5, Instant.now())
+            .executeUpdate();
+        return inserted > 0;
     }
 
     /**

@@ -23,17 +23,38 @@ import java.util.stream.Collectors;
 public class PolicyAuditService {
 
     /**
+     * 租户归属守卫（红队 P0-A：审计 IDOR 修复）。versionId 是客户端从 URL 提供的主键，
+     * 若不校验归属，A 租户可传 B 租户 versionId 读其 workflow 使用/时间线/影响。此方法
+     * 校验该版本属于调用者租户；不属于则视为「不存在」（返回 false，调用方返回空结果，
+     * 不泄露存在性）。tenantId==null 保留给内部可信调用。
+     */
+    private boolean versionInTenant(Long versionId, String tenantId) {
+        if (tenantId == null) {
+            return true; // 内部可信路径
+        }
+        return versionId != null && PolicyVersion.findByIdInTenant(versionId, tenantId) != null;
+    }
+
+    /**
      * 获取使用特定策略版本的 workflow 列表
      *
      * 使用索引：idx_workflow_state_policy_version (policy_version_id, status)
      *
      * @param versionId 策略版本 ID
+     * @param tenantId  调用者租户（校验版本归属，防跨租户 IDOR；null=内部可信）
      * @param status    可选的状态过滤（RUNNING, COMPLETED, FAILED）
      * @param page      页码（从 0 开始）
      * @param size      每页大小
      * @return 分页的 workflow 使用信息
      */
-    public PagedResult<WorkflowUsageDTO> getVersionUsage(Long versionId, String status, int page, int size) {
+    public PagedResult<WorkflowUsageDTO> getVersionUsage(Long versionId, String tenantId, String status, int page, int size) {
+        if (!versionInTenant(versionId, tenantId)) {
+            return new PagedResult<>(List.of(), 0, page, size);
+        }
+        return getVersionUsageInternal(versionId, status, page, size);
+    }
+
+    private PagedResult<WorkflowUsageDTO> getVersionUsageInternal(Long versionId, String status, int page, int size) {
         String query = "policyVersionId = ?1";
         Object[] params;
 
@@ -80,11 +101,15 @@ public class PolicyAuditService {
      */
     public PagedResult<TimelineEventDTO> getVersionTimeline(
         Long versionId,
+        String tenantId,
         Instant from,
         Instant to,
         int page,
         int size
     ) {
+        if (!versionInTenant(versionId, tenantId)) {
+            return new PagedResult<>(List.of(), 0, page, size);
+        }
         String query = "policyVersionId = ?1 AND policyActivatedAt BETWEEN ?2 AND ?3";
         long total = WorkflowStateEntity.count(query, versionId, from, to);
 
@@ -115,9 +140,15 @@ public class PolicyAuditService {
      * @param versionId 策略版本 ID
      * @return 影响评估结果
      */
-    public ImpactAssessmentDTO assessImpact(Long versionId) {
+    public ImpactAssessmentDTO assessImpact(Long versionId, String tenantId) {
         ImpactAssessmentDTO dto = new ImpactAssessmentDTO();
         dto.versionId = versionId;
+
+        if (!versionInTenant(versionId, tenantId)) {
+            // 跨租户：视为零影响，不泄露别租户 workflow 计数
+            dto.riskLevel = "LOW";
+            return dto;
+        }
 
         dto.activeCount = (int) WorkflowStateEntity.count(
             "policyVersionId = ?1 AND status = 'RUNNING'", versionId
@@ -148,17 +179,25 @@ public class PolicyAuditService {
      * 使用主键索引查询单个 workflow
      *
      * @param workflowId Workflow ID
+     * @param tenantId   调用者租户（校验 workflow 及其版本归属，防跨租户 IDOR；null=内部可信）
      * @return 版本历史列表
      */
-    public List<VersionHistoryDTO> getWorkflowVersionHistory(UUID workflowId) {
+    public List<VersionHistoryDTO> getWorkflowVersionHistory(UUID workflowId, String tenantId) {
         WorkflowStateEntity state = WorkflowStateEntity.findById(workflowId);
 
         if (state == null || state.policyVersionId == null) {
             return List.of();
         }
 
-        // 查询策略版本信息
-        PolicyVersion version = PolicyVersion.findById(state.policyVersionId);
+        // 跨租户守卫：workflow 必须属于调用者租户
+        if (tenantId != null && !tenantId.equals(state.tenantId)) {
+            return List.of();
+        }
+
+        // 查询策略版本信息（同时校验版本归属，避免 workflow.tenantId 与 version.tenantId 不一致时泄露）
+        PolicyVersion version = tenantId != null
+            ? PolicyVersion.findByIdInTenant(state.policyVersionId, tenantId)
+            : PolicyVersion.findById(state.policyVersionId);
 
         if (version == null) {
             return List.of();
@@ -180,13 +219,14 @@ public class PolicyAuditService {
      *
      * 使用索引：idx_policy_versions_artifact_sha256
      *
-     * @param sha256 编译产物 SHA256 校验和
+     * @param sha256   编译产物 SHA256 校验和
+     * @param tenantId 调用者租户（按租户范围查产物，防跨租户 IDOR；null=内部可信）
      * @return 编译产物信息，不存在时返回 null
      */
-    public ArtifactInfoDTO getArtifact(String sha256) {
-        PolicyVersion version = PolicyVersion
-            .find("artifactSha256", sha256)
-            .firstResult();
+    public ArtifactInfoDTO getArtifact(String sha256, String tenantId) {
+        PolicyVersion version = tenantId != null
+            ? PolicyVersion.find("artifactSha256 = ?1 and tenantId = ?2", sha256, tenantId).firstResult()
+            : PolicyVersion.find("artifactSha256", sha256).firstResult();
 
         if (version == null) {
             return null;
@@ -210,12 +250,13 @@ public class PolicyAuditService {
      * 使用索引：idx_policy_versions_runtime_build
      *
      * @param runtimeBuild Runtime 构建版本
+     * @param tenantId     调用者租户（按租户范围查，防跨租户 IDOR；null=内部可信）
      * @return 策略列表
      */
-    public List<RuntimePolicyDTO> getRuntimePolicies(String runtimeBuild) {
-        List<PolicyVersion> versions = PolicyVersion
-            .find("runtimeBuild", runtimeBuild)
-            .list();
+    public List<RuntimePolicyDTO> getRuntimePolicies(String runtimeBuild, String tenantId) {
+        List<PolicyVersion> versions = tenantId != null
+            ? PolicyVersion.find("runtimeBuild = ?1 and tenantId = ?2", runtimeBuild, tenantId).list()
+            : PolicyVersion.find("runtimeBuild", runtimeBuild).list();
 
         return versions.stream()
             .map(v -> {

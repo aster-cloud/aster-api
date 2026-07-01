@@ -40,11 +40,22 @@ import java.util.concurrent.TimeUnit;
 public class ApiKeyVerifierService {
 
     private static final Logger LOG = Logger.getLogger(ApiKeyVerifierService.class);
-    private static final Duration CACHE_TTL = Duration.ofMinutes(5);
+    // 红队 P1-F：撤销窗口 = 缓存 TTL。原 5min 太长（被撤销的 key 仍可用 5 分钟）。
+    // 收紧到 60s：即便跨副本广播失效（Redis 抖动），任一 pod 最多 60s 后重新 cloud/snapshot
+    // 校验拿到 revoked 状态。正常路径靠下面的 Redis pub/sub 近实时失效（不等 TTL）。
+    private static final Duration CACHE_TTL = Duration.ofSeconds(60);
     private static final int CACHE_MAX = 10_000;
+    /** 红队 P1-F：API key 缓存失效跨副本广播 channel（复用 LexiconAvailabilityService 模式）。 */
+    private static final String INVALIDATE_CHANNEL = "aster:apikey:invalidate";
 
     @Inject
     PlanGateConfig config;
+
+    @Inject
+    jakarta.enterprise.inject.Instance<io.quarkus.redis.datasource.RedisDataSource> redisDataSource;
+
+    private io.quarkus.redis.datasource.pubsub.PubSubCommands<String> pubSubCommands;
+    private io.quarkus.redis.datasource.pubsub.PubSubCommands.RedisSubscriber invalidateSubscriber;
 
     @Inject
     io.aster.billing.snapshot.LocalQuotaSnapshotService localSnapshot;
@@ -90,10 +101,48 @@ public class ApiKeyVerifierService {
             t.setDaemon(true);
             return t;
         });
+        // 红队 P1-F：订阅跨副本失效广播。收到 userId → 清本副本 Caffeine（近实时撤销，
+        // 不等 60s TTL）。fail-open：订阅失败仅退化到 TTL 兜底，不影响验证路径。
+        initInvalidateBroadcast();
         LOG.info("ApiKeyVerifierService started: cacheTtl=" + CACHE_TTL);
     }
 
+    /** 红队 P0-F（Codex 审查后补）：广播订阅是否活跃。false=退化到 60s TTL 兜底，供健康检查/指标读取。 */
+    private volatile boolean broadcastActive = false;
+
+    /** 跨副本失效广播是否处于活跃状态（订阅已建立）。false 表示当前仅靠 60s TTL 兜底。 */
+    public boolean isBroadcastActive() {
+        return broadcastActive;
+    }
+
+    private void initInvalidateBroadcast() {
+        if (redisUnavailable()) {
+            LOG.warn("apikey 失效广播未启用（无 Redis）；跨副本撤销退化到 60s TTL 兜底 "
+                + "[apikey_invalidate_broadcast=down]");
+            return;
+        }
+        try {
+            pubSubCommands = redisDataSource.get().pubsub(String.class);
+            // payload = userId。远端 pod 收到即清本地缓存（invalidateLocalOnly 不再回广播，防环）。
+            invalidateSubscriber = pubSubCommands.subscribe(INVALIDATE_CHANNEL,
+                this::invalidateLocalOnly);
+            broadcastActive = true;
+            LOG.infof("apikey 失效广播通道已启用: %s [apikey_invalidate_broadcast=up]", INVALIDATE_CHANNEL);
+        } catch (Exception e) {
+            // 可观测：明确标记 broadcast down，operator 可据此告警；本副本 TTL 兜底仍有效。
+            LOG.warn("初始化 apikey 失效广播订阅失败（退化到 60s TTL 兜底）"
+                + " [apikey_invalidate_broadcast=down]", e);
+        }
+    }
+
     void onStop(@Observes io.quarkus.runtime.ShutdownEvent ev) {
+        if (invalidateSubscriber != null) {
+            try {
+                invalidateSubscriber.unsubscribe();
+            } catch (Exception e) {
+                LOG.debugf("apikey 失效广播退订异常（忽略）: %s", e.getMessage());
+            }
+        }
         if (verifyPool != null) {
             verifyPool.shutdown();
             try {
@@ -229,10 +278,26 @@ public class ApiKeyVerifierService {
     }
 
     /**
-     * 让指定用户的所有 key 缓存失效（DUN-4 auto-downgrade 调用）
+     * 让指定用户的所有 key 缓存失效（DUN-4 auto-downgrade / 用户主动撤销 / 订阅删除时调用）。
+     *
+     * <p>红队 P1-F：清本副本本地缓存 **+ 跨副本广播**。此前只清收到 DELETE 的那一个 pod
+     * 的 Caffeine，其余 5 副本仍用本地缓存服务被撤销的 key 直到 TTL（跨副本发散，同
+     * [[lexicon-availability-cross-replica]]）。现在通过 Redis pub/sub 通知所有副本立即清除。
+     *
+     * @return 本副本清除的 key 数（不含远端副本）
      */
     public int invalidateForUser(String userId) {
-        if (userId == null) return 0;
+        int n = invalidateLocalOnly(userId);
+        broadcastInvalidate(userId);
+        return n;
+    }
+
+    /**
+     * 只清本副本本地缓存，不广播。供 Redis 订阅回调使用（远端 pod 收到广播后清本地），
+     * 避免"清→广播→别人清→再广播"的广播风暴/回环。
+     */
+    private int invalidateLocalOnly(String userId) {
+        if (userId == null || cache == null) return 0;
         Set<String> hashes = userIndex.remove(userId);
         if (hashes == null || hashes.isEmpty()) return 0;
         int n = 0;
@@ -241,6 +306,24 @@ public class ApiKeyVerifierService {
             n++;
         }
         return n;
+    }
+
+    /** 向所有副本广播"清除该 userId 的 key 缓存"。fail-open：Redis 不可用则仅本副本生效（TTL 兜底）。 */
+    private void broadcastInvalidate(String userId) {
+        if (userId == null || redisUnavailable()) return;
+        try {
+            io.quarkus.redis.datasource.pubsub.PubSubCommands<String> ps = pubSubCommands != null
+                ? pubSubCommands
+                : redisDataSource.get().pubsub(String.class);
+            ps.publish(INVALIDATE_CHANNEL, userId);
+        } catch (Exception e) {
+            LOG.warnf("广播 apikey 失效失败 userId=%s（本副本已清，其余副本靠 60s TTL 兜底）: %s",
+                userId, e.getMessage());
+        }
+    }
+
+    private boolean redisUnavailable() {
+        return redisDataSource == null || redisDataSource.isUnsatisfied();
     }
 
     /**
@@ -253,7 +336,13 @@ public class ApiKeyVerifierService {
      */
     public void seedCacheForTest(String plaintextKey, ApiKeyVerifyResult result) {
         if (plaintextKey == null || cache == null) return;
-        cache.put(sha256Hex(plaintextKey), result);
+        String keyHash = sha256Hex(plaintextKey);
+        cache.put(keyHash, result);
+        // 同步维护 userIndex 反向索引——生产 doSlowPathVerify 对 valid key 也会做这步。
+        // 不建索引则 invalidateForUser 找不到该 key（红队 P1-F 失效测试依赖此索引）。
+        if (result != null && result.valid() && result.userId() != null) {
+            userIndex.computeIfAbsent(result.userId(), k -> ConcurrentHashMap.newKeySet()).add(keyHash);
+        }
     }
 
     /**

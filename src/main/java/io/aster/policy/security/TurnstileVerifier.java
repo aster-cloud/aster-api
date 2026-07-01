@@ -33,8 +33,13 @@ import java.util.concurrent.TimeUnit;
  * <p>默认 enabled=false，零开销；secret 缺失时 {@code @ConfigProperty} 用
  * Optional 包装避免启动失败。生产 profile 启用时 fail-fast 检查 secret 必填。
  *
- * <p>缓存设计：用 token SHA-256 hash 作 key（不存原 token），TTL 60s。
+ * <p>缓存设计：用 SHA-256(token + "|" + ip) 作 key（不存原 token），TTL 60s。
  * 这样同一用户在一次 trial 会话里多次提交不需要每次都打 cf。
+ *
+ * <p>红队 P2-J：缓存 key **绑定 remoteIp**。此前仅 sha256(token) → 在 60s 窗口内，
+ * 从 IP-A 验证通过的 token 可被换到 IP-B 复用（cache-hit 直接放行），从而多 IP 绕过
+ * per-IP trial 限流。绑 IP 后：换 IP = 换 key = cache-miss → 重新打 cf（cf 端 token
+ * 单次有效，跨 IP 复用会被 cf 拒），堵住本地缓存导致的跨 IP 重放。
  */
 @ApplicationScoped
 public class TurnstileVerifier {
@@ -103,7 +108,7 @@ public class TurnstileVerifier {
             return false;
         }
 
-        String key = sha256(token);
+        String key = cacheKey(token, remoteIp);  // 红队 P2-J：绑 IP
         long now = System.currentTimeMillis();
         CacheEntry hit = cache.get(key);
         if (hit != null && hit.isFresh(now)) {
@@ -148,7 +153,7 @@ public class TurnstileVerifier {
             return java.util.concurrent.CompletableFuture.completedFuture(false);
         }
 
-        String key = sha256(token);
+        String key = cacheKey(token, remoteIp);  // 红队 P2-J：绑 IP
         long now = System.currentTimeMillis();
         CacheEntry hit = cache.get(key);
         if (hit != null && hit.isFresh(now)) {
@@ -279,5 +284,14 @@ public class TurnstileVerifier {
             // SHA-256 是 JLS 强制；fallback 也只用于 cache key，不影响安全。
             return String.valueOf(s.hashCode());
         }
+    }
+
+    /**
+     * 红队 P2-J：缓存 key = sha256(token + "|" + ip)。绑 IP 使同一 token 换 IP 即 cache-miss，
+     * 阻断本地缓存内的跨 IP 重放。ip 为 null/空时归一为 ""，仍绑定（无 IP 的调用共用一个桶）。
+     */
+    private static String cacheKey(String token, String remoteIp) {
+        String ip = remoteIp == null ? "" : remoteIp;
+        return sha256(token + "|" + ip);
     }
 }

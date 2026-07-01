@@ -269,6 +269,61 @@ class InternalCallerFilterTest {
     }
 
     // ============================================================
+    // 红队 P0-C：7 行 canonical（method\npath\nts\nnonce\nbodySha256\ntenant\nrole）
+    // 证明 body / tenant / role / nonce 全部进签名 —— 任一改动都会使签名失配，
+    // 堵住"5min 窗口内改 body 烧 LLM 预算 / 改 tenant 假冒 / 改 role 提权 / 原样重放"。
+    // 与 aster-cloud signInternalCallerHeaders 逐字节对齐。
+    // ============================================================
+
+    private static String canonical(String method, String path, long ts, String nonce,
+                                    String bodySha, String tenant, String role) {
+        return method + "\n" + path + "\n" + ts + "\n" + nonce + "\n"
+            + bodySha + "\n" + tenant + "\n" + role;
+    }
+
+    @Test
+    void bodyIsBoundIntoSignature() {
+        String shaCheap = InternalCallerFilter.sha256Hex("{\"model\":\"cheap\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String shaPricey = InternalCallerFilter.sha256Hex("{\"model\":\"pricey\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String a = InternalCallerFilter.sign("k", canonical("POST", "/api/v1/ai/complete", 1700000000L, "n1", shaCheap, "t", ""));
+        String b = InternalCallerFilter.sign("k", canonical("POST", "/api/v1/ai/complete", 1700000000L, "n1", shaPricey, "t", ""));
+        assertNotEquals(a, b, "body 不同（换 LLM model）必须产生不同签名");
+    }
+
+    @Test
+    void tenantIsBoundIntoSignature() {
+        String sha = InternalCallerFilter.sha256Hex("body".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String a = InternalCallerFilter.sign("k", canonical("POST", "/api/v1/policies/evaluate-source", 1700000000L, "n1", sha, "tenant-a", ""));
+        String b = InternalCallerFilter.sign("k", canonical("POST", "/api/v1/policies/evaluate-source", 1700000000L, "n1", sha, "tenant-b", ""));
+        assertNotEquals(a, b, "tenant 不同（跨租户假冒）必须产生不同签名");
+    }
+
+    @Test
+    void roleIsBoundIntoSignature() {
+        String sha = InternalCallerFilter.sha256Hex("body".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String a = InternalCallerFilter.sign("k", canonical("POST", "/api/v1/policies/evaluate-source", 1700000000L, "n1", sha, "t", "MEMBER"));
+        String b = InternalCallerFilter.sign("k", canonical("POST", "/api/v1/policies/evaluate-source", 1700000000L, "n1", sha, "t", "ADMIN"));
+        assertNotEquals(a, b, "role 不同（提权）必须产生不同签名");
+    }
+
+    @Test
+    void nonceIsBoundIntoSignature() {
+        String sha = InternalCallerFilter.sha256Hex("body".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String a = InternalCallerFilter.sign("k", canonical("POST", "/api/v1/ai/complete", 1700000000L, "nonce-A", sha, "t", ""));
+        String b = InternalCallerFilter.sign("k", canonical("POST", "/api/v1/ai/complete", 1700000000L, "nonce-B", sha, "t", ""));
+        assertNotEquals(a, b, "nonce 不同必须产生不同签名（重放防护基础）");
+    }
+
+    @Test
+    void sha256HexOfEmptyBodyIsCanonicalConstant() {
+        // 空 body 两端都按空字节 sha256 → 固定常量（RFC 6234 空串 sha256）。
+        String empty = InternalCallerFilter.sha256Hex(new byte[0]);
+        assertEquals("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", empty);
+        // null 与空数组一致（防 NPE + 与 cloud 端 body===undefined 对齐）。
+        assertEquals(empty, InternalCallerFilter.sha256Hex(null));
+    }
+
+    // ============================================================
     // R22 后处理：HMAC startup 校验必须由 StartupEvent 触发
     //
     // 历史背景：曾经用 @PostConstruct，但 @ApplicationScoped 在 Quarkus 是 CDI

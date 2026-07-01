@@ -6,6 +6,7 @@ import io.aster.common.dto.PagedResult;
 import io.smallrye.common.annotation.Blocking;
 import io.aster.policy.security.rbac.RequireRole;
 import io.aster.policy.security.rbac.Role;
+import io.aster.policy.tenant.TenantContext;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -29,6 +30,9 @@ public class PolicyAuditResource {
 
     @Inject
     PolicyAuditService auditService;
+
+    @Inject
+    TenantContext tenantContext;
 
     /**
      * 获取使用特定策略版本的 workflow 列表
@@ -55,7 +59,7 @@ public class PolicyAuditResource {
             throw new BadRequestException("Invalid pagination parameters: page must be >= 0, size must be > 0 and <= 100");
         }
 
-        return auditService.getVersionUsage(versionId, status, page, size);
+        return auditService.getVersionUsage(versionId, tenantContext.getCurrentTenant(), status, page, size);
     }
 
     /**
@@ -93,7 +97,7 @@ public class PolicyAuditResource {
             throw new BadRequestException("'from' must be before or equal to 'to'");
         }
 
-        return auditService.getVersionTimeline(versionId, from, to, page, size);
+        return auditService.getVersionTimeline(versionId, tenantContext.getCurrentTenant(), from, to, page, size);
     }
 
     /**
@@ -108,7 +112,7 @@ public class PolicyAuditResource {
     @Path("/policy-versions/{versionId}/impact")
     @Blocking
     public ImpactAssessmentDTO assessImpact(@PathParam("versionId") Long versionId) {
-        ImpactAssessmentDTO result = auditService.assessImpact(versionId);
+        ImpactAssessmentDTO result = auditService.assessImpact(versionId, tenantContext.getCurrentTenant());
 
         if (result.totalCount == 0) {
             throw new NotFoundException("Policy version not found or not used: " + versionId);
@@ -131,7 +135,7 @@ public class PolicyAuditResource {
     public List<VersionHistoryDTO> getWorkflowVersionHistory(@PathParam("workflowId") String workflowId) {
         try {
             UUID uuid = UUID.fromString(workflowId);
-            return auditService.getWorkflowVersionHistory(uuid);
+            return auditService.getWorkflowVersionHistory(uuid, tenantContext.getCurrentTenant());
         } catch (IllegalArgumentException e) {
             throw new BadRequestException("Invalid workflow ID format: must be a valid UUID");
         }
@@ -154,7 +158,7 @@ public class PolicyAuditResource {
             throw new BadRequestException("Invalid SHA256 format: must be 64 hexadecimal characters");
         }
 
-        ArtifactInfoDTO result = auditService.getArtifact(sha256);
+        ArtifactInfoDTO result = auditService.getArtifact(sha256, tenantContext.getCurrentTenant());
 
         if (result == null) {
             throw new NotFoundException("Artifact not found: " + sha256);
@@ -179,6 +183,6 @@ public class PolicyAuditResource {
             throw new BadRequestException("Runtime build parameter cannot be empty");
         }
 
-        return auditService.getRuntimePolicies(build);
+        return auditService.getRuntimePolicies(build, tenantContext.getCurrentTenant());
     }
 }

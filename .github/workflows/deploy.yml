@@ -222,12 +222,14 @@ jobs:
           # Sanity check — fail fast with a useful message if decode produced
           # something kubectl can't read.
           kubectl --kubeconfig ~/.kube/config version --client=false --request-timeout=10s
-          # 下发**已验签的 by-digest 引用**（非浮动 tag）→ 本次上线的 pod 一定运行
-          # 刚构建并验签的内容，堵住 tag TOCTOU。
-          # 注意：ArgoCD 后续对账可能把 image 收敛回 git 里的 jvm-latest（部署模型
-          # 权衡，见 findings P2-G：用户选择保留浮动 tag，未把 digest 写进 git manifest）。
-          # 本步保证「本次 rollout 的 pod = 验签 digest」；长期 pin 需把 digest 写入
-          # ArgoCD 源（deploy 模型变更，本轮不做）。
-          kubectl set image deployment/aster-api \
-            aster-api="wontlost/aster-api@${DIGEST}" -n aster-cloud
+          # 部署用 `rollout restart`（非 `set image @digest`）。原因（红队 P2-G 上线实测教训）：
+          # 本集群由 **ArgoCD** 管理，deployment.spec 的 image 字段被对账回 git manifest 的
+          # 浮动 tag `jvm-latest`——`kubectl set image @digest` 会被 ArgoCD 立即还原，新副本集
+          # 被缩到 0，pod 从不真正切到新 digest（实测：set image 后运行 pod 仍是旧 digest）。
+          # `rollout restart` 触发 pod 重建，配合 `imagePullPolicy: Always` 重新拉取 jvm-latest，
+          # 而 CI 本步刚把 jvm-latest 指向本次构建并**已 cosign 验签**的 digest ${DIGEST}，
+          # 所以重启后的 pod = 已验签内容。供应链保证来自上一步的 verify（对 by-digest 引用），
+          # 不依赖部署方式。长期 pin（把 digest 写进 ArgoCD git 源）是部署模型变更，本轮不做。
+          echo "verified digest to be rolled out via jvm-latest: ${DIGEST}"
+          kubectl rollout restart deployment/aster-api -n aster-cloud
           kubectl rollout status deployment/aster-api -n aster-cloud --timeout=300s

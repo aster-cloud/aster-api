@@ -537,6 +537,26 @@ public class PolicyVersionService {
         return PolicyVersion.findByVersion(policyId, version);
     }
 
+    // ── 租户范围重载（红队 P0-A：跨租户 IDOR 修复）────────────────────────────
+    // 面向外部请求的路径必须用带 tenantId 的版本：policyId 客户端可控且非租户命名空间，
+    // 只按 policyId 查会让 A 租户传 B 租户 policyId 越权读/回滚。REST 层传当前请求的
+    // 已鉴权 tenantId（来自 ApiKey/TenantFilter，不可伪造）。
+
+    /** 租户范围获取活跃版本。 */
+    public PolicyVersion getActiveVersion(String policyId, String tenantId) {
+        return PolicyVersion.findActiveVersion(policyId, tenantId);
+    }
+
+    /** 租户范围获取所有版本。 */
+    public List<PolicyVersion> getAllVersions(String policyId, String tenantId) {
+        return PolicyVersion.findAllVersions(policyId, tenantId);
+    }
+
+    /** 租户范围获取指定版本。 */
+    public PolicyVersion getVersion(String policyId, Long version, String tenantId) {
+        return PolicyVersion.findByVersion(policyId, version, tenantId);
+    }
+
     /**
      * 回滚到指定版本
      *
@@ -563,8 +583,20 @@ public class PolicyVersionService {
      */
     @Transactional
     public PolicyVersion rollbackToVersion(String policyId, Long version, String performedBy) {
-        // 查找目标版本
-        PolicyVersion targetVersion = PolicyVersion.findByVersion(policyId, version);
+        return rollbackToVersion(policyId, version, performedBy, null);
+    }
+
+    /**
+     * 租户范围回滚（红队 P0-A）。tenantId 非空时强制目标版本归属该租户，堵住跨租户回滚
+     * （A 租户传 B 租户 policyId 回滚其版本）。REST 层必须传当前已鉴权 tenantId。
+     * tenantId==null 保留给内部可信路径（workflow/anomaly，policyId 已来自自身租户）。
+     */
+    @Transactional
+    public PolicyVersion rollbackToVersion(String policyId, Long version, String performedBy, String tenantId) {
+        // 查找目标版本（tenantId 非空时租户范围查询，避免跨租户回滚）
+        PolicyVersion targetVersion = tenantId != null
+            ? PolicyVersion.findByVersion(policyId, version, tenantId)
+            : PolicyVersion.findByVersion(policyId, version);
 
         if (targetVersion == null) {
             throw new IllegalArgumentException(

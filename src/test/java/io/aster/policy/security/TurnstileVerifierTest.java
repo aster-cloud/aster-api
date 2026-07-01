@@ -80,4 +80,46 @@ class TurnstileVerifierTest {
         set("secret", Optional.of(""));
         assertFalse(verifier.verify("any-token", "1.1.1.1"));
     }
+
+    // ── 红队 P2-J：缓存 key 绑 IP（防跨 IP token 重放绕过 per-IP trial 限流）────────
+
+    private String cacheKey(String token, String ip) throws Exception {
+        var m = TurnstileVerifier.class.getDeclaredMethod("cacheKey", String.class, String.class);
+        m.setAccessible(true);
+        return (String) m.invoke(null, token, ip);
+    }
+
+    @Test
+    @DisplayName("同 token 不同 IP → 不同 cache key（防跨 IP 重放）")
+    void cacheKeyDiffersByIp() throws Exception {
+        String kA = cacheKey("same-token", "1.1.1.1");
+        String kB = cacheKey("same-token", "2.2.2.2");
+        org.junit.jupiter.api.Assertions.assertNotEquals(kA, kB,
+            "同一 token 换 IP 必须产生不同 cache key，否则 60s 内可跨 IP 复用绕过限流");
+    }
+
+    @Test
+    @DisplayName("同 token 同 IP → 相同 cache key（缓存正常命中）")
+    void cacheKeyStableForSameTokenAndIp() throws Exception {
+        org.junit.jupiter.api.Assertions.assertEquals(
+            cacheKey("t", "1.1.1.1"), cacheKey("t", "1.1.1.1"),
+            "同 token 同 IP 应命中同一缓存桶");
+    }
+
+    @Test
+    @DisplayName("不同 token 同 IP → 不同 cache key")
+    void cacheKeyDiffersByToken() throws Exception {
+        org.junit.jupiter.api.Assertions.assertNotEquals(
+            cacheKey("token-a", "1.1.1.1"), cacheKey("token-b", "1.1.1.1"));
+    }
+
+    @Test
+    @DisplayName("null IP 归一为空串，仍可稳定生成 key（不 NPE）")
+    void cacheKeyHandlesNullIp() throws Exception {
+        String k1 = cacheKey("t", null);
+        String k2 = cacheKey("t", null);
+        org.junit.jupiter.api.Assertions.assertEquals(k1, k2);
+        // null IP 与显式空串 IP 归一到同一桶
+        org.junit.jupiter.api.Assertions.assertEquals(k1, cacheKey("t", ""));
+    }
 }

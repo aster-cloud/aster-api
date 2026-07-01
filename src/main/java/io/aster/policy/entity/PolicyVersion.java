@@ -474,6 +474,29 @@ public class PolicyVersion extends PanacheEntityBase {
         return find("policyId = ?1 and version = ?2", policyId, version).firstResult();
     }
 
+    // ── 租户范围 finder（红队 P0-A：跨租户 IDOR 修复）───────────────────────────
+    // policyId 是客户端提供且非租户命名空间，故按 policyId-only 查询会让 A 租户传 B
+    // 租户的 policyId 越权读/回滚。以下重载强制 tenantId 交集，供所有面向外部请求的
+    // 服务方法使用（内部 workflow/anomaly 路径继续用无 tenant 版，它们的 policyId 来自
+    // 自身租户上下文）。
+
+    public static PolicyVersion findActiveVersion(String policyId, String tenantId) {
+        return find("policyId = ?1 and tenantId = ?2 and active = true", policyId, tenantId).firstResult();
+    }
+
+    public static java.util.List<PolicyVersion> findAllVersions(String policyId, String tenantId) {
+        return find("policyId = ?1 and tenantId = ?2 order by version desc", policyId, tenantId).list();
+    }
+
+    public static PolicyVersion findByVersion(String policyId, Long version, String tenantId) {
+        return find("policyId = ?1 and version = ?2 and tenantId = ?3", policyId, version, tenantId).firstResult();
+    }
+
+    /** 按主键 id 在租户范围查找（审计 IDOR 修复：校验 versionId 归属当前租户）。 */
+    public static PolicyVersion findByIdInTenant(Long id, String tenantId) {
+        return find("id = ?1 and tenantId = ?2", id, tenantId).firstResult();
+    }
+
     /**
      * 查找可作为 library 被引用的模块版本（ADR 0015 阶段3 ModuleResolver）。
      *

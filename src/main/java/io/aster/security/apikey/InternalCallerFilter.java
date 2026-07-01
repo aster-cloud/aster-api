@@ -1,8 +1,10 @@
 package io.aster.security.apikey;
 
 import io.quarkus.runtime.StartupEvent;
+import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.container.ContainerRequestContext;
@@ -14,7 +16,9 @@ import org.jboss.resteasy.reactive.server.ServerRequestFilter;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Optional;
@@ -42,6 +46,20 @@ public class InternalCallerFilter {
 
     @ConfigProperty(name = "aster.plan-gate.hmac-key")
     Optional<String> hmacKey;
+
+    /**
+     * 红队 P0-C：nonce 重放防护。复用全局 {@link io.aster.policy.security.NonceService}
+     * （Postgres UsedNonce 原子 persistIfNotExists，跨 pod 唯一，5min TTL 自动清理），
+     * 与 RequestSignatureFilter 同一套，避免再造一份 nonce 存储。
+     */
+    @Inject
+    io.aster.policy.security.NonceService nonceService;
+
+    /**
+     * 红队 P0-C（Codex P1）：内部调用 body 上限（字节）。与全局 quarkus.http.limits.
+     * max-body-size=1M 对齐。防 readAllBytes 缓冲被超大 body 放大内存。
+     */
+    private static final int MAX_INTERNAL_BODY_BYTES = 1024 * 1024;
 
     @ConfigProperty(name = "aster.security.evaluate-source.public", defaultValue = "false")
     boolean evaluateSourcePublic;
@@ -181,7 +199,7 @@ public class InternalCallerFilter {
     }
 
     @ServerRequestFilter(priority = Priorities.AUTHENTICATION + 50)
-    public void filter(ContainerRequestContext ctx) {
+    public Uni<Void> filter(ContainerRequestContext ctx) {
         // R23-Critical-1 + R25-Critical-1：matrix-param 归一化必须 **per-segment**。
         // 参见 ApiKeyAuthFilter.shouldProtect 同样修复。
         String p = io.aster.security.PathNormalizer.normalize(ctx.getUriInfo().getPath());
@@ -190,7 +208,7 @@ public class InternalCallerFilter {
             io.aster.policy.security.TrialBypassPredicate.hasInternalCallerCredentials(ctx);
         Classification cls = classify(p, evaluateSourcePublic, evaluateSourceTrial,
             aiPublic, aiSsePublic, hasInternalCaller);
-        if (cls == Classification.NOT_PROTECTED) return;
+        if (cls == Classification.NOT_PROTECTED) return Uni.createFrom().voidItem();
         if (cls == Classification.BYPASS_OK) {
             // 旁路命中时打 warn —— 不丢失 operator 可见性
             if (p.startsWith("/api/v1/ai/")) {
@@ -202,7 +220,7 @@ public class InternalCallerFilter {
                         + "(aster.security.ai.sse.public=true). /complete remains protected.", p);
                 }
             }
-            return;
+            return Uni.createFrom().voidItem();
         }
         if (cls == Classification.BYPASS_TRIAL) {
             // TrialEndpointGuard 优先级早于本 filter，已经做过 Origin/body/IP 限流。
@@ -214,15 +232,18 @@ public class InternalCallerFilter {
                 throw forbidden("trial_guard_not_satisfied", p);
             }
             LOG.debugf("evaluate-source served via marketing-tier trial bypass (path=%s)", p);
-            return;
+            return Uni.createFrom().voidItem();
         }
         // cls == REQUIRE_HMAC
 
         String caller = ctx.getHeaderString("X-Internal-Caller");
         String timestamp = ctx.getHeaderString("X-Aster-Timestamp");
         String signature = ctx.getHeaderString("X-Internal-Signature");
+        // 红队 P0-C：nonce 必填（绑定进 canonical + 重放去重）。旧 v1（无 nonce 的 3 行签名）
+        // 无真实用户，无需兼容窗口——直接只认 v2，缺 nonce = 缺凭证拒绝。
+        String nonce = ctx.getHeaderString("X-Aster-Nonce");
 
-        if (!"cloud-bff".equals(caller) || timestamp == null || signature == null) {
+        if (!"cloud-bff".equals(caller) || timestamp == null || signature == null || nonce == null) {
             String reason = p.startsWith("/api/v1/ai/")
                 ? "ai_internal_only" : "evaluate_source_internal_only";
             throw forbidden(reason, p);
@@ -245,12 +266,66 @@ public class InternalCallerFilter {
             LOG.warnf("%s called without HMAC key configured; rejecting", p);
             throw forbidden("hmac_not_configured", p);
         }
-        // R23-Critical-2: canonical 包含 method + 归一化后的 path + ts。
-        // aster-cloud 端 signInternalCallerHeaders(method, path) 必须传相同的归一化 path。
-        String method = ctx.getMethod();
-        String expected = sign(hmacKey.get(), method + "\n" + p + "\n" + ts);
-        if (!constantTimeEquals(expected, signature)) {
-            throw forbidden("invalid_signature", p);
+
+        // 红队 P0-C：canonical = method\npath\nts\nnonce\nbodySha256\ntenant\nrole，
+        // 绑定 body/tenant/role/nonce，修掉「改 body 烧预算 / 改 tenant/role 假冒提权 / 重放」。
+        // body 需在 @ServerRequestFilter 里缓存后重置流（镜像 RequestSignatureFilter），
+        // 故改为 Uni + worker 线程执行（避免 event-loop 阻塞读流 + DB nonce 写入）。
+        final String method = ctx.getMethod();
+        final String tenant = headerOrEmpty(ctx, "X-Tenant-Id");
+        final String role = headerOrEmpty(ctx, "X-User-Role");
+        return Uni.createFrom().item(() -> {
+            try {
+                // 红队 P0-C（Codex P1）：显式 body 上限。Quarkus 全局 quarkus.http.limits.
+                // max-body-size=1M 已在 HTTP 层拦超大 body，此处再按 Content-Length 快速失败
+                // （防在 readAllBytes 前就明知超限还去缓冲），defense-in-depth。
+                int declaredLen = ctx.getLength();
+                if (declaredLen > MAX_INTERNAL_BODY_BYTES) {
+                    throw forbidden("body_too_large", p);
+                }
+                byte[] body = ctx.getEntityStream().readAllBytes();
+                if (body.length > MAX_INTERNAL_BODY_BYTES) {
+                    throw forbidden("body_too_large", p);
+                }
+                ctx.setEntityStream(new ByteArrayInputStream(body));
+
+                String bodySha = sha256Hex(body);
+                String canonical = method + "\n" + p + "\n" + ts + "\n" + nonce + "\n"
+                    + bodySha + "\n" + tenant + "\n" + role;
+                String expected = sign(hmacKey.get(), canonical);
+                if (!constantTimeEquals(expected, signature)) {
+                    throw forbidden("invalid_signature", p);
+                }
+
+                // 签名通过后再消费 nonce（防重放）。requestHash 绑定 method/path/query/body，
+                // tenant 维度键（内部调用无浏览器 tenant 时用 "cloud-bff" 占位，跨 pod 唯一）。
+                String query = ctx.getUriInfo().getRequestUri().getQuery();
+                String requestHash = io.aster.policy.security.RequestCanonicalizer.computeRequestHash(
+                    method, ctx.getUriInfo().getPath(), query, body);
+                String nonceTenant = tenant.isEmpty() ? "cloud-bff" : tenant;
+                nonceService.ensureFresh(nonceTenant, nonce, requestHash);
+                return null;
+            } catch (WebApplicationException e) {
+                throw e; // 透传 403/409，保留状态码
+            } catch (java.io.IOException e) {
+                throw new RuntimeException("failed to buffer request body for HMAC", e);
+            }
+        }).runSubscriptionOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool())
+          .replaceWithVoid();
+    }
+
+    private static String headerOrEmpty(ContainerRequestContext ctx, String name) {
+        String v = ctx.getHeaderString(name);
+        return v == null ? "" : v;
+    }
+
+    /** body sha256（hex）。空 body → 空字节的 sha256（与 cloud 端 sha256Hex 一致）。 */
+    static String sha256Hex(byte[] body) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(md.digest(body == null ? new byte[0] : body));
+        } catch (Exception e) {
+            throw new RuntimeException("SHA-256 unavailable", e);
         }
     }
 

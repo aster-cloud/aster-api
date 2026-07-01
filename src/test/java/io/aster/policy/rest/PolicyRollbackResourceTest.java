@@ -76,15 +76,27 @@ public class PolicyRollbackResourceTest {
         // 回滚只接受已审批版本（堵住未审批草稿经回滚旁路上线的治理缺口）。
         // v1/v2 模拟"曾经正常审批激活过的历史版本"→ status=APPROVED，可作为回滚目标。
         // v3 故意保持 createVersion 默认的 DRAFT，用于断言"未审批版本回滚被拒"。
-        markApproved(v1);
-        markApproved(v2);
+        // 红队 P0-A：rollback 现按 tenantId 校验目标版本归属；测试版本必须携带与请求头
+        // X-Tenant-Id 一致的租户，否则跨租户守卫会把它当"不存在"→ success=false。
+        markApprovedInTenant(v1);
+        markApprovedInTenant(v2);
+        setTenant(v3); // v3 保持 DRAFT，但也需归属 test-tenant（否则"未审批"断言被租户守卫抢先）
     }
 
-    /** 把版本直接标记为 APPROVED（模拟已走完审批流，避开 planGate 复杂度，聚焦回滚语义）。 */
+    /** 标记 APPROVED + 归属 test-tenant（模拟已走完审批流的历史版本）。 */
     @Transactional
-    void markApproved(PolicyVersion version) {
+    void markApprovedInTenant(PolicyVersion version) {
         PolicyVersion managed = PolicyVersion.findById(version.id);
         managed.status = io.aster.policy.entity.VersionStatus.APPROVED;
+        managed.tenantId = "test-tenant";
+        managed.persist();
+    }
+
+    /** 仅设租户（保留原状态，用于 DRAFT 的 v3）。 */
+    @Transactional
+    void setTenant(PolicyVersion version) {
+        PolicyVersion managed = PolicyVersion.findById(version.id);
+        managed.tenantId = "test-tenant";
         managed.persist();
     }
 

@@ -306,18 +306,27 @@ public class DynamicCnlExecutor {
      * - 无参函数：直接返回执行结果
      */
     private static Object executeWithPolyglot(String coreJson, String functionName, Object[] context) {
-        // 使用细粒度权限控制，禁止不必要的系统访问
-        // HostAccess.SCOPED: 仅允许显式标记的主机方法访问
-        // PolyglotAccess.NONE: 禁止跨语言访问
-        // IOAccess.NONE: 禁止文件系统和网络 I/O
+        // 沙箱权限（红队 P1-D：从 allowPublicAccess(true) 收紧，向生产 TrufflePolicyRuntime
+        // 的 HostAccess.EXPLICIT 靠拢）。
+        // 真正的危险面是 allowPublicAccess(true)——它放开**所有** public 方法/字段/构造器的
+        // guest→host 反射访问，一旦有 host 对象泄漏进 guest 值就有 Java 方法调用/类逃逸面。
+        // 改用 EXPLICIT 作基线（仅 @HostAccess.Export 方法可被 guest 调用；Builtins 表 +
+        // Truffle DSL 节点均已标注），再**仅**重新开放三类数据 interop 访问器：
+        //   - allowArrayAccess / allowListAccess / allowMapAccess
+        // 因为 DynamicCnlExecutor 把评估上下文作为 Java Map/List 直接传给 guest 函数，
+        // guest 的 MemberAccessNode 要读 `context.age` 需要 map 成员访问（否则报
+        // "HostObject 不支持成员访问"）。这三者只暴露"读结构化数据"，不暴露任意方法/类，
+        // 与 allowPublicAccess(true) 的攻击面有本质区别。
+        // 另加 allowHostClassLookup(name -> false) 显式禁止按名查找 host 类。
+        // PolyglotAccess.NONE / IOAccess.NONE / 无进程·线程·native 保持不变。
         try (Context polyglotContext = Context.newBuilder("aster")
                 .engine(SHARED_ENGINE)  // 复用进程级 Engine，避免 per-request AOT 重做
-                .allowHostAccess(HostAccess.newBuilder()
-                    .allowPublicAccess(true)  // 允许访问公开的 Java 对象（如 LambdaValue）
-                    .allowArrayAccess(true)   // 允许数组操作
-                    .allowListAccess(true)    // 允许 List 操作
-                    .allowMapAccess(true)     // 允许 Map 操作
+                .allowHostAccess(HostAccess.newBuilder(HostAccess.EXPLICIT)
+                    .allowArrayAccess(true)   // 允许读数组元素（结构化上下文）
+                    .allowListAccess(true)    // 允许读 List 元素
+                    .allowMapAccess(true)     // 允许读 Map 成员（context.field）
                     .build())
+                .allowHostClassLookup(name -> false)        // 禁止按名查找 host 类（防类逃逸）
                 .allowPolyglotAccess(PolyglotAccess.NONE)  // 禁止跨语言访问
                 .allowIO(IOAccess.NONE)                     // 禁止文件/网络 I/O
                 .allowCreateProcess(false)                  // 禁止创建子进程

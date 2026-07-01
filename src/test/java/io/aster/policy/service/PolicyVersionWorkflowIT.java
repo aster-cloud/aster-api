@@ -187,7 +187,7 @@ class PolicyVersionWorkflowIT {
         state.policyActivatedAt = Instant.now();
         state.persist();
 
-        var history = auditService.getWorkflowVersionHistory(workflowId);
+        var history = auditService.getWorkflowVersionHistory(workflowId, "tenant-srckind-1");
         assertEquals(1, history.size());
         assertEquals("ai_draft", history.get(0).sourceKind,
             "审计导出必须暴露版本来源 sourceKind（G6）");

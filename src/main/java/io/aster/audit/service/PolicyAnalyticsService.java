@@ -44,8 +44,15 @@ public class PolicyAnalyticsService {
      * 使用索引：idx_workflow_state_started_at, idx_workflow_state_policy_version
      *
      * Phase 3.4: 添加缓存层，TTL 15 分钟，减少重复查询的数据库负载
-     * Phase 4.3: 强制租户过滤，从 TenantContext 自动获取
+     * Phase 4.3: 强制租户过滤。
      *
+     * <p>安全审计 C2：{@code tenantId} 必须是显式 {@code @CacheKey} 参数。历史缺陷是
+     * tenantId 从 {@link io.aster.policy.tenant.TenantContext} 隐式读取、**不进 cache key**，
+     * 而结果是租户过滤的——租户 B 先缓存某 versionId 的统计，租户 A 用相同
+     * (versionId, granularity, from, to) 命中缓存即拿到 B 的数据（跨租户泄漏）。
+     * 调用方（resource）负责传入已鉴权的租户 ID；不在缓存方法内隐式读上下文。
+     *
+     * @param tenantId   租户 ID（已鉴权，显式传入并进入 cache key）
      * @param versionId  策略版本 ID
      * @param granularity 时间粒度（hour, day, week, month）
      * @param from       开始时间
@@ -54,14 +61,12 @@ public class PolicyAnalyticsService {
      */
     @CacheResult(cacheName = "version-usage-stats")
     public List<VersionUsageStatsDTO> getVersionUsageStats(
+        @CacheKey String tenantId,
         @CacheKey Long versionId,
         @CacheKey String granularity,
         @CacheKey Instant from,
         @CacheKey Instant to
     ) {
-        // 0. 获取当前租户ID（强制过滤）
-        String tenantId = tenantContext.getCurrentTenant();
-
         // 1. 构建 DATE_TRUNC 表达式（支持 H2 兼容）
         String dateTruncExpr = buildDateTruncExpression(granularity, "started_at");
 

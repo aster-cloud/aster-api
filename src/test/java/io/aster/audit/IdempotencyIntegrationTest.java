@@ -193,6 +193,10 @@ public class IdempotencyIntegrationTest {
             "tester",
             "rollback"
         );
+        // 版本租户须与 anomaly 租户一致：自动回滚现按 anomaly.tenantId 做租户范围查询/回滚
+        // （安全审计 C1 内部自动化 IDOR 修复）。legacy createVersion 建的版本 tenantId=null，
+        // 显式对齐到 DEFAULT_TENANT 以反映真实不变量（异常与其策略版本同租户）。
+        alignVersionTenant(version.id, DEFAULT_TENANT);
         policyIdsToClean.add(policyId);
 
         Long anomalyId = createTestAnomaly(policyId, version.id, "PENDING");
@@ -318,6 +322,14 @@ public class IdempotencyIntegrationTest {
               }
             }
             """.formatted(name);
+    }
+
+    /** 把版本的 tenantId 对齐到指定租户（legacy createVersion 建的版本 tenantId=null）。 */
+    @Transactional
+    void alignVersionTenant(Long versionId, String tenantId) {
+        PolicyVersion v = PolicyVersion.findById(versionId);
+        v.tenantId = tenantId;
+        v.persist();
     }
 
     @Transactional

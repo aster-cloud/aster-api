@@ -108,8 +108,10 @@ public class PolicyAnalyticsResource {
             throw new BadRequestException("Time range cannot exceed 90 days (current: " + daysDiff + " days)");
         }
 
-        // Phase 4.3: TenantContext 由 TenantFilter 自动填充，Service 层自动使用
-        return analyticsService.getVersionUsageStats(versionId, granularity, from, to);
+        // 安全审计 C2：租户 ID 显式传入并进入 cache key，防跨租户缓存泄漏（不再由 Service
+        // 隐式从 TenantContext 读取——否则 cache key 缺 tenant，租户 A 会命中租户 B 的缓存）。
+        String tenantId = tenantContext.getCurrentTenant();
+        return analyticsService.getVersionUsageStats(tenantId, versionId, granularity, from, to);
     }
 
     /**

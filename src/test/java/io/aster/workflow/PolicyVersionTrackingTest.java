@@ -31,6 +31,9 @@ public class PolicyVersionTrackingTest {
     @Inject
     PolicyVersionService policyVersionService;
 
+    @Inject
+    io.aster.policy.tenant.TenantContext tenantContext;
+
     private String testPolicyId;
     private PolicyVersion testVersion;
 
@@ -144,5 +147,61 @@ public class PolicyVersionTrackingTest {
         // Then: 事件的 policyVersionId 也应为 NULL
         long count = WorkflowEventEntity.count("workflowId = ?1 AND policyVersionId IS NULL", UUID.fromString(workflowId));
         assertTrue(count > 0, "Legacy workflow events should have NULL policyVersionId");
+    }
+
+    /**
+     * 安全审计 C1（同类）回归：workflow 版本追踪须按 workflow 租户查 active 版本。
+     *
+     * <p>policyId 非租户唯一——历史缺陷是 enrichPolicyVersion 用 tenantless getActiveVersion，
+     * 多租户同 policyId 时会把**其它租户**的 active versionId 写进本租户 workflow_state（污染
+     * 审计/analytics/异常检测）。本测试：同 policyId 下租户 A/B 各有一个 active 版本，以租户 A
+     * 调度 workflow，其 workflow_state.policyVersionId 必须是**租户 A** 的版本。
+     */
+    @Test
+    @Transactional
+    void enrichPolicyVersionMustUseWorkflowTenantActiveVersion() {
+        String sharedPolicyId = "aster.audit.wf-crosstenant";
+        String tenantA = "wf-ct-a";
+        String tenantB = "wf-ct-b";
+
+        // 租户 A / B 各一个同 policyId 的 active 版本。
+        Long aVersionId = seedActiveVersion(sharedPolicyId, tenantA, 1000L);
+        Long bVersionId = seedActiveVersion(sharedPolicyId, tenantB, 2000L);
+
+        String previousTenant = tenantContext.isInitialized() ? tenantContext.getCurrentTenant() : null;
+        try {
+            tenantContext.setCurrentTenant(tenantA);  // 以租户 A 身份调度
+
+            String workflowId = UUID.randomUUID().toString();
+            WorkflowMetadata metadata = new WorkflowMetadata();
+            metadata.set(WorkflowMetadata.Keys.POLICY_ID, sharedPolicyId);
+            workflowRuntime.schedule(workflowId, null, metadata);
+
+            WorkflowStateEntity state = WorkflowStateEntity.findByWorkflowId(UUID.fromString(workflowId))
+                .orElseThrow(() -> new AssertionError("WorkflowState not found"));
+
+            assertEquals(aVersionId, state.policyVersionId,
+                "C1 回归：workflow 应记录**本租户(A)** 的 active 版本");
+            assertNotEquals(bVersionId, state.policyVersionId,
+                "C1 回归：不得把租户 B 同 policyId 的版本写进租户 A 的 workflow_state");
+        } finally {
+            tenantContext.setCurrentTenant(previousTenant);
+            PolicyVersion.delete("policyId = ?1", sharedPolicyId);
+        }
+    }
+
+    private Long seedActiveVersion(String policyId, String tenantId, long version) {
+        PolicyVersion v = new PolicyVersion();
+        v.policyId = policyId;
+        v.version = version;
+        v.moduleName = "aster.audit";
+        v.functionName = "wfCrossTenant";
+        v.content = "// " + tenantId;
+        v.tenantId = tenantId;
+        v.active = true;
+        v.status = io.aster.policy.entity.VersionStatus.APPROVED;
+        v.createdAt = java.time.Instant.now();
+        v.persist();
+        return v.id;
     }
 }

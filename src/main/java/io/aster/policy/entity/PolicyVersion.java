@@ -550,11 +550,36 @@ public class PolicyVersion extends PanacheEntityBase {
     }
 
     /**
-     * 停用指定策略的所有活跃版本
+     * 停用指定策略在**指定租户**内的所有活跃版本。
      *
+     * <p>安全审计 C1：{@code policyId = moduleName + "." + functionName} 并非租户唯一
+     * （两个租户可有同名 policyId），因此**必须**带 tenantId 过滤——否则租户 A 激活/回滚
+     * 会把租户 B 同 policyId 的 active 版本一并停用，造成跨租户 DoS。激活路径统一走本方法。
+     *
+     * @param policyId 策略ID（module.function）
+     * @param tenantId 租户ID（不可为 null——激活路径的版本必带 tenantId）
+     * @return 停用的版本数量
+     */
+    public static long deactivateAllVersions(String policyId, String tenantId) {
+        // null tenant 用 IS NULL 匹配（= ?2 对 null 永不命中）——保证 tenantId=null 的版本之间
+        // 仍能互相停用，与 tenantless 语义一致；非 null 则严格按 (policyId, tenantId) 隔离。
+        List<PolicyVersion> activeVersions = tenantId == null
+            ? find("policyId = ?1 and tenantId is null and active = true", policyId).list()
+            : find("policyId = ?1 and tenantId = ?2 and active = true", policyId, tenantId).list();
+        activeVersions.forEach(v -> v.active = false);
+        return activeVersions.size();
+    }
+
+    /**
+     * 停用指定策略的所有活跃版本（**不分租户**）。
+     *
+     * @deprecated 跨租户不安全（policyId 非租户唯一）。激活/回滚路径请用
+     *     {@link #deactivateAllVersions(String, String)}。本重载仅遗留 test-only
+     *     {@code createVersion(String policyId,...)} 使用，其创建的版本 tenantId=null。
      * @param policyId 策略ID
      * @return 停用的版本数量
      */
+    @Deprecated
     public static long deactivateAllVersions(String policyId) {
         // 使用 stream() 逐个停用，确保实体状态正确
         List<PolicyVersion> activeVersions = find("policyId = ?1 and active = true", policyId).list();

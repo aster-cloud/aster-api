@@ -172,11 +172,13 @@ public class PolicyDatabasePerformanceBaselineTest {
             () -> {
             },
             () -> {
-                // Phase 4.3: tenant 不再作为参数传递，由 TenantContext 自动获取
-                // String tenant = dataset.tenants().get(tenantCursor.getAndIncrement() % dataset.tenants().size());
+                // 安全审计 C2：tenantId 现为显式参数（进 cache key，防跨租户泄漏）。
+                // 用 dataset 首个租户（与 setup 处 setCurrentTenant 一致）保证命中已 seed 数据。
+                String tenant = dataset.tenants().get(0);
                 Instant from = dataset.from().plusSeconds(usageStatsIteration.getAndIncrement());
                 Instant to = dataset.to().minusSeconds(usageStatsIteration.get());
                 List<VersionUsageStatsDTO> stats = analyticsService.getVersionUsageStats(
+                    tenant,
                     versionId,
                     "hour",
                     from,

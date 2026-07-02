@@ -287,7 +287,22 @@ public class PolicyCacheManager {
 
             recordRemoteInvalidation(tenantId);
 
+            // 安全审计 C3：远程（跨 pod）失效必须真正失效 Quarkus @CacheName("policy-results")
+            // **主结果缓存**（policyResultCache），而不仅仅清 tenantCacheIndex 追踪表或
+            // cacheLifecycleTracker（后者只是镜像 TTL/size 的追踪 Caffeine，其 removalListener 只
+            // 更新索引+埋点，不驱动主缓存驱逐）。否则本 pod 主缓存条目留到 15m TTL，跨 pod
+            // 发版/回滚后仍读旧决策。与本地路径 PolicyEvaluationService（policyResultCache.invalidate
+            // 后 removeCacheEntry）对齐。本 handler 已在单线程 invalidationExecutor 内，await 安全；
+            // origin pod 会收自己的广播，二次 invalidate 幂等无害。
             if (policyModule == null && policyFunction == null && hash == null) {
+                // 全租户失效：对该租户所有已追踪 key 逐一失效主缓存，再清追踪表。
+                Set<PolicyCacheKey> tenantKeys = tenantCacheIndex.get(tenantId);
+                if (tenantKeys != null) {
+                    for (PolicyCacheKey key : new HashSet<>(tenantKeys)) {
+                        invalidateResultCache(key);
+                        removeTrackedKey(key, tenantId);
+                    }
+                }
                 tenantCacheIndex.remove(tenantId);
                 return;
             }
@@ -296,13 +311,34 @@ public class PolicyCacheManager {
             if (keys == null || keys.isEmpty()) {
                 return;
             }
-            keys.stream()
+            new HashSet<>(keys).stream()
                 .filter(k -> matches(policyModule, k.getPolicyModule()))
                 .filter(k -> matches(policyFunction, k.getPolicyFunction()))
                 .filter(k -> hash == null || k.hashCode() == hash)
-                .forEach(k -> removeTrackedKey(k, tenantId));
+                .forEach(k -> {
+                    invalidateResultCache(k);   // C3：真正失效主结果缓存条目
+                    removeTrackedKey(k, tenantId);
+                });
         } catch (Exception e) {
             LOG.warnf(e, "解析 Redis 缓存失效消息失败: %s", payload);
+        }
+    }
+
+    /**
+     * 安全审计 C3：真正失效 Quarkus 主结果缓存（policy-results）里的一个 key。
+     *
+     * <p>远程失效 handler 专用——本地失效路径由 PolicyEvaluationService 直接对
+     * {@code policyResultCache} 调 invalidate。本 handler 在单线程 invalidationExecutor 内运行，
+     * {@code await().indefinitely()} 同步失效安全（不阻塞请求线程/event-loop）。
+     */
+    private void invalidateResultCache(PolicyCacheKey key) {
+        if (key == null || policyResultCache == null) {
+            return;
+        }
+        try {
+            policyResultCache.invalidate(key).await().indefinitely();
+        } catch (Exception e) {
+            LOG.warnf(e, "远程失效主结果缓存条目失败: %s", key);
         }
     }
 

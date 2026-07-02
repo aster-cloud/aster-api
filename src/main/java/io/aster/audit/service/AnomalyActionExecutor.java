@@ -249,7 +249,10 @@ public class AnomalyActionExecutor {
                 );
             }
 
-            PolicyVersion currentVersion = policyVersionService.getActiveVersion(anomaly.policyId);
+            // 安全审计 C1（内部自动化 IDOR）：policyId 非租户唯一，自动回滚必须按 anomaly.tenantId
+            // 租户范围查询/回滚，否则可能选中并回滚**其它租户**同 policyId 的版本。
+            String tenantId = anomaly.tenantId;
+            PolicyVersion currentVersion = policyVersionService.getActiveVersion(anomaly.policyId, tenantId);
             Long fromVersion = currentVersion != null ? currentVersion.version : null;
 
             // Phase 3.8 Task 3: 版本验证 - 检测版本漂移
@@ -262,7 +265,7 @@ public class AnomalyActionExecutor {
             }
 
             // Phase 3.8 Task 3: 版本验证 - 检测版本漂移（版本号不匹配预期）
-            PolicyVersion targetPolicyVersion = PolicyVersion.findByVersion(anomaly.policyId, targetVersion);
+            PolicyVersion targetPolicyVersion = PolicyVersion.findByVersion(anomaly.policyId, targetVersion, tenantId);
             if (targetPolicyVersion == null) {
                 LOG.errorf("版本漂移检测: 目标版本 %d 不存在（可能已被删除）", targetVersion);
                 anomalyMetrics.recordRollbackFailed();
@@ -275,7 +278,7 @@ public class AnomalyActionExecutor {
             // 注意：rollbackToVersion 现要求目标版本 status==APPROVED，自动回滚到
             // 未审批版本会抛 IllegalStateException → 下方 catch 记为失败（正确：
             // 不允许把未审批版本当应急目标）。
-            policyVersionService.rollbackToVersion(anomaly.policyId, targetVersion, "system:anomaly-auto-rollback");
+            policyVersionService.rollbackToVersion(anomaly.policyId, targetVersion, "system:anomaly-auto-rollback", tenantId);
 
             LOG.infof("异常 %d 触发自动回滚: %s from %d to %d",
                 action.anomalyId, anomaly.policyId, fromVersion, targetVersion);

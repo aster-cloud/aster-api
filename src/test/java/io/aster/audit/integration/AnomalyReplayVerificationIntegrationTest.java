@@ -69,6 +69,9 @@ class AnomalyReplayVerificationIntegrationTest {
         version.functionName = "testFunction";
         version.content = "test content";
         version.active = true;
+        // 与 anomaly.tenantId 一致：自动回滚现按 anomaly.tenantId 做租户范围查询（安全审计 C1），
+        // 版本必须归属同租户才能被查到/回滚（反映真实不变量：异常与其策略版本同租户）。
+        version.tenantId = "test-tenant";
         version.createdAt = Instant.now();
         version.persist();
 
@@ -449,6 +452,7 @@ class AnomalyReplayVerificationIntegrationTest {
         v1.moduleName = "test.module";
         v1.functionName = "testFunction";
         v1.content = "v1 content";
+        v1.tenantId = "test-tenant";  // 与 anomaly.tenantId 一致（安全审计 C1 租户范围回滚）
         v1.active = false;
         v1.status = io.aster.policy.entity.VersionStatus.APPROVED;
         v1.createdAt = Instant.now().minusSeconds(3600);
@@ -552,6 +556,7 @@ class AnomalyReplayVerificationIntegrationTest {
         v1.moduleName = "test.module";
         v1.functionName = "testFunction";
         v1.content = "v1 content";
+        v1.tenantId = "test-tenant";  // 与 anomaly.tenantId 一致（安全审计 C1 租户范围回滚）
         v1.active = false;
         v1.createdAt = Instant.now().minusSeconds(3600);
         v1.persist();
@@ -688,6 +693,7 @@ class AnomalyReplayVerificationIntegrationTest {
         v1.moduleName = "test.module";
         v1.functionName = "testFunction";
         v1.content = "v1 content";
+        v1.tenantId = "test-tenant";  // 与 anomaly.tenantId 一致（安全审计 C1 租户范围回滚）
         v1.active = false;
         v1.status = io.aster.policy.entity.VersionStatus.APPROVED;
         v1.createdAt = Instant.now().minusSeconds(3600);

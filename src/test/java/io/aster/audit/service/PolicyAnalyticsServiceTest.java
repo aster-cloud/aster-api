@@ -1,6 +1,7 @@
 package io.aster.audit.service;
 
 import io.aster.audit.dto.AnomalyReportDTO;
+import io.aster.audit.dto.VersionUsageStatsDTO;
 import io.aster.policy.entity.PolicyVersion;
 import io.aster.workflow.WorkflowStateEntity;
 import io.quarkus.test.junit.QuarkusTest;
@@ -269,5 +270,62 @@ class PolicyAnalyticsServiceTest {
         assertNotNull(anomaly.sampleWorkflowId);
         assertEquals(mostRecentFailedId, anomaly.sampleWorkflowId,
             "应该选择最近的失败 workflow 作为 sample");
+    }
+
+    /**
+     * 安全审计 C2 回归：getVersionUsageStats 的租户隔离 + tenantId 作为 cache key。
+     *
+     * <p>同一个 versionId 下混入两个租户的 workflow_state；分别以租户 A / B 调用，
+     * 每个租户只应看到自己的计数。历史缺陷：tenantId 从 TenantContext 隐式读取、不进
+     * cache key，租户 B 先缓存后租户 A 同参命中会拿到 B 的数据。tenantId 提为显式
+     * @CacheKey 后，两租户是不同缓存条目且各自租户过滤。
+     */
+    @Test
+    void versionUsageStatsIsTenantScopedAndTenantIsCacheKey() {
+        String tenantA = "ct-analytics-a";
+        String tenantB = "ct-analytics-b";
+        Long sharedVersionId = testVersionId;  // 同一 versionId
+        Instant base = Instant.now().minus(1, ChronoUnit.HOURS);
+
+        // 租户 A：3 个 workflow；租户 B：1 个 workflow（同 versionId）
+        seedWorkflows(sharedVersionId, tenantA, 3, base);
+        seedWorkflows(sharedVersionId, tenantB, 1, base);
+
+        Instant from = base.minus(1, ChronoUnit.HOURS);
+        Instant to = Instant.now().plus(1, ChronoUnit.HOURS);
+
+        try {
+            int aTotal = sumTotals(service.getVersionUsageStats(tenantA, sharedVersionId, "day", from, to));
+            int bTotal = sumTotals(service.getVersionUsageStats(tenantB, sharedVersionId, "day", from, to));
+
+            assertEquals(3, aTotal, "租户 A 只应看到自己的 3 个 workflow");
+            assertEquals(1, bTotal, "C2 回归：租户 B 只应看到自己的 1 个 workflow（tenantId 进 cache key，无跨租户命中）");
+        } finally {
+            cleanupWorkflows(sharedVersionId, tenantA);
+            cleanupWorkflows(sharedVersionId, tenantB);
+        }
+    }
+
+    private int sumTotals(List<VersionUsageStatsDTO> stats) {
+        return stats.stream().mapToInt(s -> s.totalCount).sum();
+    }
+
+    @Transactional
+    void seedWorkflows(Long versionId, String tenantId, int count, Instant base) {
+        for (int i = 0; i < count; i++) {
+            WorkflowStateEntity w = new WorkflowStateEntity();
+            w.workflowId = UUID.randomUUID();
+            w.policyVersionId = versionId;
+            w.tenantId = tenantId;
+            w.startedAt = base.plus(i, ChronoUnit.MINUTES);
+            w.status = "COMPLETED";
+            w.durationMs = 1000L;
+            w.persist();
+        }
+    }
+
+    @Transactional
+    void cleanupWorkflows(Long versionId, String tenantId) {
+        WorkflowStateEntity.delete("policyVersionId = ?1 and tenantId = ?2", versionId, tenantId);
     }
 }

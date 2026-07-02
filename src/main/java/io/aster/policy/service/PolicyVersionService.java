@@ -406,7 +406,9 @@ public class PolicyVersionService {
             );
         }
 
-        PolicyVersion.deactivateAllVersions(version.policyId);
+        // 安全审计 C1：按 (policyId, tenantId) 停用，堵跨租户 DoS——policyId 非租户唯一，
+        // tenantless 停用会波及其它租户同 policyId 的 active 版本。
+        PolicyVersion.deactivateAllVersions(version.policyId, version.tenantId);
         version.active = true;
         version.activatedAt = Instant.now();
         version.activatedBy = activatedBy;

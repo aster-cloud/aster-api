@@ -260,9 +260,49 @@ tasks.register('integrationTest', Test) {
     }
 }
 
-// 让 build 任务依赖 integrationTest，CI 跑 ./gradlew build 时自动包含集成测试
+// 安全审计 H1：Flyway versioned 迁移不得含**数据破坏性** rollback DDL（DROP TABLE/DROP COLUMN）。
+// 历史缺陷：V6.1/6.2/6.3 在 ADD/CREATE 后紧跟未注释的 DROP COLUMN/TABLE（`-- 回滚` 只是注释在
+// DROP 上方），单次迁移自我抵消，靠 V6.4 补回。versioned 迁移是不可变历史，DROP TABLE/COLUMN 会
+// 在全新库重放时丢数据/schema 漂移。本 guard 扫描新迁移，命中未注释的 DROP TABLE/COLUMN 即失败。
+// 注意：只查 TABLE/COLUMN——DROP INDEX 是无数据风险的常规索引重定义（drop-then-create），不拦。
+// 例外清单 flywayDropAllowlist：已发布的历史破坏文件（不可改），仅允许既有条目，禁新增。
+def flywayDropAllowlist = [
+    'V6.1.0__add_dynamic_policy_fields.sql',
+    'V6.2.0__create_policy_catalog.sql',
+    'V6.3.0__create_policy_artifacts.sql',
+    'ROLLBACK_V3.8.0.sql'  // 显式命名的 rollback 脚本（非 versioned，Flyway 不执行）
+]
+tasks.register('verifyFlywayMigrations') {
+    group = 'verification'
+    description = 'H1: 扫描 Flyway versioned 迁移中未注释的数据破坏性 DDL（DROP TABLE/COLUMN）'
+    def migrationDir = file('src/main/resources/db/migration')
+    inputs.dir(migrationDir)
+    doLast {
+        def dropPattern = ~/(?i)\bDROP\s+(TABLE|COLUMN)\b/
+        def violations = []
+        migrationDir.listFiles()?.findAll { it.name.endsWith('.sql') }?.each { f ->
+            if (flywayDropAllowlist.contains(f.name)) return
+            f.readLines().eachWithIndex { line, idx ->
+                def stripped = line.trim()
+                if (stripped.startsWith('--')) return  // 整行注释跳过
+                if (dropPattern.matcher(line).find()) {
+                    violations << "${f.name}:${idx + 1}: ${stripped}"
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException(
+                "Flyway 迁移含破坏性 DDL（H1 guard）——versioned 迁移不可含 rollback DDL，" +
+                "改用新增前向修复迁移：\n  " + violations.join('\n  '))
+        }
+        logger.lifecycle("H1 guard: ${migrationDir.listFiles()?.count { it.name.endsWith('.sql') } ?: 0} 个迁移文件，无未注释破坏性 DDL")
+    }
+}
+
+// 让 build 任务依赖 integrationTest + Flyway guard，CI 跑 ./gradlew build 时自动包含
 tasks.named('check') {
     dependsOn 'integrationTest'
+    dependsOn 'verifyFlywayMigrations'
 }
 
 /**

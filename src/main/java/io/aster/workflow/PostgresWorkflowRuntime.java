@@ -441,8 +441,13 @@ public class PostgresWorkflowRuntime implements WorkflowRuntime {
         }
 
         try {
-            // 查询当前活跃版本
-            PolicyVersion activeVersion = policyVersionService.getActiveVersion(policyId);
+            // 查询当前活跃版本。安全审计 C1（同类）：policyId 非租户唯一，必须按 workflow 的
+            // tenantId 租户范围查询——否则多租户同 policyId 时会把**其它租户**的 policyVersionId
+            // 写进本租户 workflow_state，污染审计/analytics/异常检测。state.tenantId 为 null 时
+            // 才回退 tenantless（历史兼容）。
+            PolicyVersion activeVersion = state.tenantId != null
+                ? policyVersionService.getActiveVersion(policyId, state.tenantId)
+                : policyVersionService.getActiveVersion(policyId);
 
             if (activeVersion != null) {
                 // 注入到元数据

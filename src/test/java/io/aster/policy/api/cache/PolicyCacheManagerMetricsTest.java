@@ -96,6 +96,61 @@ public class PolicyCacheManagerMetricsTest {
         assertFalse(cacheManager.isCacheHit(key), "远程失效后键应被移除");
     }
 
+    /**
+     * 安全审计 C3 回归：远程（跨 pod）失效必须真正失效 Quarkus @CacheName("policy-results")
+     * **主结果缓存**（policyResultCache），而不仅仅清 tenantCacheIndex 追踪表 / cacheLifecycleTracker。
+     *
+     * <p>历史缺陷：{@code handleRemoteInvalidation → removeTrackedKey} 只删追踪索引，不失效主
+     * 结果缓存，导致跨 pod 发版/回滚后本 pod 的主缓存条目留到 15m TTL（stale reads）。
+     * 本测试用 valueLoader 探测**真实主缓存**是否被驱逐：失效后再 get 应触发 loader 重载
+     * （返回新值），而非命中旧值——这是 C3 修复前后的行为差异（Codex 复审指出测错对象后修正）。
+     */
+    @Test
+    void remoteInvalidationMustEvictRealPolicyResultCache() {
+        String tenant = "tenant-c3";
+        var key = new PolicyCacheKey(tenant, "aster.audit.c3", "evaluate", new Object[]{"ctx-c3"});
+        cacheManager.registerCacheEntry(key, tenant);
+
+        io.quarkus.cache.Cache resultCache = cacheManager.getPolicyResultCache();
+        // 向**真实主缓存**放入初值（valueLoader 首次调用）。
+        String first = resultCache.<PolicyCacheKey, String>get(key, k -> "STALE").await().indefinitely();
+        assertTrue("STALE".equals(first), "前置：主缓存应缓存初值 STALE");
+
+        JsonObject payload = new JsonObject()
+            .put("tenantId", tenant)
+            .put("policyModule", key.getPolicyModule())
+            .put("policyFunction", key.getPolicyFunction())
+            .put("hash", key.hashCode());
+        cacheManager.handleRemoteInvalidation(payload.encode());
+
+        // C3 核心断言：主缓存该 key 已被真正驱逐 → 再 get 触发 loader 重载返回新值。
+        String reloaded = resultCache.<PolicyCacheKey, String>get(key, k -> "RELOADED").await().indefinitely();
+        assertTrue("RELOADED".equals(reloaded),
+            "C3 回归：远程失效必须驱逐真实 policy-results 主缓存条目（否则仍命中 STALE = 跨 pod stale read）");
+        assertFalse(cacheManager.isCacheHit(key), "追踪索引也应清除");
+    }
+
+    /** C3：全租户远程失效同样须驱逐真实主缓存里该租户所有条目。 */
+    @Test
+    void remoteFullTenantInvalidationMustEvictRealPolicyResultCache() {
+        String tenant = "tenant-c3-full";
+        var key = new PolicyCacheKey(tenant, "aster.audit.c3full", "evaluate", new Object[]{"ctx"});
+        cacheManager.registerCacheEntry(key, tenant);
+
+        io.quarkus.cache.Cache resultCache = cacheManager.getPolicyResultCache();
+        String first = resultCache.<PolicyCacheKey, String>get(key, k -> "STALE").await().indefinitely();
+        assertTrue("STALE".equals(first), "前置：主缓存应缓存初值 STALE");
+
+        // 全租户失效 payload（无 module/function/hash）
+        JsonObject payload = new JsonObject().put("tenantId", tenant);
+        cacheManager.handleRemoteInvalidation(payload.encode());
+
+        String reloaded = resultCache.<PolicyCacheKey, String>get(key, k -> "RELOADED").await().indefinitely();
+        assertTrue("RELOADED".equals(reloaded),
+            "C3 回归：全租户远程失效须驱逐真实主缓存该租户所有条目");
+        assertFalse(cacheManager.isCacheHit(key));
+    }
+
     private double counterValue(String meterName, String tenant) {
         var counter = meterRegistry.find(meterName)
             .tag("cache_name", "policy-results")

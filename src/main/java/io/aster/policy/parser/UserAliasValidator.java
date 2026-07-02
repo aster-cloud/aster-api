@@ -43,14 +43,13 @@ public final class UserAliasValidator {
     private UserAliasValidator() {}
 
     /**
-     * 允许用户自定义别名的 kind 白名单（低风险运算符/比较）。
+     * 恒允许用户自定义别名的**运算符/比较** kind 白名单（低风险，任何人可用）。
      *
-     * <p>**故意排除**：声明（FUNC_TO/TYPE_DEF/MODULE_DECL）、控制流（IF/OTHERWISE/MATCH/
-     * WHEN/FOR_EACH）、返回（RETURN/RESULT_IS）、导入（IMPORT*）、效果/外部调用（IO/CPU/
-     * AWAIT/WORKFLOW/STEP/…）、逻辑（AND/OR/NOT）、布尔/类型字面量。这些 kind 的别名滥用
-     * 会误导审批者或改变可读语义。
+     * <p>**故意排除**：导入（IMPORT*）、效果/外部调用（IO/CPU/AWAIT/WORKFLOW/STEP/…）、
+     * 逻辑（AND/OR/NOT）、布尔/类型字面量。这些 kind 的别名滥用会改变可读语义/藏副作用。
+     * 声明/控制流/返回等**结构词**移入 {@link #STRUCTURAL_KINDS}（需授权，见下）。
      */
-    private static final Set<SemanticTokenKind> ALLOWED_KINDS = Set.of(
+    private static final Set<SemanticTokenKind> OPERATOR_KINDS = Set.of(
         SemanticTokenKind.PLUS,
         SemanticTokenKind.MINUS_WORD,
         SemanticTokenKind.TIMES,
@@ -64,6 +63,23 @@ public final class UserAliasValidator {
         SemanticTokenKind.AT_MOST
     );
 
+    /**
+     * **结构词** kind（声明+控制流+返回）：**仅当 allowStructural=true（管理员按用户授权）时**
+     * 可自定义别名。红队 H3 默认排除（别名滥用误导审批）；放开需三重护栏（多词 + 审批显规范结构 +
+     * 审计留痕）。与 cloud policy-alias-shared.STRUCTURAL_KINDS 对齐（跨引擎 parity）。
+     *
+     * <p>仍禁（不在此集，任何授权都不放开）：IMPORT/effects/AND/OR/NOT/布尔——护栏兜不住。
+     */
+    private static final Set<SemanticTokenKind> STRUCTURAL_KINDS = Set.of(
+        SemanticTokenKind.MODULE_DECL,
+        SemanticTokenKind.FUNC_TO,
+        SemanticTokenKind.IF,
+        SemanticTokenKind.OTHERWISE,
+        SemanticTokenKind.MATCH,
+        SemanticTokenKind.WHEN,
+        SemanticTokenKind.RETURN
+    );
+
     /** 校验结果：valid + 错误清单。 */
     public record Result(boolean valid, List<String> errors) {
         public static Result ok() {
@@ -71,23 +87,31 @@ public final class UserAliasValidator {
         }
     }
 
-    /** 兼容重载：不带领域词汇索引。 */
+    /** 兼容重载：不带领域词汇索引，不允许结构词。 */
     public static Result validate(Map<SemanticTokenKind, List<String>> aliasSet, String locale) {
-        return validate(aliasSet, locale, null);
+        return validate(aliasSet, locale, null, false);
+    }
+
+    /** 兼容重载：带领域词汇索引，不允许结构词。 */
+    public static Result validate(Map<SemanticTokenKind, List<String>> aliasSet, String locale,
+                                  IdentifierIndex identifierIndex) {
+        return validate(aliasSet, locale, identifierIndex, false);
     }
 
     /**
      * 校验用户 aliasSet（针对给定 locale 的基础 lexicon + 可选领域词汇索引）。
      *
-     * <p>校验完整识别命名空间（Codex 复核修正）：base 规范拼写 + base 别名 + 用户别名互不
-     * 遮蔽 + 不撞领域词汇标识符。所有比较走统一归一（trim + 折叠空白 + lowercase ROOT）。
+     * <p>白名单两档（deny-by-default）：OPERATOR_KINDS 恒允许；STRUCTURAL_KINDS 仅当
+     * {@code allowStructural=true}（管理员按用户授权，调用方从 entitlement 权威传入）时允许；
+     * 其余高危 kind 恒拒。其余校验（多词/规范形/不遮蔽/不撞领域词汇）不变。
      *
      * @param aliasSet        用户别名，null/空视为合法（无别名）
      * @param locale          基础语言代码（取规范拼写/别名做不遮蔽校验）
      * @param identifierIndex 领域词汇索引，null 表示不做别名↔标识符碰撞校验
+     * @param allowStructural 是否放开结构词别名（管理员按用户授权，权威传入，默认 false）
      */
     public static Result validate(Map<SemanticTokenKind, List<String>> aliasSet, String locale,
-                                  IdentifierIndex identifierIndex) {
+                                  IdentifierIndex identifierIndex, boolean allowStructural) {
         if (aliasSet == null || aliasSet.isEmpty()) {
             return Result.ok();
         }
@@ -117,10 +141,17 @@ public final class UserAliasValidator {
         for (Map.Entry<SemanticTokenKind, List<String>> e : aliasSet.entrySet()) {
             SemanticTokenKind kind = e.getKey();
 
-            // 铁律 1：白名单（deny-by-default）
-            if (!ALLOWED_KINDS.contains(kind)) {
-                errors.add("不允许为 " + kind + " 自定义别名（仅低风险运算符/比较类可自定义，"
-                    + "防止误导审批的语义滥用）");
+            // 铁律 1：白名单（deny-by-default）两档——运算符恒允；结构词需授权；其余高危恒拒。
+            boolean isOperator = OPERATOR_KINDS.contains(kind);
+            boolean isStructural = STRUCTURAL_KINDS.contains(kind);
+            if (!isOperator && !(isStructural && allowStructural)) {
+                if (isStructural) {
+                    errors.add("不允许为结构词 " + kind + " 自定义别名（需管理员授予结构词别名权限；"
+                        + "审批时会显示规范化真实结构并留痕）");
+                } else {
+                    errors.add("不允许为 " + kind + " 自定义别名（仅运算符/比较类，或经授权的结构词"
+                        + "可自定义，防止误导审批的语义滥用）");
+                }
                 continue;
             }
 

@@ -192,6 +192,53 @@ class UserAliasValidatorTest {
     }
 
     /** 构造一个含单条 field 映射的领域词汇 IdentifierIndex（用于碰撞测试）。 */
+    // ── 结构词别名门控（ADR 0022 扩展；与 cloud policy-alias-shared 对齐） ──────────
+
+    @Test
+    void structuralKindsRejectedByDefault_allowStructuralFalse() {
+        // MODULE_DECL/FUNC_TO/IF/OTHERWISE/MATCH/WHEN/RETURN 默认（未授权）拒绝。
+        for (SemanticTokenKind k : List.of(
+                SemanticTokenKind.MODULE_DECL, SemanticTokenKind.FUNC_TO, SemanticTokenKind.IF,
+                SemanticTokenKind.OTHERWISE, SemanticTokenKind.MATCH, SemanticTokenKind.WHEN,
+                SemanticTokenKind.RETURN)) {
+            var r = UserAliasValidator.validate(Map.of(k, List.of("the phrase here")), "en-US");
+            assertFalse(r.valid(), "结构词默认应拒: " + k);
+        }
+    }
+
+    @Test
+    void structuralKindsAllowedWhenAuthorized_multiWord() {
+        for (SemanticTokenKind k : List.of(
+                SemanticTokenKind.MODULE_DECL, SemanticTokenKind.FUNC_TO, SemanticTokenKind.IF,
+                SemanticTokenKind.OTHERWISE, SemanticTokenKind.MATCH, SemanticTokenKind.WHEN,
+                SemanticTokenKind.RETURN)) {
+            var r = UserAliasValidator.validate(
+                Map.of(k, List.of("the phrase here")), "en-US", null, true);
+            assertTrue(r.valid(), "授权后结构词多词别名应允许: " + k + " errors=" + r.errors());
+        }
+    }
+
+    @Test
+    void structuralAuthorizedButSingleWord_stillRejected_guardMultiWord() {
+        // 护栏①：授权下结构词单词别名仍拒（多词铁律）。
+        var r = UserAliasValidator.validate(
+            Map.of(SemanticTokenKind.RETURN, List.of("answer")), "en-US", null, true);
+        assertFalse(r.valid());
+        assertTrue(String.join(",", r.errors()).contains("多词"));
+    }
+
+    @Test
+    void highRiskKindsRejectedEvenWhenAuthorized() {
+        // 高危 kind（IMPORT/AND/OR/NOT/IO/AWAIT/布尔）即使 allowStructural=true 也拒。
+        for (SemanticTokenKind k : List.of(
+                SemanticTokenKind.IMPORT, SemanticTokenKind.AND, SemanticTokenKind.OR,
+                SemanticTokenKind.NOT, SemanticTokenKind.IO, SemanticTokenKind.AWAIT)) {
+            var r = UserAliasValidator.validate(
+                Map.of(k, List.of("some phrase")), "en-US", null, true);
+            assertFalse(r.valid(), "高危 kind 即使授权也应拒: " + k);
+        }
+    }
+
     private static IdentifierIndex vocabIndexWith(String canonical, String localized) {
         DomainVocabulary vocab = new DomainVocabulary(
             "test-vocab", "Test Vocab", "en-US", "1.0.0",

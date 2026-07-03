@@ -469,10 +469,19 @@ public class PolicyEvaluationResource {
                 aster.core.identifier.IdentifierIndex vocabIndex =
                     buildVocabularyIndex(request.vocabulary());
 
-                // ADR 0022：策略携带的已发布版本冻结别名快照 → SemanticTokenKind map。
-                // 冻结版本 = 已授权+校验+进 envelope 的可信快照，执行端 allowStructural=true 应用。
+                // ADR 0022：策略携带的别名快照 → SemanticTokenKind map。
                 java.util.Map<aster.core.lexicon.SemanticTokenKind, java.util.List<String>> aliasSet =
                     buildAliasSet(request.aliasSet());
+
+                // 结构词别名授权口径按调用来源可信度区分（安全边界）：
+                //   - 内部调用方（cloud BFF S2S，带 X-Internal-Caller + HMAC）转发的是**已发布
+                //     版本冻结别名快照**——创建时已 per-user 授权+校验+进 envelope，可信 →
+                //     allowStructural=true。
+                //   - 直连 API-key 的 trial/即时源码=**未冻结的现场用户输入**，不可信 →
+                //     allowStructural=false（结构词别名被 UserAliasValidator 拒，防绕过 per-user 授权
+                //     注入结构词）。此端点身兼「存储版本执行」与「trial 源码预览」两职，故必须区分。
+                boolean aliasesTrusted =
+                    io.aster.policy.security.TrialBypassPredicate.hasInternalCallerCredentials(jaxrsCtx);
 
                 // 使用动态执行器执行 CNL，支持命名上下文格式
                 // executeWithContext 会自动检测并映射命名参数到位置参数
@@ -484,7 +493,8 @@ public class PolicyEvaluationResource {
                     request.getLocaleOrDefault(),
                     vocabIndex,
                     legacyEvaluateSentinel,
-                    aliasSet
+                    aliasSet,
+                    aliasesTrusted
                 );
 
                 // 记录指标

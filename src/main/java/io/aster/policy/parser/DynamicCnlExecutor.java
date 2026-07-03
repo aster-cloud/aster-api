@@ -173,9 +173,25 @@ public class DynamicCnlExecutor {
             String tenantId, String source, Object context, String functionName, String locale,
             aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel,
             Map<aster.core.lexicon.SemanticTokenKind, List<String>> aliasSet) {
+        // 兼容重载：aliasSet 视为可信冻结快照（既有内部调用方语义）。
+        return executeWithTenantContext(tenantId, source, context, functionName, locale,
+            identifierIndex, legacyEvaluateSentinel, aliasSet, true);
+    }
+
+    /**
+     * 带用户别名 + 显式信任标志的租户上下文执行（ADR 0022 安全边界）。
+     *
+     * @param aliasesTrusted true=aliasSet 是已发布版本冻结的可信快照（allowStructural=true，
+     *   结构词别名放行，因创建时已授权+校验）；false=未冻结的现场用户输入（allowStructural=false，
+     *   结构词别名需授权，被 UserAliasValidator 拒）。区分「存储版本执行」与「trial 源码预览」。
+     */
+    public ExecutionResult executeWithTenantContext(
+            String tenantId, String source, Object context, String functionName, String locale,
+            aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel,
+            Map<aster.core.lexicon.SemanticTokenKind, List<String>> aliasSet, boolean aliasesTrusted) {
         return executeInternal(
             source, context, functionName, locale, true, identifierIndex, legacyEvaluateSentinel,
-            tenantId, moduleResolver, modulesEnabled, aliasSet);
+            tenantId, moduleResolver, modulesEnabled, aliasSet, aliasesTrusted);
     }
 
     /**
@@ -195,7 +211,7 @@ public class DynamicCnlExecutor {
             aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel,
             String tenantId, ModuleResolver moduleResolver, boolean modulesEnabled) {
         return executeInternal(source, context, functionName, locale, mapNamedContext, identifierIndex,
-            legacyEvaluateSentinel, tenantId, moduleResolver, modulesEnabled, null);
+            legacyEvaluateSentinel, tenantId, moduleResolver, modulesEnabled, null, true);
     }
 
     private static ExecutionResult executeInternal(
@@ -203,15 +219,26 @@ public class DynamicCnlExecutor {
             aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel,
             String tenantId, ModuleResolver moduleResolver, boolean modulesEnabled,
             Map<aster.core.lexicon.SemanticTokenKind, List<String>> aliasSet) {
+        // 兼容重载：默认 aliasSet 可信（既有调用方语义）。
+        return executeInternal(source, context, functionName, locale, mapNamedContext, identifierIndex,
+            legacyEvaluateSentinel, tenantId, moduleResolver, modulesEnabled, aliasSet, true);
+    }
+
+    private static ExecutionResult executeInternal(
+            String source, Object context, String functionName, String locale, boolean mapNamedContext,
+            aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel,
+            String tenantId, ModuleResolver moduleResolver, boolean modulesEnabled,
+            Map<aster.core.lexicon.SemanticTokenKind, List<String>> aliasSet, boolean aliasesTrusted) {
         long startTime = System.currentTimeMillis();
 
         try {
             // 1. 解析 CNL → AST（传入 locale 以支持多语言，传入 index 以翻译用户词）。
-            //    带用户别名（ADR 0022）时走 parseWithUserAliases——冻结版本可信，allowStructural=true。
-            LOG.debugf("解析 CNL 源代码... locale=%s, vocab=%s, aliases=%s",
-                locale, identifierIndex != null, aliasSet != null && !aliasSet.isEmpty());
+            //    带用户别名（ADR 0022）时走 parseWithUserAliases。allowStructural 按 aliasesTrusted：
+            //    冻结版本可信=true（结构词已授权）；trial 现场输入=false（结构词需授权，防绕过）。
+            LOG.debugf("解析 CNL 源代码... locale=%s, vocab=%s, aliases=%s, trusted=%s",
+                locale, identifierIndex != null, aliasSet != null && !aliasSet.isEmpty(), aliasesTrusted);
             InProcessCnlParser.ParseResult parseResult = (aliasSet != null && !aliasSet.isEmpty())
-                ? InProcessCnlParser.parseWithUserAliases(source, locale, identifierIndex, aliasSet, true)
+                ? InProcessCnlParser.parseWithUserAliases(source, locale, identifierIndex, aliasSet, aliasesTrusted)
                 : InProcessCnlParser.parse(source, locale, identifierIndex);
             Module astModule = parseResult.module();
 

@@ -160,9 +160,22 @@ public class DynamicCnlExecutor {
     public ExecutionResult executeWithTenantContext(
             String tenantId, String source, Object context, String functionName, String locale,
             aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel) {
+        return executeWithTenantContext(tenantId, source, context, functionName, locale,
+            identifierIndex, legacyEvaluateSentinel, null);
+    }
+
+    /**
+     * 带用户别名（ADR 0022）的租户上下文执行。aliasSet 为已发布版本冻结的可信快照，
+     * 按 allowStructural=true 应用（冻结版本 = 已授权+校验+进 envelope，执行时信任）。
+     * null/空 aliasSet 时行为与无别名一致（向后兼容）。
+     */
+    public ExecutionResult executeWithTenantContext(
+            String tenantId, String source, Object context, String functionName, String locale,
+            aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel,
+            Map<aster.core.lexicon.SemanticTokenKind, List<String>> aliasSet) {
         return executeInternal(
             source, context, functionName, locale, true, identifierIndex, legacyEvaluateSentinel,
-            tenantId, moduleResolver, modulesEnabled);
+            tenantId, moduleResolver, modulesEnabled, aliasSet);
     }
 
     /**
@@ -181,12 +194,25 @@ public class DynamicCnlExecutor {
             String source, Object context, String functionName, String locale, boolean mapNamedContext,
             aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel,
             String tenantId, ModuleResolver moduleResolver, boolean modulesEnabled) {
+        return executeInternal(source, context, functionName, locale, mapNamedContext, identifierIndex,
+            legacyEvaluateSentinel, tenantId, moduleResolver, modulesEnabled, null);
+    }
+
+    private static ExecutionResult executeInternal(
+            String source, Object context, String functionName, String locale, boolean mapNamedContext,
+            aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel,
+            String tenantId, ModuleResolver moduleResolver, boolean modulesEnabled,
+            Map<aster.core.lexicon.SemanticTokenKind, List<String>> aliasSet) {
         long startTime = System.currentTimeMillis();
 
         try {
-            // 1. 解析 CNL → AST（传入 locale 以支持多语言，传入 index 以翻译用户词）
-            LOG.debugf("解析 CNL 源代码... locale=%s, vocab=%s", locale, identifierIndex != null);
-            InProcessCnlParser.ParseResult parseResult = InProcessCnlParser.parse(source, locale, identifierIndex);
+            // 1. 解析 CNL → AST（传入 locale 以支持多语言，传入 index 以翻译用户词）。
+            //    带用户别名（ADR 0022）时走 parseWithUserAliases——冻结版本可信，allowStructural=true。
+            LOG.debugf("解析 CNL 源代码... locale=%s, vocab=%s, aliases=%s",
+                locale, identifierIndex != null, aliasSet != null && !aliasSet.isEmpty());
+            InProcessCnlParser.ParseResult parseResult = (aliasSet != null && !aliasSet.isEmpty())
+                ? InProcessCnlParser.parseWithUserAliases(source, locale, identifierIndex, aliasSet, true)
+                : InProcessCnlParser.parse(source, locale, identifierIndex);
             Module astModule = parseResult.module();
 
             // 2. 确定要执行的函数名（优先级：显式 functionName > @entry 注解 > 单 Rule > 诊断）

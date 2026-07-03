@@ -102,6 +102,50 @@ class UserAliasCompileTest {
     }
 
     @Test
+    void structuralAliasesLowerToSameIrAsCanonical_whenAuthorized() {
+        // ADR 0022 结构词扩展（C1）：授权用户用结构词多词别名写的源码，经
+        // parseWithUserAliases(allowStructural=true) 应降到与规范关键词版一致的 Core IR。
+        // 证明冻结版本执行时别名能归回真实结构（存得进也跑得了）。
+        Map<SemanticTokenKind, List<String>> aliasSet = Map.of(
+            SemanticTokenKind.FUNC_TO, List.of("the rule for"),
+            SemanticTokenKind.IF, List.of("in the case that"),
+            SemanticTokenKind.RETURN, List.of("the answer is")
+        );
+        String aliasSrc = """
+            Module Pricing.
+
+            the rule for discountedPrice given amount as Int, produce Int:
+              in the case that amount greater than 100
+                the answer is amount times 90 divided by 100.
+              the answer is amount.""";
+        String canonicalSrc = """
+            Module Pricing.
+
+            Rule discountedPrice given amount as Int, produce Int:
+              If amount greater than 100
+                Return amount times 90 divided by 100.
+              Return amount.""";
+
+        InProcessCnlParser.ParseResult pr =
+            InProcessCnlParser.parseWithUserAliases(aliasSrc, "en-US", null, aliasSet, true);
+        JsonNode aliasIr = stripOrigin(MAPPER.valueToTree(new CoreLowering().lowerModule(pr.module())));
+        JsonNode canonIr = lowerToIr(canonicalSrc, null);
+        assertEquals(canonIr, aliasIr, "授权的结构词别名版应降到与规范版一致的 Core IR");
+    }
+
+    @Test
+    void structuralAliasesRejected_whenNotAuthorized() {
+        // 未授权（默认 allowStructural=false）：结构词别名被校验拒 → 抛 CnlParseException。
+        Map<SemanticTokenKind, List<String>> aliasSet = Map.of(
+            SemanticTokenKind.RETURN, List.of("the answer is"));
+        String src = "Module M.\n\nRule p given x as Int, produce Int:\n  the answer is x.";
+        org.junit.jupiter.api.Assertions.assertThrows(
+            InProcessCnlParser.CnlParseException.class,
+            () -> InProcessCnlParser.parseWithUserAliases(src, "en-US", null, aliasSet),
+            "未授权时结构词别名应被校验拒绝");
+    }
+
+    @Test
     void nullAliasSetIsBackwardCompatible() {
         // aliasSet 为 null → 与不带别名的 parse 完全一致
         String src = "Module M.\n\nRule p given x as Int, produce Int:\n  Return x times 2.";

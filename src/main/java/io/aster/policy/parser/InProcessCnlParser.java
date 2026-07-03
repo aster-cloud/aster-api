@@ -94,7 +94,24 @@ public class InProcessCnlParser {
     public static ParseResult parseWithUserAliases(String source, String locale,
                                                    IdentifierIndex identifierIndex,
                                                    Map<SemanticTokenKind, List<String>> aliasSet) {
-        UserAliasValidator.Result vr = UserAliasValidator.validate(aliasSet, locale, identifierIndex);
+        return parseWithUserAliases(source, locale, identifierIndex, aliasSet, false);
+    }
+
+    /**
+     * 带别名解析，可指定 allowStructural（ADR 0022 结构词别名扩展）。
+     *
+     * <p><b>执行冻结版本时应传 allowStructural=true</b>：已发布版本的 aliasSet 是在创建时经
+     * 管理员授权（per-user grant）+ UserAliasValidator 校验 + 冻结进 sourceEnvelope 的**可信快照**。
+     * 执行端不应再按当前 grant 状态重判（grant 撤销不应打断已发布策略）；envelope 已防篡改。
+     * 现场用户提交（非冻结）走 allowStructural=false（默认），结构词别名需授权。
+     *
+     * @param allowStructural 是否放开结构词别名校验（冻结可信版本执行时 true）
+     */
+    public static ParseResult parseWithUserAliases(String source, String locale,
+                                                   IdentifierIndex identifierIndex,
+                                                   Map<SemanticTokenKind, List<String>> aliasSet,
+                                                   boolean allowStructural) {
+        UserAliasValidator.Result vr = UserAliasValidator.validate(aliasSet, locale, identifierIndex, allowStructural);
         if (!vr.valid()) {
             throw new CnlParseException("用户自定义别名校验失败: " + String.join("; ", vr.errors()));
         }

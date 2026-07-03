@@ -71,7 +71,7 @@ class CnlSourceLimitsTest {
     @Test
     void sourcePolicyRequestRejectsOversizedSource() {
         String tooBig = sourceOfLength(CnlSourceLimits.MAX_SOURCE_LENGTH + 1);
-        SourcePolicyRequest req = new SourcePolicyRequest(tooBig, java.util.Map.of(), null, null, null);
+        SourcePolicyRequest req = new SourcePolicyRequest(tooBig, java.util.Map.of(), null, null, null, null);
         var violations = validator.validate(req);
         assertFalse(violations.isEmpty(), "超长 source 必须触发约束违规");
         assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("source")),

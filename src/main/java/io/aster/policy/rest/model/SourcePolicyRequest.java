@@ -19,6 +19,10 @@ import java.util.Map;
  *        领域词汇，使执行端规范化阶段能把用户自定义术语翻译为规范化名称。
  *        形如 aster-lang-core DomainVocabulary 的 JSON（id/name/locale/version/
  *        structs/fields/functions/enumValues）。为 null 时仅用内置词汇。
+ * @param aliasSet 用户关键词别名（可选，ADR 0022）。已发布版本冻结的规范别名快照，
+ *        形如 {@code {"TIMES":["multiplied by"],...}}（kind → 多词短语数组）。执行端归一
+ *        阶段据此把别名归回规范关键词，使别名写的源码能编译。冻结版本 = 已授权+校验+进
+ *        envelope 的可信快照，执行端按 allowStructural=true 应用。为 null 时无用户别名。
  */
 public record SourcePolicyRequest(
     // 见 CnlSourceLimits：CNL 解析在长输入上超线性耗时，无上限即 DoS 向量。
@@ -34,7 +38,9 @@ public record SourcePolicyRequest(
 
     String functionName,
 
-    Map<String, Object> vocabulary
+    Map<String, Object> vocabulary,
+
+    Map<String, java.util.List<String>> aliasSet
 ) {
     /**
      * 获取语言配置，默认 en-US

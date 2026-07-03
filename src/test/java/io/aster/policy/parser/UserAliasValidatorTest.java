@@ -239,6 +239,55 @@ class UserAliasValidatorTest {
         }
     }
 
+    // ---- W2 DoS 上界（与 cloud policy-alias.test.ts W2 块逐一对齐） ----
+
+    @Test
+    void w2_rejectsTooManyKinds() {
+        java.util.Map<SemanticTokenKind, List<String>> big = new java.util.HashMap<>();
+        // 33 > MAX_ALIAS_KINDS(32)。用真实 kind 枚举填够数量（不足则本测试无意义，断言防退化）。
+        var all = SemanticTokenKind.values();
+        int n = Math.min(all.length, UserAliasValidator.MAX_ALIAS_KINDS + 1);
+        for (int i = 0; i < n; i++) {
+            big.put(all[i], List.of("a b"));
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(
+            all.length > UserAliasValidator.MAX_ALIAS_KINDS,
+            "枚举数量须超过上限，测试才有效");
+        var r = UserAliasValidator.validate(big, "en-US");
+        assertFalse(r.valid());
+        assertTrue(r.errors().stream().anyMatch(e -> e.contains("kind 数量")));
+    }
+
+    @Test
+    void w2_rejectsTooManyAliasesPerKind() {
+        java.util.List<String> many = new java.util.ArrayList<>();
+        for (int i = 0; i < UserAliasValidator.MAX_ALIASES_PER_KIND + 1; i++) {
+            many.add("alias number " + i);
+        }
+        var r = UserAliasValidator.validate(Map.of(SemanticTokenKind.TIMES, many), "en-US");
+        assertFalse(r.valid());
+        assertTrue(r.errors().stream().anyMatch(e -> e.contains("别名数量")));
+    }
+
+    @Test
+    void w2_rejectsOverlongAlias() {
+        String longAlias = "a " + "x".repeat(200);
+        var r = UserAliasValidator.validate(
+            Map.of(SemanticTokenKind.TIMES, List.of(longAlias)), "en-US");
+        assertFalse(r.valid());
+        assertTrue(r.errors().stream().anyMatch(e -> e.contains("别名长度")));
+    }
+
+    @Test
+    void w2_acceptsAtLimitBoundary() {
+        java.util.List<String> eight = new java.util.ArrayList<>();
+        for (int i = 0; i < UserAliasValidator.MAX_ALIASES_PER_KIND; i++) {
+            eight.add("alias phrase " + i);
+        }
+        var r = UserAliasValidator.validate(Map.of(SemanticTokenKind.TIMES, eight), "en-US");
+        assertTrue(r.valid(), () -> r.errors().toString());
+    }
+
     private static IdentifierIndex vocabIndexWith(String canonical, String localized) {
         DomainVocabulary vocab = new DomainVocabulary(
             "test-vocab", "Test Vocab", "en-US", "1.0.0",

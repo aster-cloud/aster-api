@@ -40,6 +40,17 @@ public final class UserAliasValidator {
      */
     public static final String VERSION = "1";
 
+    /**
+     * W2 DoS 上界（与 cloud policy-alias-shared 同名常量逐一对齐，跨引擎 parity）。
+     * 可别名 kind 上限 18（11 运算符 + 7 结构词），故界远宽于合法用途，只兜异常/恶意
+     * 巨量输入——防单条别名达 MB 级拖垮归一正则/信封哈希，或几千 kind/短语撑爆内存。
+     */
+    public static final int MAX_ALIAS_KINDS = 32;
+    /** 单个 kind 最多别名短语数。 */
+    public static final int MAX_ALIASES_PER_KIND = 8;
+    /** 单条别名短语最大长度（字符）。 */
+    public static final int MAX_ALIAS_LENGTH = 64;
+
     private UserAliasValidator() {}
 
     /**
@@ -85,6 +96,9 @@ public final class UserAliasValidator {
         public static Result ok() {
             return new Result(true, List.of());
         }
+        public static Result fail(List<String> errors) {
+            return new Result(false, List.copyOf(errors));
+        }
     }
 
     /** 兼容重载：不带领域词汇索引，不允许结构词。 */
@@ -114,6 +128,12 @@ public final class UserAliasValidator {
                                   IdentifierIndex identifierIndex, boolean allowStructural) {
         if (aliasSet == null || aliasSet.isEmpty()) {
             return Result.ok();
+        }
+
+        // W2：kind 总数上界（DoS 兜底），超限直接判失败不再逐条处理。
+        if (aliasSet.size() > MAX_ALIAS_KINDS) {
+            return Result.fail(List.of(
+                "别名集 kind 数量 " + aliasSet.size() + " 超过上限 " + MAX_ALIAS_KINDS));
         }
 
         List<String> errors = new ArrayList<>();
@@ -159,9 +179,19 @@ public final class UserAliasValidator {
             if (aliases == null || aliases.isEmpty()) {
                 continue;
             }
+            // W2：单 kind 别名数量上界（DoS 兜底）。
+            if (aliases.size() > MAX_ALIASES_PER_KIND) {
+                errors.add(kind + " 的别名数量 " + aliases.size() + " 超过上限 " + MAX_ALIASES_PER_KIND);
+                continue;
+            }
             for (String alias : aliases) {
                 if (alias == null || alias.isBlank()) {
                     errors.add(kind + " 的别名不能为空");
+                    continue;
+                }
+                // W2：单条别名长度上界（DoS 兜底）。先于归一，避免对超长串做正则。
+                if (alias.length() > MAX_ALIAS_LENGTH) {
+                    errors.add(kind + " 的别名长度 " + alias.length() + " 超过上限 " + MAX_ALIAS_LENGTH);
                     continue;
                 }
                 String norm = normalize(alias);

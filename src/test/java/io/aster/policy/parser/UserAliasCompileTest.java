@@ -102,6 +102,50 @@ class UserAliasCompileTest {
     }
 
     @Test
+    void structuralAliasesLowerToSameIrAsCanonical_whenAuthorized() {
+        // ADR 0022 结构词扩展（C1）：授权用户用结构词多词别名写的源码，经
+        // parseWithUserAliases(allowStructural=true) 应降到与规范关键词版一致的 Core IR。
+        // 证明冻结版本执行时别名能归回真实结构（存得进也跑得了）。
+        Map<SemanticTokenKind, List<String>> aliasSet = Map.of(
+            SemanticTokenKind.FUNC_TO, List.of("the rule for"),
+            SemanticTokenKind.IF, List.of("in the case that"),
+            SemanticTokenKind.RETURN, List.of("the answer is")
+        );
+        String aliasSrc = """
+            Module Pricing.
+
+            the rule for discountedPrice given amount as Int, produce Int:
+              in the case that amount greater than 100
+                the answer is amount times 90 divided by 100.
+              the answer is amount.""";
+        String canonicalSrc = """
+            Module Pricing.
+
+            Rule discountedPrice given amount as Int, produce Int:
+              If amount greater than 100
+                Return amount times 90 divided by 100.
+              Return amount.""";
+
+        InProcessCnlParser.ParseResult pr =
+            InProcessCnlParser.parseWithUserAliases(aliasSrc, "en-US", null, aliasSet, true);
+        JsonNode aliasIr = stripOrigin(MAPPER.valueToTree(new CoreLowering().lowerModule(pr.module())));
+        JsonNode canonIr = lowerToIr(canonicalSrc, null);
+        assertEquals(canonIr, aliasIr, "授权的结构词别名版应降到与规范版一致的 Core IR");
+    }
+
+    @Test
+    void structuralAliasesRejected_whenNotAuthorized() {
+        // 未授权（默认 allowStructural=false）：结构词别名被校验拒 → 抛 CnlParseException。
+        Map<SemanticTokenKind, List<String>> aliasSet = Map.of(
+            SemanticTokenKind.RETURN, List.of("the answer is"));
+        String src = "Module M.\n\nRule p given x as Int, produce Int:\n  the answer is x.";
+        org.junit.jupiter.api.Assertions.assertThrows(
+            InProcessCnlParser.CnlParseException.class,
+            () -> InProcessCnlParser.parseWithUserAliases(src, "en-US", null, aliasSet),
+            "未授权时结构词别名应被校验拒绝");
+    }
+
+    @Test
     void nullAliasSetIsBackwardCompatible() {
         // aliasSet 为 null → 与不带别名的 parse 完全一致
         String src = "Module M.\n\nRule p given x as Int, produce Int:\n  Return x times 2.";
@@ -109,5 +153,38 @@ class UserAliasCompileTest {
         JsonNode withEmpty = lowerToIr(src, Map.of());
         assertEquals(withNull, withEmpty);
         assertTrue(withNull.toString().contains("\"*\""), "应含乘法算子");
+    }
+
+    // ---- 安全边界：executor 按 aliasesTrusted 决定 allowStructural（trial vs 冻结版本）----
+
+    @Test
+    void executor_untrustedStructuralAlias_rejected() {
+        // trial/现场输入（aliasesTrusted=false）：结构词别名不可信 → 校验拒 → parse 抛异常，
+        // executor 包成 DynamicExecutionException。防直连 API-key 的 trial 调用绕过 per-user
+        // 授权注入结构词别名。
+        Map<SemanticTokenKind, List<String>> aliasSet = Map.of(
+            SemanticTokenKind.RETURN, List.of("the answer is"));
+        String src = "Module M.\n\nRule p given x as Int, produce Int:\n  the answer is x.";
+
+        DynamicCnlExecutor executor = new DynamicCnlExecutor();
+        org.junit.jupiter.api.Assertions.assertThrows(
+            RuntimeException.class,
+            () -> executor.executeWithTenantContext(
+                "tenant-1", src, Map.of("x", 5), "p", "en-US", null, false, aliasSet, false),
+            "未授权结构词别名的 trial 执行应被拒绝");
+    }
+
+    @Test
+    void executor_trustedStructuralAlias_executes() {
+        // 冻结版本（aliasesTrusted=true）：结构词别名可信 → 正常执行。
+        Map<SemanticTokenKind, List<String>> aliasSet = Map.of(
+            SemanticTokenKind.RETURN, List.of("the answer is"));
+        String src = "Module M.\n\nRule p given x as Int, produce Int:\n  the answer is x.";
+
+        DynamicCnlExecutor executor = new DynamicCnlExecutor();
+        DynamicCnlExecutor.ExecutionResult result = executor.executeWithTenantContext(
+            "tenant-1", src, Map.of("x", 5), "p", "en-US", null, false, aliasSet, true);
+
+        assertEquals(5, result.result(), "授权结构词别名应正常执行");
     }
 }

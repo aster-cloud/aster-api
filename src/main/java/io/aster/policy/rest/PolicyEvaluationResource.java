@@ -469,6 +469,20 @@ public class PolicyEvaluationResource {
                 aster.core.identifier.IdentifierIndex vocabIndex =
                     buildVocabularyIndex(request.vocabulary());
 
+                // ADR 0022：策略携带的别名快照 → SemanticTokenKind map。
+                java.util.Map<aster.core.lexicon.SemanticTokenKind, java.util.List<String>> aliasSet =
+                    buildAliasSet(request.aliasSet());
+
+                // 结构词别名授权口径按调用来源可信度区分（安全边界）：
+                //   - 内部调用方（cloud BFF S2S，带 X-Internal-Caller + HMAC）转发的是**已发布
+                //     版本冻结别名快照**——创建时已 per-user 授权+校验+进 envelope，可信 →
+                //     allowStructural=true。
+                //   - 直连 API-key 的 trial/即时源码=**未冻结的现场用户输入**，不可信 →
+                //     allowStructural=false（结构词别名被 UserAliasValidator 拒，防绕过 per-user 授权
+                //     注入结构词）。此端点身兼「存储版本执行」与「trial 源码预览」两职，故必须区分。
+                boolean aliasesTrusted =
+                    io.aster.policy.security.TrialBypassPredicate.hasInternalCallerCredentials(jaxrsCtx);
+
                 // 使用动态执行器执行 CNL，支持命名上下文格式
                 // executeWithContext 会自动检测并映射命名参数到位置参数
                 DynamicCnlExecutor.ExecutionResult execResult = dynamicCnlExecutor.executeWithTenantContext(
@@ -478,7 +492,9 @@ public class PolicyEvaluationResource {
                     request.getFunctionNameOrDefault(),
                     request.getLocaleOrDefault(),
                     vocabIndex,
-                    legacyEvaluateSentinel
+                    legacyEvaluateSentinel,
+                    aliasSet,
+                    aliasesTrusted
                 );
 
                 // 记录指标
@@ -1215,6 +1231,32 @@ public class PolicyEvaluationResource {
      * @param vocabulary 领域词汇 Map（DomainVocabulary 的 JSON 结构），可为 null
      * @return 构建好的 IdentifierIndex，无有效词汇时返回 null
      */
+    /**
+     * 把请求里的别名 Map（kind 名 → 短语数组）转成 {@code Map<SemanticTokenKind, List<String>>}。
+     *
+     * <p>ADR 0022。无法识别的 kind 名跳过（不阻断执行；下游 UserAliasValidator 会对无效 kind 拒，
+     * 但冻结版本本就已校验过，这里只做类型转换）。null/空 → null（无用户别名，退化为无别名解析）。
+     */
+    private java.util.Map<aster.core.lexicon.SemanticTokenKind, java.util.List<String>> buildAliasSet(
+            Map<String, java.util.List<String>> aliasSet) {
+        if (aliasSet == null || aliasSet.isEmpty()) {
+            return null;
+        }
+        java.util.Map<aster.core.lexicon.SemanticTokenKind, java.util.List<String>> out =
+            new java.util.EnumMap<>(aster.core.lexicon.SemanticTokenKind.class);
+        for (var e : aliasSet.entrySet()) {
+            if (e.getKey() == null || e.getValue() == null) {
+                continue;
+            }
+            try {
+                out.put(aster.core.lexicon.SemanticTokenKind.valueOf(e.getKey()), e.getValue());
+            } catch (IllegalArgumentException ignored) {
+                // 未知 kind 名跳过——不阻断执行。
+            }
+        }
+        return out.isEmpty() ? null : out;
+    }
+
     private aster.core.identifier.IdentifierIndex buildVocabularyIndex(Map<String, Object> vocabulary) {
         if (vocabulary == null || vocabulary.isEmpty()) {
             return null;

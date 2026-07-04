@@ -424,7 +424,10 @@ public class PolicyVersionService {
         } catch (jakarta.persistence.OptimisticLockException | org.hibernate.StaleObjectStateException e) {
             LOG.warnf("双重激活竞态被乐观锁拦截: versionId=%d, policyId=%s, tenantId=%s",
                 versionId, version.policyId, version.tenantId);
+            // WebApplicationException 的构造签名是 (Throwable cause, Response response)，
+            // 没有 (Response, Throwable) 重载——按 cause 在前传入，保留 OLE 作为 cause。
             throw new jakarta.ws.rs.WebApplicationException(
+                e,
                 jakarta.ws.rs.core.Response.status(409)
                     .entity(java.util.Map.of(
                         "error", "concurrent_activation",
@@ -432,8 +435,7 @@ public class PolicyVersionService {
                             + "concurrently. Retry the operation.",
                         "policyId", version.policyId))
                     .type(jakarta.ws.rs.core.MediaType.APPLICATION_JSON)
-                    .build(),
-                e);
+                    .build());
         }
 
         PolicyCatalog catalog = PolicyCatalog.find(

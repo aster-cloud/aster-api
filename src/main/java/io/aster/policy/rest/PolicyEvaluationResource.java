@@ -137,32 +137,11 @@ public class PolicyEvaluationResource {
         new Semaphore(ANON_PARSE_PERMITS_COUNT, true);
     private static final long ANON_PARSE_ACQUIRE_TIMEOUT_MS = 200;
 
-    /**
-     * 审计 #98（Medium 3）：匿名解析端点（/schema、/validate）的每请求解析<b>墙钟</b>超时。
-     *
-     * <p>这两个端点 {@code @AnonymousAllowed}、豁免 API-key 边界，会跑 canonicalize + ANTLR
-     * 解析——对长输入超线性（代码注释：50KB 解析 >15s）。并发闸 + 匿名源码上限（16 KiB）之外，
-     * 再加一道每请求墙钟上限：超时即以 {@code 408} 快速失败（4xx），把 worker 线程从病态输入
-     * 上解绑。注意墙钟超时只让<b>请求</b>快速失败返回，底层 ANTLR 线程可能仍在跑完（无法安全
-     * 中断），但并发闸限制了这类在途解析的数量，纵深防御成立。3s 相对 16 KiB 上限（最坏约秒级）
-     * 留足余量，正常请求不受影响。
-     */
-    private static final java.time.Duration ANON_PARSE_WALL_CLOCK_TIMEOUT =
-        java.time.Duration.ofSeconds(3);
-
-    /** 解析墙钟超时时构造 408（4xx）响应，供 /schema、/validate 的 Mutiny 超时分支复用。 */
-    private static jakarta.ws.rs.WebApplicationException parseTimeout(String endpoint) {
-        return new jakarta.ws.rs.WebApplicationException(
-            jakarta.ws.rs.core.Response.status(408)
-                .type(MediaType.APPLICATION_JSON)
-                .entity(java.util.Map.of(
-                    "error", "parse_timeout",
-                    "message", "CNL parsing exceeded the per-request time budget ("
-                        + ANON_PARSE_WALL_CLOCK_TIMEOUT.toMillis() + " ms). "
-                        + "Reduce source size or complexity and retry.",
-                    "endpoint", endpoint))
-                .build());
-    }
+    // 审计 #98（Medium 3, DEFERRED）：匿名 /schema、/validate 的每请求解析墙钟超时。
+    // 本 PR 只保留静态的匿名源码上限（MAX_ANON_SOURCE_LENGTH=16 KiB，见 SchemaRequest），
+    // 把最坏单次解析耗时压进秒级；Mutiny 每请求墙钟超时（.ifNoItem().after().failWith()）延后
+    // 单独处理——它挂在 JAX-RS reactive 返回的 Uni 上，需在能跑 Quarkus 增强/集成测试的环境里
+    // 验证后再加。见 issue #98。
 
     @Inject
     PolicyEvaluationService evaluationService;
@@ -696,9 +675,7 @@ public class PolicyEvaluationResource {
             } finally {
                 ANON_PARSE_PERMITS.release();
             }
-        }).runSubscriptionOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool())
-          // 审计 #98（Medium 3）：每请求解析墙钟超时 → 408（4xx）。病态输入拖过预算即快速失败。
-          .ifNoItem().after(ANON_PARSE_WALL_CLOCK_TIMEOUT).failWith(() -> parseTimeout("/schema"));
+        }).runSubscriptionOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool());
     }
 
     /**
@@ -867,9 +844,6 @@ public class PolicyEvaluationResource {
                     return ValidationResponse.failure(result.getMessage());
                 }
             })
-            // 审计 #98（Medium 3）：每请求解析墙钟超时 → 408（4xx）。放在 eventually 之前，
-            // 使超时失败/取消也走下面的许可释放，不泄漏 permit。
-            .ifNoItem().after(ANON_PARSE_WALL_CLOCK_TIMEOUT).failWith(() -> parseTimeout("/validate"))
             // 无论 item/failure/cancellation，都释放许可（eventually 等价于
             // onTermination().invoke）。显式 Runnable lambda：方法引用会与
             // eventually(Supplier<Uni>) 重载歧义。

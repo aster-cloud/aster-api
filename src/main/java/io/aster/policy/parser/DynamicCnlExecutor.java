@@ -359,6 +359,9 @@ public class DynamicCnlExecutor {
      * - 无参函数：直接返回执行结果
      */
     private static Object executeWithPolyglot(String coreJson, String functionName, Object[] context) {
+        // 审计 #98（Low，DEFERRED）：此处构建的 Polyglot Context 无墙钟/CPU 看门狗
+        // （context.close(true)）。当前安全，因为 DSL 无循环/迭代构造，执行必然有界。
+        // 一旦语言引入循环/迭代，必须在此加执行超时看门狗。本 PR 不改，仅记录 defer（见 #98）。
         // 沙箱权限（红队 P1-D：从 allowPublicAccess(true) 收紧，向生产 TrufflePolicyRuntime
         // 的 HostAccess.EXPLICIT 靠拢）。
         // 真正的危险面是 allowPublicAccess(true)——它放开**所有** public 方法/字段/构造器的

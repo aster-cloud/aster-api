@@ -44,6 +44,19 @@ public class InternalCallerFilter {
 
     private static final Logger LOG = Logger.getLogger(InternalCallerFilter.class);
 
+    /**
+     * 审计 #98（Medium 1）：HMAC 校验通过后在请求上打的<b>可信凭证</b>属性。
+     *
+     * <p>下游（{@code PolicyEvaluationResource}）用它派生 {@code aliasesTrusted}
+     * （允许注册结构词别名），<b>而不是</b>看 {@code X-Internal-Caller} 头是否<b>存在</b>。
+     * 原因：{@code evaluate-source.public} 逃生舱在 HMAC 分支之前就 BYPASS_OK 放行，
+     * 一个带三条 {@code X-Internal-*} 头 + 垃圾签名的调用方会被 {@code hasInternalCallerCredentials}
+     * （纯粹看头存在）误判为可信，从而拿到 {@code allowStructural=true} 注入 RETURN/IF/MATCH
+     * 等结构词别名，击穿 ADR-0022 门控。此属性仅在 {@code constantTimeEquals} 真正通过后设置，
+     * public / trial 旁路路径<b>不会</b>设置它——从而把「可信」严格绑定到「签名已验证」。
+     */
+    public static final String HMAC_VERIFIED_PROP = "aster.internal.hmac-verified";
+
     @ConfigProperty(name = "aster.plan-gate.hmac-key")
     Optional<String> hmacKey;
 
@@ -198,6 +211,17 @@ public class InternalCallerFilter {
         }
     }
 
+    /**
+     * 审计 #98（Medium 1）：调用方是否已通过 HMAC 校验（{@link #HMAC_VERIFIED_PROP} 已盖章）。
+     *
+     * <p>下游用它派生 {@code aliasesTrusted}（是否允许注册结构词别名），<b>取代</b>看
+     * {@code X-Internal-Caller} 头是否存在。只有真正通过 {@code constantTimeEquals} 的请求
+     * 才会被本 filter 盖章；public / trial 旁路路径不会盖章 → 此方法返回 false。
+     */
+    public static boolean isHmacVerified(ContainerRequestContext ctx) {
+        return ctx != null && Boolean.TRUE.equals(ctx.getProperty(HMAC_VERIFIED_PROP));
+    }
+
     @ServerRequestFilter(priority = Priorities.AUTHENTICATION + 50)
     public Uni<Void> filter(ContainerRequestContext ctx) {
         // R23-Critical-1 + R25-Critical-1：matrix-param 归一化必须 **per-segment**。
@@ -296,6 +320,12 @@ public class InternalCallerFilter {
                 if (!constantTimeEquals(expected, signature)) {
                     throw forbidden("invalid_signature", p);
                 }
+
+                // 审计 #98（Medium 1）：签名<b>真正</b>通过后才盖可信凭证章。下游只认这个
+                // 属性来决定 aliasesTrusted，绝不看 X-Internal-Caller 头的存在与否。public /
+                // trial 旁路路径在此之前就 return 了，天然不会设置它 → 逃生舱下带垃圾签名的
+                // 调用方拿不到结构词别名信任。
+                ctx.setProperty(HMAC_VERIFIED_PROP, Boolean.TRUE);
 
                 // 签名通过后再消费 nonce（防重放）。requestHash 绑定 method/path/query/body，
                 // tenant 维度键（内部调用无浏览器 tenant 时用 "cloud-bff" 占位，跨 pod 唯一）。

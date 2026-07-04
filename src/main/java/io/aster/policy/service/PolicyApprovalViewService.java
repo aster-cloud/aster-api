@@ -23,6 +23,11 @@ import java.util.Map;
  * 消除"看别名、批归一语义"的社会工程鸿沟。
  *
  * <p>纯数据装配，不依赖 DB（输入是已读出的 {@link PolicyVersion}）。端点暴露在生产审批路径接入。
+ *
+ * <p><b>审计 #98（Low，DEFERRED）</b>：{@link #build(PolicyVersion)} 在 {@code src/main}
+ * 内暂无调用方。反社会工程审批 legend 是否落地，取决于 cloud BFF 是否渲染等价视图——需与
+ * cloud 侧确认后再决定「后端直接暴露该视图端点」还是「保留 BFF 渲染」。本 PR 不改行为，
+ * 仅记录 defer；见 issue #98。</p>
  */
 @ApplicationScoped
 public class PolicyApprovalViewService {

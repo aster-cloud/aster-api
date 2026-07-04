@@ -137,6 +137,33 @@ public class PolicyEvaluationResource {
         new Semaphore(ANON_PARSE_PERMITS_COUNT, true);
     private static final long ANON_PARSE_ACQUIRE_TIMEOUT_MS = 200;
 
+    /**
+     * 审计 #98（Medium 3）：匿名解析端点（/schema、/validate）的每请求解析<b>墙钟</b>超时。
+     *
+     * <p>这两个端点 {@code @AnonymousAllowed}、豁免 API-key 边界，会跑 canonicalize + ANTLR
+     * 解析——对长输入超线性（代码注释：50KB 解析 >15s）。并发闸 + 匿名源码上限（16 KiB）之外，
+     * 再加一道每请求墙钟上限：超时即以 {@code 408} 快速失败（4xx），把 worker 线程从病态输入
+     * 上解绑。注意墙钟超时只让<b>请求</b>快速失败返回，底层 ANTLR 线程可能仍在跑完（无法安全
+     * 中断），但并发闸限制了这类在途解析的数量，纵深防御成立。3s 相对 16 KiB 上限（最坏约秒级）
+     * 留足余量，正常请求不受影响。
+     */
+    private static final java.time.Duration ANON_PARSE_WALL_CLOCK_TIMEOUT =
+        java.time.Duration.ofSeconds(3);
+
+    /** 解析墙钟超时时构造 408（4xx）响应，供 /schema、/validate 的 Mutiny 超时分支复用。 */
+    private static jakarta.ws.rs.WebApplicationException parseTimeout(String endpoint) {
+        return new jakarta.ws.rs.WebApplicationException(
+            jakarta.ws.rs.core.Response.status(408)
+                .type(MediaType.APPLICATION_JSON)
+                .entity(java.util.Map.of(
+                    "error", "parse_timeout",
+                    "message", "CNL parsing exceeded the per-request time budget ("
+                        + ANON_PARSE_WALL_CLOCK_TIMEOUT.toMillis() + " ms). "
+                        + "Reduce source size or complexity and retry.",
+                    "endpoint", endpoint))
+                .build());
+    }
+
     @Inject
     PolicyEvaluationService evaluationService;
 
@@ -480,8 +507,14 @@ public class PolicyEvaluationResource {
                 //   - 直连 API-key 的 trial/即时源码=**未冻结的现场用户输入**，不可信 →
                 //     allowStructural=false（结构词别名被 UserAliasValidator 拒，防绕过 per-user 授权
                 //     注入结构词）。此端点身兼「存储版本执行」与「trial 源码预览」两职，故必须区分。
+                // 审计 #98（Medium 1）：结构词别名信任<b>必须</b>绑定到「HMAC 签名已验证」，
+                // 而非 X-Internal-Caller 头的<b>存在</b>。InternalCallerFilter 只在 constantTimeEquals
+                // 真正通过后盖 HMAC_VERIFIED_PROP 章；evaluate-source.public / trial 旁路路径不会盖章。
+                // 因此带三条 X-Internal-* 头 + 垃圾签名的调用方（无论走 public 逃生舱还是 API-key）
+                // 在此处得到 aliasesTrusted=false → allowStructural=false，UserAliasValidator 拒其
+                // 结构词别名（RETURN/IF/MATCH…），堵住 ADR-0022 门控绕过。
                 boolean aliasesTrusted =
-                    io.aster.policy.security.TrialBypassPredicate.hasInternalCallerCredentials(jaxrsCtx);
+                    io.aster.security.apikey.InternalCallerFilter.isHmacVerified(jaxrsCtx);
 
                 // 使用动态执行器执行 CNL，支持命名上下文格式
                 // executeWithContext 会自动检测并映射命名参数到位置参数
@@ -663,7 +696,9 @@ public class PolicyEvaluationResource {
             } finally {
                 ANON_PARSE_PERMITS.release();
             }
-        }).runSubscriptionOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool());
+        }).runSubscriptionOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool())
+          // 审计 #98（Medium 3）：每请求解析墙钟超时 → 408（4xx）。病态输入拖过预算即快速失败。
+          .ifNoItem().after(ANON_PARSE_WALL_CLOCK_TIMEOUT).failWith(() -> parseTimeout("/schema"));
     }
 
     /**
@@ -832,6 +867,9 @@ public class PolicyEvaluationResource {
                     return ValidationResponse.failure(result.getMessage());
                 }
             })
+            // 审计 #98（Medium 3）：每请求解析墙钟超时 → 408（4xx）。放在 eventually 之前，
+            // 使超时失败/取消也走下面的许可释放，不泄漏 permit。
+            .ifNoItem().after(ANON_PARSE_WALL_CLOCK_TIMEOUT).failWith(() -> parseTimeout("/validate"))
             // 无论 item/failure/cancellation，都释放许可（eventually 等价于
             // onTermination().invoke）。显式 Runnable lambda：方法引用会与
             // eventually(Supplier<Uni>) 重载歧义。

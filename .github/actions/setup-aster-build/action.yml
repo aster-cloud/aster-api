@@ -1,0 +1,121 @@
+name: Setup Aster build
+description: >-
+  检出全部 aster-lang 生态兄弟仓（composite includeBuild + 版本目录源），装好 JDK，
+  并把共享版本目录发布到 Maven Local。封装 ci/deploy/nightly/perf 四个 workflow 里
+  逐字重复的构建准备段——加/删一个语言包仓只需改这一处。
+
+# 前提（重要）：调用方必须**先**用 actions/checkout 把 aster-api 检出到 ./aster-api，
+# 再 `uses: ./aster-api/.github/actions/setup-aster-build`。因为 local composite action
+# 的文件本身就在 aster-api 仓内——不先检出主仓，这个 action 路径还不存在（鸡生蛋）。
+# 故本 action 只负责检出 7 个**兄弟**仓（与 ./aster-api 平级），aster-api 自身由调用方检出。
+#
+# 说明：本 action 只做「构建准备」——检出兄弟仓 + JDK + 发布版本目录。它**不**起 DB/Redis
+# service（那是各 job 的 services: 块职责，与运行时环境耦合），也**不**跑测试或构建
+# aster-api 本体（由调用方决定跑 test / integrationTest / build 的哪一步）。
+
+inputs:
+  cross-repo-token:
+    description: >-
+      检出私有兄弟仓用的 token。传 secrets.CROSS_REPO_TOKEN；缺省回退到 github.token
+      （同 org 公开仓或放宽权限时可用）。
+    required: false
+    default: ""
+  require-cross-repo-token:
+    description: >-
+      是否强制要求 cross-repo-token 非空（fail-closed）。生产/部署链路（deploy/nightly/
+      perf）应设 "true"：兄弟仓是受控私有源，凭据缺失时必须**显式失败**而非静默回退到
+      github.token——否则会把"必须用受控凭据取依赖源码"的策略降级成"能拉到就行"（Codex
+      交叉审 Medium）。CI（PR/公开场景）可留 "false" 用 fallback。
+    required: false
+    default: "false"
+  java-version:
+    description: JDK 主版本
+    required: false
+    default: "25"
+  java-distribution:
+    description: JDK 发行版
+    required: false
+    default: temurin
+  publish-catalog:
+    description: >-
+      是否把 aster-lang-platform 版本目录发布到 Maven Local。settings.gradle 在评估阶段
+      解析 catalog（composite includeBuild 无法替换它），故除非调用方另行准备，否则应保持
+      true。
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    # fail-closed 前置检查：生产/部署链路（require-cross-repo-token=true）必须提供受控
+    # 凭据，缺失时立即失败，而不是静默回退到 github.token 去拉私有兄弟仓源码（Codex 审 Medium）。
+    - name: Require cross-repo token (fail-closed)
+      if: ${{ inputs.require-cross-repo-token == 'true' && inputs.cross-repo-token == '' }}
+      shell: bash
+      run: |
+        echo "::error::require-cross-repo-token=true 但 cross-repo-token 为空。"
+        echo "生产/部署链路必须提供受控的 CROSS_REPO_TOKEN 来检出私有兄弟仓，拒绝回退到 github.token。"
+        exit 1
+
+    # 共享版本目录（aster-lang-platform，ADR 0012）：settings.gradle 依赖它，且 catalog
+    # 无法通过 composite includeBuild 替换（settings 评估阶段解析）→ 必须先发布到 Maven Local。
+    - uses: actions/checkout@v7
+      with:
+        repository: aster-cloud/aster-lang-platform
+        path: aster-lang-platform
+        token: ${{ inputs.cross-repo-token || github.token }}
+
+    # composite includeBuild 引用的兄弟仓（见 aster-api/settings.gradle）：源码参与构建，
+    # 替换掉 cloud.aster-lang:* 的已发布制品。加/删仓在此一处维护即可。
+    - uses: actions/checkout@v7
+      with:
+        repository: aster-cloud/aster-lang-core
+        path: aster-lang-core
+        token: ${{ inputs.cross-repo-token || github.token }}
+
+    - uses: actions/checkout@v7
+      with:
+        repository: aster-cloud/aster-lang-runtime
+        path: aster-lang-runtime
+        token: ${{ inputs.cross-repo-token || github.token }}
+
+    - uses: actions/checkout@v7
+      with:
+        repository: aster-cloud/aster-lang-truffle
+        path: aster-lang-truffle
+        token: ${{ inputs.cross-repo-token || github.token }}
+
+    - uses: actions/checkout@v7
+      with:
+        repository: aster-cloud/aster-lang-validation
+        path: aster-lang-validation
+        token: ${{ inputs.cross-repo-token || github.token }}
+
+    # en/zh/de lexicon SPI 包源：aster-lang-locales（多模块，新坐标
+    # aster-lang-locales-{en,zh,de}）。旧独立 en/zh/de 仓已归档。
+    - uses: actions/checkout@v7
+      with:
+        repository: aster-cloud/aster-lang-locales
+        path: aster-lang-locales
+        token: ${{ inputs.cross-repo-token || github.token }}
+
+    # Hindi (hi-IN) 独立 SPI 包（从 core builtins 拆出），aster-api 经 composite
+    # includeBuild + runtimeOnly asterLibs.hi 依赖，故其源码必须在场。
+    - uses: actions/checkout@v7
+      with:
+        repository: aster-cloud/aster-lang-hi
+        path: aster-lang-hi
+        token: ${{ inputs.cross-repo-token || github.token }}
+
+    - uses: actions/setup-java@v5
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: ${{ inputs.java-distribution }}
+        cache: gradle
+
+    # 发布共享版本目录到 Maven Local（aster-api settings 依赖它）。
+    - name: Publish version catalog to Maven Local
+      if: ${{ inputs.publish-catalog == 'true' }}
+      shell: bash
+      working-directory: aster-lang-platform
+      run: ./gradlew publishToMavenLocal

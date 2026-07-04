@@ -3,12 +3,12 @@ name: Deploy
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - '.claude/**'
-      # 治理/工具配置文件不影响构建产物，无需触发部署（避免无害重部署）：
-      - 'renovate.json'
-      - '.github/dependabot.yml'
+    # 不设 paths-ignore（Codex 交叉审 High）：deploy 用「github.sha == origin/main tip」做
+    # stale-guard 防过时部署，其正确性前提是「每个 main commit 都有自己的 deploy run 接手」。
+    # 若这里 paths-ignore 掉 docs/治理提交，会出现死角：代码提交 A 触发 deploy，随后 docs-only
+    # 提交 B 前进 main 但**不**触发 deploy → A 的 guard 看到 tip=B 判自己过时而跳过，B 又没有
+    # run 接手 → A 的代码永不上线。让每个 commit 都触发 deploy，docs-only 提交会正常成为 tip
+    # 并无害地重部署（rollout restart 幂等）。省"无害重部署"的收益不值这个正确性死角。
   workflow_dispatch:
 
 concurrency:
@@ -59,61 +59,12 @@ jobs:
         run: |
           PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE aster_test;" || true
 
-      # 共享版本目录（aster-lang-platform，ADR 0012）—— settings.gradle 依赖它。
-      - uses: actions/checkout@v7
+      - name: Setup Aster build (siblings + JDK + version catalog)
+        uses: ./aster-api/.github/actions/setup-aster-build
         with:
-          repository: aster-cloud/aster-lang-platform
-          path: aster-lang-platform
-          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
-
-      - uses: actions/checkout@v7
-        with:
-          repository: aster-cloud/aster-lang-core
-          path: aster-lang-core
-          token: ${{ secrets.CROSS_REPO_TOKEN }}
-
-      - uses: actions/checkout@v7
-        with:
-          repository: aster-cloud/aster-lang-runtime
-          path: aster-lang-runtime
-          token: ${{ secrets.CROSS_REPO_TOKEN }}
-
-      - uses: actions/checkout@v7
-        with:
-          repository: aster-cloud/aster-lang-truffle
-          path: aster-lang-truffle
-          token: ${{ secrets.CROSS_REPO_TOKEN }}
-
-      - uses: actions/checkout@v7
-        with:
-          repository: aster-cloud/aster-lang-validation
-          path: aster-lang-validation
-          token: ${{ secrets.CROSS_REPO_TOKEN }}
-
-      # en/zh/de lexicon SPI 包源：aster-lang-locales（新坐标，composite includeBuild）。
-      # 旧独立 en/zh/de 仓已归档。
-      - uses: actions/checkout@v7
-        with:
-          repository: aster-cloud/aster-lang-locales
-          path: aster-lang-locales
-          token: ${{ secrets.CROSS_REPO_TOKEN }}
-
-      # Hindi SPI pack (extracted from core builtins) — composite includeBuild.
-      - uses: actions/checkout@v7
-        with:
-          repository: aster-cloud/aster-lang-hi
-          path: aster-lang-hi
-          token: ${{ secrets.CROSS_REPO_TOKEN }}
-
-      - uses: actions/setup-java@v5
-        with:
-          java-version: '25'
-          distribution: 'temurin'
-          cache: 'gradle'
-
-      - name: Publish version catalog to Maven Local
-        working-directory: aster-lang-platform
-        run: ./gradlew publishToMavenLocal
+          cross-repo-token: ${{ secrets.CROSS_REPO_TOKEN }}
+          # 部署链路 fail-closed：凭据缺失即失败，不静默回退 github.token。
+          require-cross-repo-token: "true"
 
       # 恢复完整 build（含 integrationTest）：之前排除 IT 是因 MixpanelClientIT /
       # PlanGateServiceIT 的 mock 端口跨 classloader 不一致导致 flaky；该根因已修
@@ -143,23 +94,60 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Stale-commit guard（Codex 交叉审两轮定稿）：部署是不可逆动作（push 镜像 + rollout），
+      # 且 deploy 的 concurrency 不 cancel 正在跑的 run。若 build-and-test 期间 main 又前进了，
+      # 本次携带的已是过时提交——继续部署会把旧代码推上生产、覆盖更新的部署。
+      #
+      # 关键设计（吸取第一轮并行 stale-check 的教训）：guard 必须在**push 镜像的紧前一刻**取
+      # 远端 tip，而不能用 workflow 开头的快照——否则 build 期间 main 前进就漏判。用 git
+      # ls-remote 直接问远端（不依赖本地 refs/remotes 是否被 fetch 刷新，最可靠）。
+      # 仅 push 事件把关；workflow_dispatch 手动部署允许部署任意点。
+      - name: Stale-commit guard (skip push+deploy if main moved ahead)
+        id: staleguard
+        run: |
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "非 push 事件（${{ github.event_name }}），跳过 stale 闸门。"
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          REMOTE_TIP=$(git ls-remote origin refs/heads/main | cut -f1)
+          echo "this run sha:    ${GITHUB_SHA}"
+          echo "origin/main tip: ${REMOTE_TIP}"
+          if [ -z "${REMOTE_TIP}" ]; then
+            echo "::error::无法解析 origin/main tip（git ls-remote 返回空）——为安全起见按过时处理，不部署。"
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+            echo "⚠️ **部署已跳过**：无法解析 origin/main tip，按过时处理（fail-safe）。" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${GITHUB_SHA}" != "${REMOTE_TIP}" ]; then
+            echo "::warning::main 已前进到 ${REMOTE_TIP}，本次 ${GITHUB_SHA} 已过时——跳过 push+部署，交由更新的 run 处理。"
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+            # 运维可观测性：job 会显示成功但实际未部署，在 summary 里显式说明原因（Codex 审 Low）。
+            echo "⏭️ **部署已跳过（过时提交）**：本次 \`${GITHUB_SHA}\` 已非 main tip（现为 \`${REMOTE_TIP}\`），由更新的 deploy run 接手。" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Download build artifact
+        if: ${{ steps.staleguard.outputs.stale != 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: quarkus-app
           path: build/quarkus-app/
 
-      - uses: docker/setup-qemu-action@v4
+      - if: ${{ steps.staleguard.outputs.stale != 'true' }}
+        uses: docker/setup-qemu-action@v4
 
-      - uses: docker/setup-buildx-action@v4
+      - if: ${{ steps.staleguard.outputs.stale != 'true' }}
+        uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v4
+      - if: ${{ steps.staleguard.outputs.stale != 'true' }}
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Generate image tag
         id: meta
+        if: ${{ steps.staleguard.outputs.stale != 'true' }}
         run: |
           SHA=$(echo "${{ github.sha }}" | head -c 7)
           TAG="${SHA}"
@@ -168,6 +156,7 @@ jobs:
 
       - name: Build & Push Docker Image
         id: build
+        if: ${{ steps.staleguard.outputs.stale != 'true' }}
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -178,18 +167,23 @@ jobs:
             wontlost/aster-api:${{ steps.meta.outputs.tag }}
             wontlost/aster-api:jvm-latest
 
-      # 红队 P2-G（Codex 审查后修正）：供应链加固全链锁**同一 by-digest 引用**。
-      # build-push-action 输出刚构建镜像的不可变 digest。sign / verify / rollout 全用
-      # 这个 digest，而不是浮动 tag jvm-latest。修掉 Codex 抓的两个绕过：
-      #   (1) TOCTOU：verify jvm-latest 通过后、K8s 拉取前，tag 仍可被替换 → 现在部署
-      #       直接下发 @sha256:<digest>，不再让 K8s 解析浮动 tag。
-      #   (2) signed-rollback：verify 浮动 tag 只要求"本 workflow 签过"→ 攻击者把
-      #       jvm-latest 指向任意历史上本 workflow 签过的旧 digest 也通过 → 现在只
-      #       verify + 部署"本次刚构建"的 digest，历史 digest 不进入本次 rollout。
+      # 红队 P2-G：sign / verify 均对 build-push-action 输出的**不可变 digest** 做（非浮动
+      # tag），把签名身份绑定到本 workflow 的 OIDC。这消除了 verify 阶段的 signed-rollback：
+      # 只签验"本次刚构建"的 digest，历史 digest 不进入验签。
+      #
+      # ⚠️ 已知遗留（TOCTOU，本轮不修，Codex 交叉审确认）：verify 对 digest 成立，但最终
+      # 下面的 `rollout restart` 让集群按 **浮动 tag jvm-latest** 重新拉取（因 ArgoCD 对账把
+      # image 字段还原成 git manifest 的 jvm-latest，`set image @digest` 会被立即回滚——见
+      # Deploy 步骤注释）。故 verify(digest) 与 pull(jvm-latest) 之间存在窗口：tag 可被替换，
+      # 或指向历史签过的 digest。真正闭合需 GitOps 侧按 digest pin（把 @sha256 写进 ArgoCD
+      # git 源）或集群 admission 按签名校验——那是部署模型变更，应单独立项，不在本次 workflow
+      # 优化范围内。当前注释如实描述现状，不再声称"全链 by-digest"。
       - name: Install cosign
+        if: ${{ steps.staleguard.outputs.stale != 'true' }}
         uses: sigstore/cosign-installer@v3
 
       - name: Sign pushed image digest (keyless)
+        if: ${{ steps.staleguard.outputs.stale != 'true' }}
         env:
           COSIGN_YES: "true"
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -202,6 +196,7 @@ jobs:
       # 部署前校验**本次刚构建的 digest**（非浮动 tag）带一份由本仓库本 workflow 签发的
       # cosign 签名。fail-closed：任何签名/身份不符 → verify 失败 → 部署中止。
       - name: Verify freshly-built digest signature
+        if: ${{ steps.staleguard.outputs.stale != 'true' }}
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
@@ -210,6 +205,7 @@ jobs:
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
       - name: Deploy to K3S
+        if: ${{ steps.staleguard.outputs.stale != 'true' }}
         env:
           KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -226,10 +222,11 @@ jobs:
           # 本集群由 **ArgoCD** 管理，deployment.spec 的 image 字段被对账回 git manifest 的
           # 浮动 tag `jvm-latest`——`kubectl set image @digest` 会被 ArgoCD 立即还原，新副本集
           # 被缩到 0，pod 从不真正切到新 digest（实测：set image 后运行 pod 仍是旧 digest）。
-          # `rollout restart` 触发 pod 重建，配合 `imagePullPolicy: Always` 重新拉取 jvm-latest，
-          # 而 CI 本步刚把 jvm-latest 指向本次构建并**已 cosign 验签**的 digest ${DIGEST}，
-          # 所以重启后的 pod = 已验签内容。供应链保证来自上一步的 verify（对 by-digest 引用），
-          # 不依赖部署方式。长期 pin（把 digest 写进 ArgoCD git 源）是部署模型变更，本轮不做。
-          echo "verified digest to be rolled out via jvm-latest: ${DIGEST}"
+          # `rollout restart` 触发 pod 重建，配合 `imagePullPolicy: Always` 重新拉取 jvm-latest。
+          # ⚠️ 注意（见上 Install cosign 处的 TOCTOU 遗留说明）：pod 实际拉取的是 **浮动 tag
+          # jvm-latest** 而非上一步验签的 ${DIGEST}——正常路径下 jvm-latest 就指向本次已验签的
+          # digest，但 verify→pull 之间 tag 若被替换则不再等价。闭合此窗口需 GitOps 侧 digest
+          # pin / 集群 admission 签名校验（单独立项）。此处如实标注，不声称"pod == 已验签内容"。
+          echo "expected digest behind jvm-latest for this rollout: ${DIGEST}"
           kubectl rollout restart deployment/aster-api -n aster-cloud
           kubectl rollout status deployment/aster-api -n aster-cloud --timeout=300s

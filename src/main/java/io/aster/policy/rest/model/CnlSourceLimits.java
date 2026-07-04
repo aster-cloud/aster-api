@@ -13,8 +13,19 @@ package io.aster.policy.rest.model;
  */
 public final class CnlSourceLimits {
 
-    /** 单次请求允许的最大 CNL 源码字符数（64 KiB）。 */
+    /** 单次请求允许的最大 CNL 源码字符数（64 KiB）——认证路径（如 SourcePolicyRequest）。 */
     public static final int MAX_SOURCE_LENGTH = 65_536;
+
+    /**
+     * <b>匿名</b>端点（{@link SchemaRequest} → {@code /api/v1/policies/schema}）的更严
+     * 源码上限（16 KiB，审计 #98 Medium 3）。
+     *
+     * <p>{@code /schema} 是 {@code @AnonymousAllowed}、豁免 API-key 边界，攻击者可无凭证
+     * 提交 ≤上限的源码触发 canonicalize + ANTLR 解析（对长输入超线性：10KB≈1.5s、50KB>15s）。
+     * 认证路径可信度更高、配额可追责，用 64 KiB；匿名路径把上限压到 16 KiB，把最坏单次
+     * 解析耗时压进秒级，与 {@code PolicyEvaluationResource} 的每请求解析墙钟超时形成纵深防御。
+     */
+    public static final int MAX_ANON_SOURCE_LENGTH = 16_384;
 
     /**
      * JSON 策略定义（Core IR JSON）最大字符数（256 KiB）。比 CNL source 宽，

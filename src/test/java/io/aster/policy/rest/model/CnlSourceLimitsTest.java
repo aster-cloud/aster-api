@@ -44,7 +44,8 @@ class CnlSourceLimitsTest {
 
     @Test
     void schemaRequestRejectsOversizedSource() {
-        String tooBig = sourceOfLength(CnlSourceLimits.MAX_SOURCE_LENGTH + 1);
+        // 审计 #98 Medium 3：/schema 是匿名解析面，上限压到 MAX_ANON_SOURCE_LENGTH（16 KiB）。
+        String tooBig = sourceOfLength(CnlSourceLimits.MAX_ANON_SOURCE_LENGTH + 1);
         SchemaRequest req = new SchemaRequest(tooBig, null, null);
         var violations = validator.validate(req);
         assertFalse(violations.isEmpty(), "超长 source 必须触发约束违规");
@@ -54,10 +55,11 @@ class CnlSourceLimitsTest {
 
     @Test
     void schemaRequestAcceptsSourceAtLimit() {
-        String atLimit = sourceOfLength(CnlSourceLimits.MAX_SOURCE_LENGTH);
+        // 恰好等于匿名上限（16 KiB）应通过——SchemaRequest 走匿名限额而非 64 KiB 认证限额。
+        String atLimit = sourceOfLength(CnlSourceLimits.MAX_ANON_SOURCE_LENGTH);
         SchemaRequest req = new SchemaRequest(atLimit, null, null);
         var violations = validator.validate(req);
-        assertTrue(violations.isEmpty(), "恰好等于上限的 source 应通过校验");
+        assertTrue(violations.isEmpty(), "恰好等于匿名上限的 source 应通过校验");
     }
 
     @Test

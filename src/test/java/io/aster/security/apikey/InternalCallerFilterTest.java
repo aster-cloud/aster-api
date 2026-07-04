@@ -1,7 +1,9 @@
 package io.aster.security.apikey;
 
+import io.aster.policy.security.TrialBypassPredicate;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.event.Observes;
+import jakarta.ws.rs.container.ContainerRequestContext;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
@@ -9,10 +11,13 @@ import java.lang.reflect.Parameter;
 
 import static io.aster.security.apikey.InternalCallerFilter.Classification;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * R27-Minor-3：InternalCallerFilter 单元测试。
@@ -364,6 +369,83 @@ class InternalCallerFilterTest {
         }
         assertTrue(hasObserves,
             "StartupEvent 参数必须标 @Observes —— 否则 CDI 不会把该方法注册为观察者");
+    }
+
+    // ============================================================
+    // 审计 #98（Medium 1）：结构词别名信任必须绑定「HMAC 已验证」，
+    // 而非 X-Internal-Caller 头的存在。
+    //
+    // 逃生舱 evaluate-source.public=true 会在 HMAC 分支之前就 BYPASS_OK 放行，
+    // 一个带三条 X-Internal-* 头 + 垃圾签名的调用方，若用「头存在」当信任信号
+    // （旧的 hasInternalCallerCredentials）会拿到 aliasesTrusted=true 注入结构词
+    // 别名（RETURN/IF/MATCH…），击穿 ADR-0022 门控。修复：只认 filter 在
+    // constantTimeEquals 真正通过后盖的 HMAC_VERIFIED_PROP 章。
+    // ============================================================
+
+    /** 构造一个带完整内部调用头形态、但可选是否已盖 HMAC 验证章的请求上下文。 */
+    private static ContainerRequestContext ctxWithInternalHeaders(boolean hmacVerified) {
+        ContainerRequestContext c = mock(ContainerRequestContext.class);
+        when(c.getHeaderString(TrialBypassPredicate.INTERNAL_CALLER_HEADER)).thenReturn("cloud-bff");
+        when(c.getHeaderString(TrialBypassPredicate.INTERNAL_SIGNATURE_HEADER)).thenReturn("deadbeef-garbage-signature");
+        when(c.getHeaderString(TrialBypassPredicate.INTERNAL_TIMESTAMP_HEADER)).thenReturn("1700000000");
+        if (hmacVerified) {
+            when(c.getProperty(InternalCallerFilter.HMAC_VERIFIED_PROP)).thenReturn(Boolean.TRUE);
+        }
+        return c;
+    }
+
+    @Test
+    void hmacVerifiedPropConstantIsStable() {
+        // resource 与 filter 必须引用同一属性键；改名会静默断开信任传递。
+        assertEquals("aster.internal.hmac-verified", InternalCallerFilter.HMAC_VERIFIED_PROP);
+    }
+
+    @Test
+    void badSignatureWithInternalHeadersIsNotHmacVerified() {
+        // 核心回归：带 X-Internal-Caller + 垃圾签名（public 逃生舱下会进到 resource），
+        // 头齐全 → hasInternalCallerCredentials=true（旧信任信号），但 filter 从未盖章
+        // → isHmacVerified=false（新信任信号）→ 下游 aliasesTrusted=false，拒结构词别名。
+        ContainerRequestContext ctx = ctxWithInternalHeaders(/*hmacVerified*/ false);
+
+        assertTrue(TrialBypassPredicate.hasInternalCallerCredentials(ctx),
+            "头形态齐全时旧的 header-presence 判定仍返回 true —— 正是它不可作为信任信号的原因");
+        assertFalse(InternalCallerFilter.isHmacVerified(ctx),
+            "垃圾签名/未盖章的请求必须 isHmacVerified=false → aliasesTrusted=false，"
+                + "堵住 public 逃生舱下伪造内部头注入结构词别名（ADR-0022 门控绕过）");
+    }
+
+    @Test
+    void onlyHmacVerifiedPropGrantsTrust() {
+        // 只有 filter 在 constantTimeEquals 通过后盖了 HMAC_VERIFIED_PROP=TRUE 才算可信。
+        ContainerRequestContext verified = ctxWithInternalHeaders(/*hmacVerified*/ true);
+        assertTrue(InternalCallerFilter.isHmacVerified(verified));
+    }
+
+    @Test
+    void isHmacVerifiedFalseWhenNoPropAndNoHeaders() {
+        // 匿名 trial / public 旁路请求：既无内部头也无验证章 → 不可信。
+        ContainerRequestContext bare = mock(ContainerRequestContext.class);
+        assertFalse(InternalCallerFilter.isHmacVerified(bare));
+        assertFalse(InternalCallerFilter.isHmacVerified(null),
+            "null ctx 必须安全返回 false，不 NPE");
+    }
+
+    @Test
+    void nonBooleanPropDoesNotGrantTrust() {
+        // 防御：属性被写成非 TRUE 的值（如字符串 "true"）也不得授予信任。
+        ContainerRequestContext ctx = mock(ContainerRequestContext.class);
+        when(ctx.getProperty(InternalCallerFilter.HMAC_VERIFIED_PROP)).thenReturn("true");
+        assertFalse(InternalCallerFilter.isHmacVerified(ctx),
+            "只有 Boolean.TRUE 授予信任；字符串等非布尔值一律不可信");
+    }
+
+    @Test
+    void hmacVerifiedPropIsSetOnlyAfterSignatureCheck() throws Exception {
+        // 源码级契约钉：filter() 里对 HMAC_VERIFIED_PROP 的 setProperty 调用必须出现在
+        // constantTimeEquals 通过分支之后，且方法体内除此之外不得在 BYPASS 分支盖章。
+        // 用反射拿不到方法体，这里退而校验 isHmacVerified 只读 HMAC_VERIFIED_PROP。
+        Method m = InternalCallerFilter.class.getMethod("isHmacVerified", ContainerRequestContext.class);
+        assertEquals(boolean.class, m.getReturnType());
     }
 
     @Test

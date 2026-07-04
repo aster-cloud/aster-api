@@ -12,11 +12,13 @@ import jakarta.validation.constraints.Size;
 public record SchemaRequest(
     // 源码长度硬上限：CNL 解析/规范化在长输入上呈超线性耗时（实测 10KB≈1.5s，
     // 50KB 已 >15s），无上限时是算法复杂度 DoS 向量——少量大 body 即可耗尽
-    // worker 线程池。合法策略普遍 < 几 KB，64KB 上限对真实用例绰绰有余，
-    // 同时把恶意/异常大输入在校验层快速 400 拒绝，不进入昂贵的解析路径。
+    // worker 线程池。/schema 是**匿名**端点（豁免 API-key 边界），故用更严的
+    // 匿名上限 MAX_ANON_SOURCE_LENGTH（16 KiB，审计 #98 Medium 3）而非 64 KiB，
+    // 把最坏单次解析耗时压进秒级；恶意/异常大输入在校验层就被 400 快速拒绝，
+    // 不进入昂贵的解析路径。合法策略普遍 < 几 KB，16KB 对真实用例仍绰绰有余。
     @NotBlank(message = "源代码不能为空")
-    @Size(max = CnlSourceLimits.MAX_SOURCE_LENGTH,
-          message = "源代码长度超过上限（最多 " + CnlSourceLimits.MAX_SOURCE_LENGTH + " 字符）")
+    @Size(max = CnlSourceLimits.MAX_ANON_SOURCE_LENGTH,
+          message = "源代码长度超过上限（最多 " + CnlSourceLimits.MAX_ANON_SOURCE_LENGTH + " 字符）")
     @JsonProperty("source")
     String source,
 

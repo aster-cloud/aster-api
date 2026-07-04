@@ -414,6 +414,30 @@ public class PolicyVersionService {
         version.activatedBy = activatedBy;
         version.persist();
 
+        // 审计 #98（Medium 2）：显式 flush 触发 @Version 乐观锁检查，在事务提交前就把
+        // 双重激活竞态暴露成 OptimisticLockException。两个并发激活/回滚都会 UPDATE 同一
+        // 当前 active 行（deactivateAllVersions 把它置 active=false），后提交者版本号不匹配
+        // → 抛 OLE 回滚，保证每个 (policyId, tenantId) 至多一条 active 行。不 flush 的话
+        // OLE 会推迟到 @Transactional 边界提交时才抛，越过本方法的 try/catch。
+        try {
+            entityManager.flush();
+        } catch (jakarta.persistence.OptimisticLockException | org.hibernate.StaleObjectStateException e) {
+            LOG.warnf("双重激活竞态被乐观锁拦截: versionId=%d, policyId=%s, tenantId=%s",
+                versionId, version.policyId, version.tenantId);
+            // WebApplicationException 的构造签名是 (Throwable cause, Response response)，
+            // 没有 (Response, Throwable) 重载——按 cause 在前传入，保留 OLE 作为 cause。
+            throw new jakarta.ws.rs.WebApplicationException(
+                e,
+                jakarta.ws.rs.core.Response.status(409)
+                    .entity(java.util.Map.of(
+                        "error", "concurrent_activation",
+                        "message", "Another activation/rollback for this policy committed "
+                            + "concurrently. Retry the operation.",
+                        "policyId", version.policyId))
+                    .type(jakarta.ws.rs.core.MediaType.APPLICATION_JSON)
+                    .build());
+        }
+
         PolicyCatalog catalog = PolicyCatalog.find(
             "tenantId = ?1 and moduleName = ?2 and functionName = ?3",
             version.tenantId,

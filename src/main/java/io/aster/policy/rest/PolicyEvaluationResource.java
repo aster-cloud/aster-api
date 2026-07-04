@@ -137,6 +137,12 @@ public class PolicyEvaluationResource {
         new Semaphore(ANON_PARSE_PERMITS_COUNT, true);
     private static final long ANON_PARSE_ACQUIRE_TIMEOUT_MS = 200;
 
+    // 审计 #98（Medium 3, DEFERRED）：匿名 /schema、/validate 的每请求解析墙钟超时。
+    // 本 PR 只保留静态的匿名源码上限（MAX_ANON_SOURCE_LENGTH=16 KiB，见 SchemaRequest），
+    // 把最坏单次解析耗时压进秒级；Mutiny 每请求墙钟超时（.ifNoItem().after().failWith()）延后
+    // 单独处理——它挂在 JAX-RS reactive 返回的 Uni 上，需在能跑 Quarkus 增强/集成测试的环境里
+    // 验证后再加。见 issue #98。
+
     @Inject
     PolicyEvaluationService evaluationService;
 
@@ -480,8 +486,14 @@ public class PolicyEvaluationResource {
                 //   - 直连 API-key 的 trial/即时源码=**未冻结的现场用户输入**，不可信 →
                 //     allowStructural=false（结构词别名被 UserAliasValidator 拒，防绕过 per-user 授权
                 //     注入结构词）。此端点身兼「存储版本执行」与「trial 源码预览」两职，故必须区分。
+                // 审计 #98（Medium 1）：结构词别名信任<b>必须</b>绑定到「HMAC 签名已验证」，
+                // 而非 X-Internal-Caller 头的<b>存在</b>。InternalCallerFilter 只在 constantTimeEquals
+                // 真正通过后盖 HMAC_VERIFIED_PROP 章；evaluate-source.public / trial 旁路路径不会盖章。
+                // 因此带三条 X-Internal-* 头 + 垃圾签名的调用方（无论走 public 逃生舱还是 API-key）
+                // 在此处得到 aliasesTrusted=false → allowStructural=false，UserAliasValidator 拒其
+                // 结构词别名（RETURN/IF/MATCH…），堵住 ADR-0022 门控绕过。
                 boolean aliasesTrusted =
-                    io.aster.policy.security.TrialBypassPredicate.hasInternalCallerCredentials(jaxrsCtx);
+                    io.aster.security.apikey.InternalCallerFilter.isHmacVerified(jaxrsCtx);
 
                 // 使用动态执行器执行 CNL，支持命名上下文格式
                 // executeWithContext 会自动检测并映射命名参数到位置参数

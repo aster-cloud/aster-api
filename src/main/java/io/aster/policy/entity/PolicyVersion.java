@@ -28,6 +28,26 @@ public class PolicyVersion extends PanacheEntityBase {
     public Long id;
 
     /**
+     * 乐观锁版本号（审计 #98 Medium 2：双重激活竞态）。
+     *
+     * <p>{@code activateVersionInternal} 走 deactivate-then-activate，无行锁。手动
+     * {@code rollback} 与 {@code AnomalyActionExecutor.executeAutoRollback} 并发时，
+     * 两个事务都会读到并停用<b>同一</b>当前 active 行（{@link #deactivateAllVersions}
+     * 把它 {@code active=false}），再各自激活不同目标 → 可能提交出两条 active 行，
+     * {@code findActiveVersion(...).firstResult()} 返回任意一条 → 生产评估不确定。
+     *
+     * <p>{@code @Version} 让这两个事务对<b>共享的当前 active 行</b>的并发 UPDATE 互斥：
+     * 后提交者命中 {@link jakarta.persistence.OptimisticLockException} 回滚，从而保证
+     * 每个 {@code (policyId, tenantId)} 至多一条 active 行。activate/rollback 调用方
+     * 需捕获该异常并转成可重试的冲突响应。
+     *
+     * <p>DB 列由 {@code V6.15.0__add_policy_version_lock.sql} 添加（DEFAULT 0，NOT NULL）。
+     */
+    @Version
+    @Column(name = "lock_version", nullable = false)
+    public Long lockVersion;
+
+    /**
      * 策略唯一标识符（业务ID，跨版本不变）
      */
     @Column(name = "policy_id", nullable = false, length = 100)
@@ -53,8 +73,13 @@ public class PolicyVersion extends PanacheEntityBase {
 
     /**
      * 策略内容（Aster CNL 代码或 JSON 配置）
+     *
+     * <p>审计 #98（Low）：{@code updatable=false} —— 版本一经创建即冻结，content 不可再改。
+     * 与同族的 {@code aliasSet} / {@code sourceEnvelopeSha256} / {@code sourceToolchainId}
+     * 对齐，使冻结成为<b>预防性</b>约束（JPA 层直接不发 UPDATE），而不仅是 envelope 对账的
+     * <b>检测性</b>约束。任何试图改已存版本 content 的写入会被 Hibernate 静默忽略该列。
      */
-    @Column(name = "content", nullable = false, columnDefinition = "TEXT")
+    @Column(name = "content", nullable = false, columnDefinition = "TEXT", updatable = false)
     public String content;
 
     /**

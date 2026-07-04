@@ -201,6 +201,16 @@ public class WorkflowSchedulerService {
         workflowRuntime.setCurrentWorkflowId(workflowId);
         DeterminismContext context = new DeterminismContext();
         workflowRuntime.setDeterminismContext(context);
+        // 审计 runtime#19：把本 workflow 的 per-workflow 确定性实例绑定到执行线程的
+        // ReplayDeterministicUuid/Random ThreadLocal（这里就是 #4 所指的"执行 runnable 入口"——
+        // executorService 池化线程上跑 processWorkflow）。不绑定的话，执行体内 current() 拿到的是
+        // 线程默认 new 出的脱节实例，与本 context 的 uuid()/random() 脱钩 → 跨 workflow 串扰 +
+        // replay 不确定。保存前值并在 finally 精确恢复（支持线程复用/嵌套），与 DeterminismContext.
+        // runWith 同语义（此处内联是因本方法体含多处 return，无法整体包进 lambda）。
+        ReplayDeterministicUuid prevUuid = ReplayDeterministicUuid.current();
+        ReplayDeterministicRandom prevRandom = ReplayDeterministicRandom.current();
+        ReplayDeterministicUuid.setCurrent(context.uuid());
+        ReplayDeterministicRandom.setCurrent(context.random());
         try {
             UUID wfUuid = UUID.fromString(workflowId);
 
@@ -399,6 +409,9 @@ public class WorkflowSchedulerService {
                 Log.errorf(ex, "Failed to release lock for workflow %s", workflowId);
             }
         } finally {
+            // 恢复执行线程上的确定性 ThreadLocal 到进入前的值（池化线程复用安全，防跨 workflow 串扰）。
+            ReplayDeterministicUuid.setCurrent(prevUuid);
+            ReplayDeterministicRandom.setCurrent(prevRandom);
             // Phase 3.6: 清理 ThreadLocal 上下文防止内存泄漏
             workflowRuntime.clearDeterminismContext();
             workflowRuntime.clearCurrentWorkflowId();

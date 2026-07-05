@@ -215,8 +215,20 @@ public class PolicyCacheManager {
             return false;
         }
         String normalizedTenant = normalizeTenant(key.getTenantId());
-        Set<PolicyCacheKey> keys = tenantCacheIndex.get(normalizedTenant);
-        boolean hit = keys != null && keys.contains(key);
+        // 直接探测真实的 policy-results Caffeine 缓存（getIfPresent 不触发加载）。
+        // 此前读 tenantCacheIndex 侧索引 —— 它由 registerCacheEntry 每次调用无条件回填、
+        // 与真实缓存靠独立 mirror tracker 松散同步、各自按 TTL/容量独立驱逐，两者会漂移：
+        // 索引说 present（isCacheHit=true）但真缓存条目已被驱逐 → getAsync 找不到照样重跑
+        // loader（全量重执行 + 重复 DB + 审计），"命中"却不省时、DB 反增。改为查真实缓存后，
+        // isCacheHit 与 getAsync 命中判定一致：真命中才 true，才真正跳过执行。
+        boolean hit = false;
+        if (caffeineCacheDelegate != null) {
+            hit = caffeineCacheDelegate.getIfPresent(key) != null;
+        } else {
+            // 非 Caffeine 后端（理论罕见）回退到侧索引，保持行为不崩。
+            Set<PolicyCacheKey> keys = tenantCacheIndex.get(normalizedTenant);
+            hit = keys != null && keys.contains(key);
+        }
         recordCacheLookup(normalizedTenant, hit);
         return hit;
     }

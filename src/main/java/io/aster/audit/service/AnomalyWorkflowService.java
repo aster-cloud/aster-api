@@ -6,7 +6,7 @@ import io.aster.audit.outbox.OutboxStatus;
 import io.aster.audit.rest.model.VerificationResult;
 import io.aster.policy.entity.PolicyVersion;
 import io.aster.policy.event.AuditEvent;
-import io.aster.workflow.WorkflowStateEntity;
+import io.aster.api.workflow.WorkflowStateEntity;
 import io.quarkus.logging.Log;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;

@@ -3,7 +3,7 @@ package io.aster.policy.service;
 import io.aster.policy.service.PolicyStorageService.PolicyDocument;
 import io.aster.test.PostgresTestResource;
 import io.aster.workflow.DeterminismContext;
-import io.aster.workflow.PostgresWorkflowRuntime;
+import io.aster.api.workflow.PostgresWorkflowRuntime;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;

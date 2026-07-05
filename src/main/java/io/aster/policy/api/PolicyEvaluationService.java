@@ -24,7 +24,7 @@ import io.aster.policy.runtime.ExecutionResult;
 import io.aster.policy.runtime.TrufflePolicyRuntime;
 import io.aster.policy.tenant.TenantContext;
 import io.aster.workflow.DeterminismContext;
-import io.aster.workflow.PostgresWorkflowRuntime;
+import io.aster.api.workflow.PostgresWorkflowRuntime;
 import io.quarkus.cache.Cache;
 import io.quarkus.cache.CacheInvalidateAll;
 import io.quarkus.narayana.jta.QuarkusTransaction;

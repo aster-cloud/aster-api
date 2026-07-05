@@ -223,9 +223,16 @@ tasks.named('test', Test) {
     }
     // 排除 *IT 集成测试，让 test 任务保持快速反馈（< 30s）
     exclude '**/*IT.class'
-    // 单元测试在慢 CI runner 上偶发 flaky（并发/时序敏感的 RateLimiter 吞吐、
-    // audit outbox 调度等，与被测改动无关）。重试 1 次容忍瞬时 flakiness，
-    // 避免无关 flaky 阻塞 PR；首次通过即视为通过（不强制重试后仍通过）。
+    // 单元测试在慢 CI runner 上偶发 flaky（并发/时序敏感的 RateLimiter 吞吐等，
+    // 与被测改动无关）。重试 1 次容忍瞬时 flakiness，避免无关 flaky 阻塞 PR；
+    // 首次通过即视为通过（不强制重试后仍通过）。
+    //
+    // 注：scheduler-enabled 的 @TestProfile 集成测试（TimerIntegrationIT /
+    // TimerCrashRecoveryIT / WorkflowCrashRecoveryIT）已重命名为 *IT 移到
+    // integrationTest 任务（maxParallelForks=1 隔离），其后台 @Scheduled 全表扫描
+    // 不再污染 fast test 的共享 JVM——这是「症状漂移 flaky」的根因。此处遂不用
+    // forkEvery（forkEvery 会为每批重启 Quarkus 容器，把 fast-feedback test 拖慢
+    // 数倍、甚至触发测试级 timeout）。
     retry {
         maxRetries = 1
         failOnPassedAfterRetry = false

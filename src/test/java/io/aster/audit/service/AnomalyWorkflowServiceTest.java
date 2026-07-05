@@ -5,7 +5,7 @@ import io.aster.audit.entity.AnomalyReportEntity;
 import io.aster.audit.outbox.OutboxStatus;
 import io.aster.audit.rest.model.VerificationResult;
 import io.aster.policy.entity.PolicyVersion;
-import io.aster.workflow.WorkflowStateEntity;
+import io.aster.api.workflow.WorkflowStateEntity;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

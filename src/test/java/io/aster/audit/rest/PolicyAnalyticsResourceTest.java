@@ -4,7 +4,7 @@ import io.aster.audit.PostgresAnalyticsTestProfile;
 import io.aster.policy.entity.PolicyVersion;
 import io.aster.policy.service.PolicyVersionService;
 import io.aster.test.PostgresTestResource;
-import io.aster.workflow.WorkflowStateEntity;
+import io.aster.api.workflow.WorkflowStateEntity;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;

@@ -3,7 +3,7 @@ package io.aster.audit.service;
 import io.aster.audit.dto.*;
 import io.aster.common.dto.PagedResult;
 import io.aster.policy.entity.PolicyVersion;
-import io.aster.workflow.WorkflowStateEntity;
+import io.aster.api.workflow.WorkflowStateEntity;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.time.Instant;

@@ -223,9 +223,17 @@ tasks.named('test', Test) {
     }
     // 排除 *IT 集成测试，让 test 任务保持快速反馈（< 30s）
     exclude '**/*IT.class'
-    // 单元测试在慢 CI runner 上偶发 flaky（并发/时序敏感的 RateLimiter 吞吐、
-    // audit outbox 调度等，与被测改动无关）。重试 1 次容忍瞬时 flakiness，
-    // 避免无关 flaky 阻塞 PR；首次通过即视为通过（不强制重试后仍通过）。
+    // 分批独立 JVM 隔离：少数 @TestProfile 测试（TimerIntegrationTest /
+    // TimerCrashRecoveryTest / WorkflowCrashRecoveryTest）显式打开
+    // quarkus.scheduler.enabled + workflow.scheduler.polling.enabled，其后台
+    // @Scheduled（TimerScheduler every=1s、AnomalyActionScheduler 全表捞 PENDING）
+    // 与手动 pollReadyWorkflows 线程会在**同一 JVM 内后续测试**的数据上跑（onStop
+    // 有 10s awaitTermination 残留窗口），抢先篡改被断言的行 → 症状漂移 flaky。
+    // forkEvery 让长套件分批换 JVM，断开 scheduler-enabled 容器的后台线程跨批污染，
+    // 兼顾内存峰值（此前 1061 class 同一 JVM 逼近 2g 堆）。非 forkEvery=1（太慢）。
+    forkEvery = 40
+    // 重试 1 次容忍剩余瞬时 flakiness（RateLimiter 吞吐等时序敏感、与被测改动无关）；
+    // 首次通过即视为通过（不强制重试后仍通过）。
     retry {
         maxRetries = 1
         failOnPassedAfterRetry = false

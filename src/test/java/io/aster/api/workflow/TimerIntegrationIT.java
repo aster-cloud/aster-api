@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @QuarkusTest
 @TestProfile(TimerIntegrationTestProfile.class)
-public class TimerIntegrationTest {
+public class TimerIntegrationIT {
 
     @Inject
     TimerSchedulerService timerSchedulerService;

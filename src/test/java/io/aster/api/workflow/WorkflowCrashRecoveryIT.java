@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @QuarkusTest
 @TestProfile(CrashRecoveryTestProfile.class)
-class WorkflowCrashRecoveryTest extends CrashRecoveryTestBase {
+class WorkflowCrashRecoveryIT extends CrashRecoveryTestBase {
 
     @Inject
     PostgresEventStore eventStore;

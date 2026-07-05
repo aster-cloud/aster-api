@@ -21,7 +21,7 @@ import static org.mockito.Mockito.reset;
  */
 @QuarkusTest
 @TestProfile(CrashRecoveryTestProfile.class)
-public class TimerCrashRecoveryTest extends CrashRecoveryTestBase {
+public class TimerCrashRecoveryIT extends CrashRecoveryTestBase {
 
     private static final Duration SHORT_DELAY = Duration.ofSeconds(1);
     private static final Duration WAIT_TIMEOUT = Duration.ofSeconds(10);

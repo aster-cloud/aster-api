@@ -112,10 +112,21 @@ jobs:
         env:
           TESTCONTAINERS_RYUK_DISABLED: "true"
 
-      # 聚合 test + integrationTest 的覆盖率，verification 在指定包上做强约束
+      # 聚合 test + integrationTest 的覆盖率，verification 在指定包上做强约束。
+      # ★-x test -x integrationTest（时长优化）：jacocoTestReport dependsOn 'test'，此步是
+      # 独立 gradle 调用，不排除的话 Gradle 会重跑 test（上游步骤已跑过一遍）——实测 CI 此步
+      # 340s 几乎全是冗余 test 重跑。jacocoReport 只需读上游产出的 build/jacoco/*.exec，
+      # 显式排除 test/integrationTest 后仅做聚合，本地实测从 340s → 1s。
+      # ★fail-closed 前置（Codex 审 Medium）：-x test 依赖上游步骤已产出 exec。若上游 test
+      # 因 build-cache 命中被跳过且未恢复 exec，coverage 可能用旧/空数据让门禁假过。故先断言
+      # 两个 exec 存在且非空（-s），缺失即 fail，把「覆盖率门禁基于真实本次数据」变成硬约束。
       - name: Coverage Report + Verification
         working-directory: aster-api
-        run: ./gradlew jacocoTestReport jacocoCoverageVerification
+        run: |
+          test -s build/jacoco/test.exec || { echo "::error::build/jacoco/test.exec 缺失/为空——上游 Unit Tests 未产出覆盖率数据，拒绝聚合（避免门禁假过）"; exit 1; }
+          test -s build/jacoco/integrationTest.exec || { echo "::error::build/jacoco/integrationTest.exec 缺失/为空——上游 Integration Tests 未产出覆盖率数据"; exit 1; }
+          ./gradlew jacocoTestReport jacocoCoverageVerification -x test -x integrationTest
+          test -s build/reports/jacoco/test/jacocoTestReport.xml || { echo "::error::jacoco 报告未生成"; exit 1; }
 
       - name: Upload coverage to Codecov
         if: always()

@@ -2,7 +2,7 @@ package io.aster.policy.service;
 
 import io.aster.policy.entity.PolicyDocumentEntity;
 import io.aster.workflow.DeterminismContext;
-import io.aster.workflow.PostgresWorkflowRuntime;
+import io.aster.api.workflow.PostgresWorkflowRuntime;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

@@ -7,7 +7,7 @@ import io.aster.billing.PlanInfo;
 import io.aster.billing.PlanLimitException;
 import io.aster.policy.entity.PolicyVersion;
 import io.aster.policy.entity.VersionStatus;
-import io.aster.workflow.WorkflowStateEntity;
+import io.aster.api.workflow.WorkflowStateEntity;
 import io.aster.policy.telemetry.NsmEvents;
 import io.aster.policy.telemetry.NsmTelemetry;
 import io.aster.test.PostgresTestResource;

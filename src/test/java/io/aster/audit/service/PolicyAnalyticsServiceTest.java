@@ -3,7 +3,7 @@ package io.aster.audit.service;
 import io.aster.audit.dto.AnomalyReportDTO;
 import io.aster.audit.dto.VersionUsageStatsDTO;
 import io.aster.policy.entity.PolicyVersion;
-import io.aster.workflow.WorkflowStateEntity;
+import io.aster.api.workflow.WorkflowStateEntity;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

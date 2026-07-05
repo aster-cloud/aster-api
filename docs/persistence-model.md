@@ -54,7 +54,7 @@ running both stacks at once — it is not the disease.
 
 | Subsystem | Model | How it runs | Persistence APIs |
 |---|---|---|---|
-| **Workflow** (`io.aster.workflow.*`) — scheduler, event store, timers, runtime | **Blocking** | `@Scheduled` / `ExecutorService` worker threads | Hibernate ORM Panache, `@Transactional`, native `FOR UPDATE SKIP LOCKED` |
+| **Workflow** (`io.aster.api.workflow.*`) — scheduler, event store, timers, runtime | **Blocking** | `@Scheduled` / `ExecutorService` worker threads | Hibernate ORM Panache, `@Transactional`, native `FOR UPDATE SKIP LOCKED` |
 | **Outbox** (`io.aster.audit.outbox.GenericOutboxScheduler`, `AnomalyActionScheduler`) | **Blocking** | `@Scheduled` worker thread; one `QuarkusTransaction.requiringNew()` per event; `executeEvent(...).await().atMost(30s)` blocks the worker | Hibernate ORM Panache, `@Transactional`, `QuarkusTransaction` |
 | **Audit / anomaly orchestration** (`AnomalyWorkflowService`, `AnomalyActionExecutor`) | **Blocking** | Reached only from the outbox worker (blocking `.await()`) and from `@Blocking` REST handlers | Hibernate ORM Panache, `@Transactional` |
 | **Audit REST** (`PolicyAnalyticsResource`) | **Blocking** | Handlers are `@Blocking` (worker thread); they *return* `Uni` for shape only | Hibernate ORM Panache |
@@ -68,7 +68,7 @@ points, never a single `@Transactional` method that returns a deferred `Uni`.
 
 ## Rules for new code
 
-1. **Decide the subsystem's model first.** If you are in `io.aster.workflow.*`,
+1. **Decide the subsystem's model first.** If you are in `io.aster.api.workflow.*`,
    the outbox, or audit orchestration, you are **blocking**. If you are in
    evaluate/GraphQL, you are **reactive**.
 2. **Blocking method → return a plain value (or `void`), annotate `@Transactional`,

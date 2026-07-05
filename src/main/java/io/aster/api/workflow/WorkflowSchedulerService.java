@@ -76,16 +76,26 @@ public class WorkflowSchedulerService {
      * 服务启动
      */
     void onStart(@Observes StartupEvent ev) {
+        // 幂等：StartupEvent 正常只触发一次，但防御性 guard 避免重复调用覆盖旧线程池引用
+        // 造成泄漏（Codex 审查建议）。
+        if (executorService != null) {
+            return;
+        }
+        // 工作线程池是 workflow 执行资源（resumeWorkflow/resumeWorkflowStep、pollReadyWorkflows
+        // 都往它 submit），**无条件创建**——它不该受 pollingEnabled 影响。pollingEnabled 只控制
+        // 「本服务是否自动轮询 ready workflows」，不该剥夺由 TimerSchedulerService（外部 @Scheduled）
+        // 驱动的 resume 执行能力。此前把 executorService 创建放在 pollingEnabled 早 return 之后，
+        // 导致 pollingEnabled=false 时 timer 触发 resume → 对 null executorService submit → NPE。
+        int workerCount = Runtime.getRuntime().availableProcessors();
+        executorService = Executors.newFixedThreadPool(workerCount);
+        running = true;
+
         if (!pollingEnabled) {
-            Log.info("WorkflowSchedulerService polling disabled via config");
+            Log.info("WorkflowSchedulerService polling disabled via config（executorService 仍创建，供 timer 驱动的 resume 使用）");
             return;
         }
 
         Log.infof("Starting WorkflowSchedulerService (worker=%s)", workerId);
-
-        // 创建工作线程池（可配置）
-        int workerCount = Runtime.getRuntime().availableProcessors();
-        executorService = Executors.newFixedThreadPool(workerCount);
 
         // 启动定时器轮询服务
         timerPollingService = Executors.newScheduledThreadPool(1);
@@ -101,7 +111,6 @@ public class WorkflowSchedulerService {
                 TimeUnit.SECONDS
         );
 
-        running = true;
         Log.info("WorkflowSchedulerService started");
     }
 

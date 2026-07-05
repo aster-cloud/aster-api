@@ -8,6 +8,7 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.ResourceLimits;
+import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.io.IOAccess;
 import org.jboss.logging.Logger;
@@ -31,6 +32,16 @@ public class TrufflePolicyRuntime {
     private BlockingQueue<Context> contextPool;
     private Engine sharedEngine;
     private int poolSize;
+
+    // Core IR JSON → 已构建的 Truffle Source（cached=true）。
+    // 此前 execute() 每次都 ctx.eval("aster", coreJson) 传 raw String，GraalVM 每次把 coreJson
+    // 重新 parse 成 AST——即便编译缓存命中（CompiledPolicyCache 存的是 coreJson 字符串），执行仍
+    // 每次冷 parse，是 executionWait 命中/未命中几乎不变的主因之一。改用按内容缓存的 cached Source：
+    // 相同 coreJson 复用同一 Source → 共享 Engine 的 code cache 复用已解析的 AST，避免重复 parse。
+    // 有界（LRU 近似：超上限清空重建，coreJson 集有限且随版本增长，容量兜底防无界）。
+    private final java.util.concurrent.ConcurrentHashMap<String, Source> sourceCache =
+        new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int SOURCE_CACHE_MAX = 2048;
 
     @PostConstruct
     void init() {
@@ -115,8 +126,8 @@ public class TrufflePolicyRuntime {
             // 1. 从池中获取 Context
             ctx = contextPool.take();
 
-            // 2. 评估 Core IR JSON
-            Value evalResult = ctx.eval("aster", coreJson);
+            // 2. 评估 Core IR（用按内容缓存的 cached Source，避免每次重新 parse coreJson）
+            Value evalResult = ctx.eval(sourceFor(coreJson));
 
             // 3. 执行函数
             Object result = executeFunction(evalResult, contextArgs);
@@ -137,6 +148,33 @@ public class TrufflePolicyRuntime {
                 contextPool.offer(ctx);
             }
         }
+    }
+
+    /**
+     * 返回 coreJson 对应的 cached Truffle Source（按内容缓存，供共享 Engine 复用已解析 AST）。
+     * cached(true)：让 GraalVM engine 级 code cache 对同一 Source 复用解析结果。
+     */
+    private Source sourceFor(String coreJson) {
+        Source cached = sourceCache.get(coreJson);
+        if (cached != null) {
+            return cached;
+        }
+        // 容量兜底：coreJson 集随版本增长，超上限清空重建（近似 LRU，避免无界）。
+        if (sourceCache.size() >= SOURCE_CACHE_MAX) {
+            sourceCache.clear();
+        }
+        Source built;
+        try {
+            // name 用内容 hash，保证同内容同 name（Source 等价 → engine code cache 命中）。
+            built = Source.newBuilder("aster", coreJson, "core-" + Integer.toHexString(coreJson.hashCode()))
+                .cached(true)
+                .build();
+        } catch (Exception e) {
+            // 构建 Source 理论不该失败（literal String content）；万一失败退回按内容直接构造。
+            built = Source.create("aster", coreJson);
+        }
+        Source prev = sourceCache.putIfAbsent(coreJson, built);
+        return prev != null ? prev : built;
     }
 
     /**

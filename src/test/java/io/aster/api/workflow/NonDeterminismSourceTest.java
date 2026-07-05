@@ -71,8 +71,8 @@ class NonDeterminismSourceTest {
         Assertions.assertThat(uuidMatches.keySet())
                 .containsExactlyInAnyOrder(
                         "src/main/java/io/aster/policy/service/PolicyStorageService.java",
-                        "src/main/java/io/aster/workflow/WorkflowSchedulerService.java",
-                        "src/main/java/io/aster/workflow/TimerSchedulerService.java",
+                        "src/main/java/io/aster/api/workflow/WorkflowSchedulerService.java",
+                        "src/main/java/io/aster/api/workflow/TimerSchedulerService.java",
                         "src/main/java/io/aster/policy/exception/GlobalExceptionMapper.java",
                         "src/main/java/io/aster/policy/rest/LexiconAdminResource.java"
                 );

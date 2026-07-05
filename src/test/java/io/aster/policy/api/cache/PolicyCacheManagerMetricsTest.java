@@ -38,10 +38,12 @@ public class PolicyCacheManagerMetricsTest {
         double hitBefore = counterValue("policy_cache_hits_total", tenant);
         double missBefore = counterValue("policy_cache_misses_total", tenant);
 
-        assertFalse(cacheManager.isCacheHit(key), "未注册前应判定为未命中");
+        assertFalse(cacheManager.isCacheHit(key), "缓存无值时应判定为未命中");
 
-        cacheManager.registerCacheEntry(key, tenant);
-        assertTrue(cacheManager.isCacheHit(key), "注册后应返回命中");
+        // isCacheHit 现在查真实 policy-results 缓存（非侧索引），故须往真缓存放值才算命中。
+        // registerCacheEntry 只维护 tenant 追踪索引、不写真缓存，因此不能用它模拟"命中"。
+        cacheManager.getPolicyResultCache().<PolicyCacheKey, String>get(key, k -> "cached").await().indefinitely();
+        assertTrue(cacheManager.isCacheHit(key), "真缓存有值后应返回命中");
 
         double hitAfter = counterValue("policy_cache_hits_total", tenant);
         double missAfter = counterValue("policy_cache_misses_total", tenant);
@@ -79,7 +81,8 @@ public class PolicyCacheManagerMetricsTest {
         String tenant = "tenant-remote";
         var key = new PolicyCacheKey(tenant, "aster.module", "functionC", new Object[]{"ctx"});
         cacheManager.registerCacheEntry(key, tenant);
-        assertTrue(cacheManager.isCacheHit(key), "注册后需保证存在缓存键以测试远程失效");
+        // 本用例测远程失效计数，只需追踪索引有 key 供失效匹配（isCacheHit 现查真缓存、语义不同）。
+        assertTrue(cacheManager.snapshotTenantCacheKeys(tenant).contains(key), "注册后追踪索引应含该键以测试远程失效");
 
         double invalidationBefore = counterValue("policy_cache_remote_invalidations_total", tenant);
 
@@ -123,11 +126,15 @@ public class PolicyCacheManagerMetricsTest {
             .put("hash", key.hashCode());
         cacheManager.handleRemoteInvalidation(payload.encode());
 
+        // 失效后、reload 前：真缓存该 key 已被驱逐（isCacheHit 现查真缓存，应为 false）。
+        assertFalse(cacheManager.isCacheHit(key), "远程失效后真实 policy-results 缓存该条目应已驱逐");
+        // 追踪索引也应清除。
+        assertTrue(cacheManager.snapshotTenantCacheKeys(tenant).isEmpty(), "远程失效后追踪索引也应清除");
+
         // C3 核心断言：主缓存该 key 已被真正驱逐 → 再 get 触发 loader 重载返回新值。
         String reloaded = resultCache.<PolicyCacheKey, String>get(key, k -> "RELOADED").await().indefinitely();
         assertTrue("RELOADED".equals(reloaded),
             "C3 回归：远程失效必须驱逐真实 policy-results 主缓存条目（否则仍命中 STALE = 跨 pod stale read）");
-        assertFalse(cacheManager.isCacheHit(key), "追踪索引也应清除");
     }
 
     /** C3：全租户远程失效同样须驱逐真实主缓存里该租户所有条目。 */
@@ -145,10 +152,13 @@ public class PolicyCacheManagerMetricsTest {
         JsonObject payload = new JsonObject().put("tenantId", tenant);
         cacheManager.handleRemoteInvalidation(payload.encode());
 
+        // 失效后、reload 前：真缓存已驱逐 + 追踪索引清空（isCacheHit 现查真缓存）。
+        assertFalse(cacheManager.isCacheHit(key), "全租户远程失效后真实缓存条目应已驱逐");
+        assertTrue(cacheManager.snapshotTenantCacheKeys(tenant).isEmpty(), "全租户远程失效后追踪索引应清空");
+
         String reloaded = resultCache.<PolicyCacheKey, String>get(key, k -> "RELOADED").await().indefinitely();
         assertTrue("RELOADED".equals(reloaded),
             "C3 回归：全租户远程失效须驱逐真实主缓存该租户所有条目");
-        assertFalse(cacheManager.isCacheHit(key));
     }
 
     private double counterValue(String meterName, String tenant) {

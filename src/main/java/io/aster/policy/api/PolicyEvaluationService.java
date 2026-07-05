@@ -246,30 +246,72 @@ public class PolicyEvaluationService {
      */
     private PolicyEvaluationResult evaluateDynamic(PolicyCacheKey cacheKey, long startMarker, boolean deterministicTiming) {
         try {
-            // 1. 从数据库加载策略
-            java.util.Optional<PolicyCatalog> catalog = policySourceRepository.findActiveCatalog(
-                cacheKey.getTenantId(),
-                cacheKey.getPolicyModule(),
-                cacheKey.getPolicyFunction()
-            );
-
-            if (catalog.isEmpty()) {
-                throw new RuntimeException(String.format(
-                    "策略未找到: %s.%s (租户: %s)",
-                    cacheKey.getPolicyModule(),
-                    cacheKey.getPolicyFunction(),
-                    cacheKey.getTenantId()
-                ));
+            // 1. 从数据库加载策略版本。
+            // 热路径优化：cacheKey 已带 versionId（动态加载模式下 evaluatePolicy 已解析过活跃
+            // 版本，见 loadVersionId + versionResolutionCache）时，直接按 id 单查 findVersionById，
+            // **跳过 findActiveCatalog + findActiveVersion 的重复解析**（后者=catalog.findByIdOptional
+            // + version.find 两次往返）。此前 evaluateDynamic 无条件重解析，与 evaluatePolicy 里已
+            // 做的版本解析重复。仅 versionId 缺失（非动态加载路径）才回退到按 module/function 解析活跃版本。
+            java.util.Optional<PolicyVersion> version;
+            String preResolvedVersionId = cacheKey.getVersionId();
+            Long preResolvedVersionIdLong = null;
+            if (preResolvedVersionId != null) {
+                // versionId 正常来自 loadVersionId 的 String.valueOf(version.id)（数字）；防御性捕获
+                // 非数字（PolicyCacheKey 未约束 versionId 类型），非数字则回退按活跃版本解析。
+                try {
+                    preResolvedVersionIdLong = Long.valueOf(preResolvedVersionId);
+                } catch (NumberFormatException nfe) {
+                    preResolvedVersionIdLong = null;
+                }
             }
-
-            java.util.Optional<PolicyVersion> version = policySourceRepository.findActiveVersion(catalog.get().id);
-            if (version.isEmpty()) {
-                throw new RuntimeException(String.format(
-                    "策略活跃版本未找到: %s.%s (租户: %s)",
+            if (preResolvedVersionIdLong != null) {
+                version = policySourceRepository.findVersionById(preResolvedVersionIdLong);
+                // ★租户隔离铁律（IDOR）：findVersionById 是裸主键查询，不带租户约束。必须显式校验
+                // 查回的版本归属当前 cacheKey 的租户 + module/function 一致——否则被污染的 versionId
+                // 可让 A 租户请求加载 B 租户版本。校验失败即当作未找到（不泄漏存在性）。
+                if (version.isPresent()) {
+                    PolicyVersion v = version.get();
+                    boolean sameTenant = java.util.Objects.equals(v.tenantId, cacheKey.getTenantId());
+                    boolean sameModule = java.util.Objects.equals(v.moduleName, cacheKey.getPolicyModule());
+                    boolean sameFunction = java.util.Objects.equals(v.functionName, cacheKey.getPolicyFunction());
+                    if (!sameTenant || !sameModule || !sameFunction) {
+                        version = java.util.Optional.empty();
+                    }
+                }
+                if (version.isEmpty()) {
+                    throw new RuntimeException(String.format(
+                        "策略版本未找到: %s.%s (版本: %s, 租户: %s)",
+                        cacheKey.getPolicyModule(),
+                        cacheKey.getPolicyFunction(),
+                        preResolvedVersionId,
+                        cacheKey.getTenantId()
+                    ));
+                }
+            } else {
+                java.util.Optional<PolicyCatalog> catalog = policySourceRepository.findActiveCatalog(
+                    cacheKey.getTenantId(),
                     cacheKey.getPolicyModule(),
-                    cacheKey.getPolicyFunction(),
-                    cacheKey.getTenantId()
-                ));
+                    cacheKey.getPolicyFunction()
+                );
+
+                if (catalog.isEmpty()) {
+                    throw new RuntimeException(String.format(
+                        "策略未找到: %s.%s (租户: %s)",
+                        cacheKey.getPolicyModule(),
+                        cacheKey.getPolicyFunction(),
+                        cacheKey.getTenantId()
+                    ));
+                }
+
+                version = policySourceRepository.findActiveVersion(catalog.get().id);
+                if (version.isEmpty()) {
+                    throw new RuntimeException(String.format(
+                        "策略活跃版本未找到: %s.%s (租户: %s)",
+                        cacheKey.getPolicyModule(),
+                        cacheKey.getPolicyFunction(),
+                        cacheKey.getTenantId()
+                    ));
+                }
             }
 
             String versionId = String.valueOf(version.get().id);

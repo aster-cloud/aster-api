@@ -8,7 +8,6 @@ import aster.core.module.LinkException;
 import aster.core.module.ModuleGraphLinker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.aster.common.JacksonMappers;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import io.aster.policy.api.convert.NamedContextMapper;
 import io.aster.policy.module.ModuleResolutionException;
 import io.aster.policy.module.ModuleResolver;
@@ -18,12 +17,17 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotAccess;
+import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.io.IOAccess;
 import org.jboss.logging.Logger;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 动态 CNL 执行器
@@ -40,7 +44,20 @@ import java.util.Map;
 public class DynamicCnlExecutor {
 
     private static final Logger LOG = Logger.getLogger(DynamicCnlExecutor.class);
-    private static final ObjectMapper MAPPER = JacksonMappers.PRETTY;
+    private static final ObjectMapper MAPPER = JacksonMappers.DEFAULT;
+    private static final int CACHE_MAX = 2048;
+
+    // Core IR JSON → cached Truffle Source。Source 是不可变编译单元；Context 仍每次新建，
+    // 只让共享 Engine 复用同一 coreJson 的 parse/code cache，不跨请求共享执行状态。
+    private static final ConcurrentHashMap<String, Source> sourceCache = new ConcurrentHashMap<>();
+
+    // CNL 编译产物缓存：只缓存 parse/lower/serialize 的稳定结果，不缓存执行结果。
+    // key 覆盖 source/locale/aliasSet/identifierIndex/aliasesTrusted；含 import 的模块不写入。
+    private static final ConcurrentHashMap<CoreIrCacheKey, CompiledCoreIr> coreIrCache =
+        new ConcurrentHashMap<>();
+    private static final AtomicLong coreIrCacheHits = new AtomicLong();
+    private static final AtomicLong coreIrCacheMisses = new AtomicLong();
+    private static final AtomicLong coreIrCacheBypasses = new AtomicLong();
 
     @Inject
     ModuleResolver moduleResolver;
@@ -72,6 +89,47 @@ public class DynamicCnlExecutor {
         String functionName,
         long executionTimeMs
     ) {}
+
+    private record CoreIrCacheKey(String key) {}
+
+    private record CompiledCoreIr(
+        String coreJson,
+        CoreModel.Module coreModule,
+        String moduleName,
+        List<String> functionNames,
+        String entryFunctionName,
+        boolean cacheable
+    ) {
+        private CompiledCoreIr {
+            functionNames = functionNames == null ? List.of() : List.copyOf(functionNames);
+        }
+    }
+
+    record CacheStats(long coreHits, long coreMisses, long coreBypasses, int coreSize, int sourceSize) {}
+
+    static void clearCachesForTest() {
+        coreIrCache.clear();
+        sourceCache.clear();
+        coreIrCacheHits.set(0);
+        coreIrCacheMisses.set(0);
+        coreIrCacheBypasses.set(0);
+    }
+
+    static CacheStats cacheStatsForTest() {
+        return new CacheStats(
+            coreIrCacheHits.get(),
+            coreIrCacheMisses.get(),
+            coreIrCacheBypasses.get(),
+            coreIrCache.size(),
+            sourceCache.size()
+        );
+    }
+
+    static String coreIrCacheKeyForTest(
+            String source, String locale, aster.core.identifier.IdentifierIndex identifierIndex,
+            Map<aster.core.lexicon.SemanticTokenKind, List<String>> aliasSet, boolean aliasesTrusted) {
+        return coreIrCacheKey(source, locale, identifierIndex, aliasSet, aliasesTrusted).key();
+    }
 
     /**
      * 动态执行 CNL 源代码（使用默认 locale）
@@ -232,56 +290,44 @@ public class DynamicCnlExecutor {
         long startTime = System.currentTimeMillis();
 
         try {
-            // 1. 解析 CNL → AST（传入 locale 以支持多语言，传入 index 以翻译用户词）。
-            //    带用户别名（ADR 0022）时走 parseWithUserAliases。allowStructural 按 aliasesTrusted：
-            //    冻结版本可信=true（结构词已授权）；trial 现场输入=false（结构词需授权，防绕过）。
-            LOG.debugf("解析 CNL 源代码... locale=%s, vocab=%s, aliases=%s, trusted=%s",
-                locale, identifierIndex != null, aliasSet != null && !aliasSet.isEmpty(), aliasesTrusted);
-            InProcessCnlParser.ParseResult parseResult = (aliasSet != null && !aliasSet.isEmpty())
-                ? InProcessCnlParser.parseWithUserAliases(source, locale, identifierIndex, aliasSet, aliasesTrusted)
-                : InProcessCnlParser.parse(source, locale, identifierIndex);
-            Module astModule = parseResult.module();
+            // cacheKey == null 表示 lexicon 指纹算不出（罕见异常路径）→ 完全跳过缓存，
+            // 直接编译（既不查也不存），保守避免跨 lexicon 版本串用。
+            CoreIrCacheKey cacheKey = coreIrCacheKey(source, locale, identifierIndex, aliasSet, aliasesTrusted);
+            CompiledCoreIr compiled = cacheKey == null ? null : coreIrCache.get(cacheKey);
+            if (compiled != null) {
+                coreIrCacheHits.incrementAndGet();
+                LOG.debugf("Core IR 缓存命中: module=%s, key=%s", compiled.moduleName(), cacheKey.key());
+            } else {
+                if (cacheKey != null) {
+                    coreIrCacheMisses.incrementAndGet();
+                }
+                compiled = compileCoreIr(
+                    source, locale, identifierIndex, aliasSet, aliasesTrusted,
+                    functionName, legacyEvaluateSentinel, tenantId, moduleResolver, modulesEnabled);
+                if (cacheKey != null && compiled.cacheable()) {
+                    if (coreIrCache.size() >= CACHE_MAX) {
+                        coreIrCache.clear();
+                    }
+                    CompiledCoreIr prev = coreIrCache.putIfAbsent(cacheKey, compiled);
+                    if (prev != null) {
+                        compiled = prev;
+                    }
+                } else {
+                    coreIrCacheBypasses.incrementAndGet();
+                }
+            }
 
             // 2. 确定要执行的函数名（优先级：显式 functionName > @entry 注解 > 单 Rule > 诊断）
-            EntryPointSelector.Selection selection = EntryPointSelector.select(
-                functionName, parseResult.functionNames(), parseResult.entryFunctionName(),
-                legacyEvaluateSentinel);
-            String targetFunction;
-            if (selection instanceof EntryPointSelector.Selected selected) {
-                targetFunction = selected.function();
-            } else if (selection instanceof EntryPointSelector.Ambiguous ambiguous) {
-                throw new AmbiguousEntryException(ambiguous.candidates());
-            } else if (selection instanceof EntryPointSelector.NotFound notFound) {
-                throw new DynamicExecutionException(
-                    "未找到指定函数 '" + notFound.requested() + "',可用: " + notFound.candidates());
-            } else {
-                throw new DynamicExecutionException("CNL 中未找到可执行的函数");
-            }
+            String targetFunction = selectTargetFunction(
+                functionName, compiled.functionNames(), compiled.entryFunctionName(), legacyEvaluateSentinel);
 
-            LOG.infof("目标函数: %s.%s", parseResult.moduleName(), targetFunction);
-
-            // 3. 降级 AST → Core IR
-            LOG.debugf("降级 AST → Core IR...");
-            CoreLowering lowering = new CoreLowering();
-            CoreModel.Module coreModule = lowering.lowerModule(astModule);
-            List<Decl.Import> imports = importsOf(astModule);
-            if (!imports.isEmpty() && modulesEnabled) {
-                if (moduleResolver == null) {
-                    throw new ModuleResolutionException(
-                        ModuleResolutionException.Code.MODULE_NOT_VISIBLE,
-                        "Module resolver is unavailable");
-                }
-                LOG.debugf("解析跨模块 imports: count=%d, tenant=%s", imports.size(), tenantId);
-                var graph = moduleResolver.resolveGraph(tenantId, coreModule, imports, locale);
-                coreModule = new ModuleGraphLinker().link(graph).merged();
-                LOG.debugf("跨模块 imports 已 link: modules=%d, edges=%d", graph.modules().size(), graph.imports().size());
-            }
+            LOG.infof("目标函数: %s.%s", compiled.moduleName(), targetFunction);
 
             // 4. 映射命名上下文到位置参数（如需）
             Object[] positionalContext;
             if (mapNamedContext) {
                 // 查找目标函数的参数定义
-                List<CoreModel.Param> functionParams = findFunctionParams(coreModule, targetFunction);
+                List<CoreModel.Param> functionParams = findFunctionParams(compiled.coreModule(), targetFunction);
                 if (functionParams == null) {
                     throw new DynamicExecutionException("未找到函数参数定义: " + targetFunction);
                 }
@@ -304,21 +350,16 @@ public class DynamicCnlExecutor {
                 positionalContext = context instanceof Object[] arr ? arr : new Object[] { context };
             }
 
-            // 5. 序列化 Core IR → JSON
-            LOG.debugf("序列化 Core IR → JSON...");
-            String coreJson = MAPPER.writeValueAsString(coreModule);
-            LOG.debugf("Core JSON 长度: %d 字符", coreJson.length());
-
             // 6. 使用 GraalVM Polyglot 执行
             LOG.debugf("使用 GraalVM Polyglot 执行...");
-            Object result = executeWithPolyglot(coreJson, targetFunction, positionalContext);
+            Object result = executeWithPolyglot(compiled.coreJson(), targetFunction, positionalContext);
 
             long executionTime = System.currentTimeMillis() - startTime;
-            LOG.infof("动态执行完成: %s.%s, 耗时 %dms", parseResult.moduleName(), targetFunction, executionTime);
+            LOG.infof("动态执行完成: %s.%s, 耗时 %dms", compiled.moduleName(), targetFunction, executionTime);
 
             return new ExecutionResult(
                 result,
-                parseResult.moduleName(),
+                compiled.moduleName(),
                 targetFunction,
                 executionTime
             );
@@ -339,6 +380,144 @@ public class DynamicCnlExecutor {
             LOG.errorf(e, "动态执行失败: %s", e.getMessage());
             throw new DynamicExecutionException("动态执行失败: " + e.getMessage(), e);
         }
+    }
+
+    private static CompiledCoreIr compileCoreIr(
+            String source, String locale, aster.core.identifier.IdentifierIndex identifierIndex,
+            Map<aster.core.lexicon.SemanticTokenKind, List<String>> aliasSet, boolean aliasesTrusted,
+            String functionName, boolean legacyEvaluateSentinel,
+            String tenantId, ModuleResolver moduleResolver, boolean modulesEnabled) throws Exception {
+        // 1. 解析 CNL → AST（传入 locale 以支持多语言，传入 index 以翻译用户词）。
+        //    带用户别名（ADR 0022）时走 parseWithUserAliases。allowStructural 按 aliasesTrusted：
+        //    冻结版本可信=true（结构词已授权）；trial 现场输入=false（结构词需授权，防绕过）。
+        LOG.debugf("解析 CNL 源代码... locale=%s, vocab=%s, aliases=%s, trusted=%s",
+            locale, identifierIndex != null, aliasSet != null && !aliasSet.isEmpty(), aliasesTrusted);
+        InProcessCnlParser.ParseResult parseResult = (aliasSet != null && !aliasSet.isEmpty())
+            ? InProcessCnlParser.parseWithUserAliases(source, locale, identifierIndex, aliasSet, aliasesTrusted)
+            : InProcessCnlParser.parse(source, locale, identifierIndex);
+        Module astModule = parseResult.module();
+
+        // 先保留原入口诊断顺序：多入口/找不到入口在 lower/link 前报出。
+        selectTargetFunction(
+            functionName, parseResult.functionNames(), parseResult.entryFunctionName(), legacyEvaluateSentinel);
+
+        // 3. 降级 AST → Core IR
+        LOG.debugf("降级 AST → Core IR...");
+        CoreLowering lowering = new CoreLowering();
+        CoreModel.Module coreModule = lowering.lowerModule(astModule);
+        List<Decl.Import> imports = importsOf(astModule);
+        boolean cacheable = imports.isEmpty();
+        if (!imports.isEmpty() && modulesEnabled) {
+            if (moduleResolver == null) {
+                throw new ModuleResolutionException(
+                    ModuleResolutionException.Code.MODULE_NOT_VISIBLE,
+                    "Module resolver is unavailable");
+            }
+            LOG.debugf("解析跨模块 imports: count=%d, tenant=%s", imports.size(), tenantId);
+            var graph = moduleResolver.resolveGraph(tenantId, coreModule, imports, locale);
+            coreModule = new ModuleGraphLinker().link(graph).merged();
+            LOG.debugf("跨模块 imports 已 link: modules=%d, edges=%d", graph.modules().size(), graph.imports().size());
+        }
+
+        // 5. 序列化 Core IR → JSON。热路径只喂给 GraalVM eval，compact JSON 足够且减少重 parse 体积。
+        LOG.debugf("序列化 Core IR → JSON...");
+        String coreJson = MAPPER.writeValueAsString(coreModule);
+        LOG.debugf("Core JSON 长度: %d 字符", coreJson.length());
+
+        return new CompiledCoreIr(
+            coreJson,
+            coreModule,
+            parseResult.moduleName(),
+            parseResult.functionNames(),
+            parseResult.entryFunctionName(),
+            cacheable
+        );
+    }
+
+    private static String selectTargetFunction(
+            String functionName, List<String> functionNames, String entryFunctionName,
+            boolean legacyEvaluateSentinel) {
+        EntryPointSelector.Selection selection = EntryPointSelector.select(
+            functionName, functionNames, entryFunctionName, legacyEvaluateSentinel);
+        if (selection instanceof EntryPointSelector.Selected selected) {
+            return selected.function();
+        } else if (selection instanceof EntryPointSelector.Ambiguous ambiguous) {
+            throw new AmbiguousEntryException(ambiguous.candidates());
+        } else if (selection instanceof EntryPointSelector.NotFound notFound) {
+            throw new DynamicExecutionException(
+                "未找到指定函数 '" + notFound.requested() + "',可用: " + notFound.candidates());
+        } else {
+            throw new DynamicExecutionException("CNL 中未找到可执行的函数");
+        }
+    }
+
+    private static CoreIrCacheKey coreIrCacheKey(
+            String source, String locale, aster.core.identifier.IdentifierIndex identifierIndex,
+            Map<aster.core.lexicon.SemanticTokenKind, List<String>> aliasSet, boolean aliasesTrusted) {
+        try {
+            java.util.TreeMap<String, Object> payload = new java.util.TreeMap<>();
+            payload.put("source", source);
+            payload.put("locale", locale);
+            payload.put("aliasSet", UserAliasValidator.canonicalJson(aliasSet));
+            payload.put("identifierIndex", identifierIndexFingerprint(identifierIndex));
+            payload.put("aliasesTrusted", aliasesTrusted);
+            // lexicon 是可热插拔/下线的：同一 locale 在 lexicon 被替换/禁用/恢复后 parse 结果会变。
+            // 纳入当前 locale 实际解析用的 lexicon 内容指纹，使 lexicon 变更后旧 Core IR 自然失效
+            // （否则跨 lexicon 版本命中 = stale/错误 Core IR）。
+            String lexiconFingerprint = InProcessCnlParser.lexiconFingerprintForLocale(locale);
+            if (lexiconFingerprint == null) {
+                // 指纹算不出 → 无法保证 lexicon 未变 → 放弃缓存该次（返回 null，调用方跳过缓存）。
+                // 确定性处理，不引入随机源。
+                return null;
+            }
+            payload.put("lexicon", lexiconFingerprint);
+            return new CoreIrCacheKey(sha256(MAPPER.writeValueAsString(payload)));
+        } catch (Exception e) {
+            throw new DynamicExecutionException("构建 Core IR 缓存 key 失败: " + e.getMessage(), e);
+        }
+    }
+
+    private static String identifierIndexFingerprint(
+            aster.core.identifier.IdentifierIndex identifierIndex) throws Exception {
+        if (identifierIndex == null) {
+            return null;
+        }
+        java.util.TreeMap<String, Object> payload = new java.util.TreeMap<>();
+        payload.put("vocabulary", identifierIndex.getVocabulary());
+        payload.put("toCanonical", new java.util.TreeMap<>(identifierIndex.getToCanonicalMap()));
+        payload.put("toLocalized", new java.util.TreeMap<>(identifierIndex.getToLocalizedMap()));
+        return MAPPER.writeValueAsString(payload);
+    }
+
+    private static String sha256(String value) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+        StringBuilder out = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            out.append(String.format("%02x", b));
+        }
+        return out.toString();
+    }
+
+    private static Source sourceFor(String coreJson) {
+        Source cached = sourceCache.get(coreJson);
+        if (cached != null) {
+            return cached;
+        }
+        // 容量兜底：coreJson 集随版本增长，超上限清空重建（近似 LRU，避免无界）。
+        if (sourceCache.size() >= CACHE_MAX) {
+            sourceCache.clear();
+        }
+        Source built;
+        try {
+            built = Source.newBuilder("aster", coreJson, "core-" + Integer.toHexString(coreJson.hashCode()))
+                .cached(true)
+                .build();
+        } catch (Exception e) {
+            built = Source.create("aster", coreJson);
+        }
+        Source prev = sourceCache.putIfAbsent(coreJson, built);
+        return prev != null ? prev : built;
     }
 
     private static List<Decl.Import> importsOf(Module module) {
@@ -399,7 +578,7 @@ public class DynamicCnlExecutor {
             // 删除后由 truffle 唯一负责。
 
             // 评估 Core IR JSON - 返回入口函数的 LambdaValue 或无参函数的执行结果
-            Value evalResult = polyglotContext.eval("aster", coreJson);
+            Value evalResult = polyglotContext.eval(sourceFor(coreJson));
 
             LOG.debugf("Polyglot eval 返回: canExecute=%b, isNull=%b, isHostObject=%b",
                 evalResult.canExecute(), evalResult.isNull(), evalResult.isHostObject());

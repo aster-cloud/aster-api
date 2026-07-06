@@ -273,6 +273,40 @@ public class InProcessCnlParser {
      * @param locale 语言代码（如 "zh-CN"、"de-DE"、"en-US"），null 表示默认英语
      * @return 对应的 Lexicon 实例
      */
+    /**
+     * 返回给定 locale 当前实际解析用的 lexicon 的内容指纹（id + keywords + aliases）。
+     *
+     * 供 Core IR 缓存 key 使用：lexicon 是可热插拔/下线的（LexiconRegistry 动态注册 +
+     * 可用性开关），同一 locale 在 lexicon 被替换/禁用/恢复后，getLexiconForLocale 可能返回
+     * 不同的 lexicon 对象（禁用会 fallback 到默认/前缀匹配），parse/canonicalize 结果随之变化。
+     * 把当前 lexicon 的内容纳入缓存 key，使 lexicon 变更后旧 Core IR 自然失效（无需 registry
+     * listener 主动清缓存）。指纹涵盖 getLexiconForLocale 的完整解析结果（含禁用→fallback），
+     * 因为它对同一 locale 调同一 getLexiconForLocale 拿到的就是实际 parse 用的那个 lexicon。
+     *
+     * @return lexicon 内容指纹；计算失败时返回 {@code null}，调用方据此**放弃缓存该次编译产物**
+     *   （保守：指纹算不出就无法保证 lexicon 未变，不缓存好过缓存可能过时的 Core IR）。
+     */
+    public static String lexiconFingerprintForLocale(String locale) {
+        try {
+            Lexicon lexicon = getLexiconForLocale(locale);
+            java.util.TreeMap<String, Object> payload = new java.util.TreeMap<>();
+            payload.put("id", lexicon.getId());
+            // keywords/aliases 的 key 是 enum SemanticTokenKind，用 name() 转字符串保证 JSON 稳定有序。
+            java.util.TreeMap<String, String> keywords = new java.util.TreeMap<>();
+            lexicon.getKeywords().forEach((k, v) -> keywords.put(k.name(), v));
+            payload.put("keywords", keywords);
+            java.util.TreeMap<String, java.util.List<String>> aliases = new java.util.TreeMap<>();
+            lexicon.getAliases().forEach((k, v) -> aliases.put(k.name(), v));
+            payload.put("aliases", aliases);
+            return io.aster.common.JacksonMappers.DEFAULT.writeValueAsString(payload);
+        } catch (Exception e) {
+            // 指纹计算失败（极罕见异常路径）：返回 null，调用方放弃缓存（确定性处理，不引入
+            // 随机源）。不抛异常、不阻断执行。
+            LOG.warnf("计算 lexicon 指纹失败（locale=%s），本次跳过 Core IR 缓存: %s", locale, e.getMessage());
+            return null;
+        }
+    }
+
     private static Lexicon getLexiconForLocale(String locale) {
         if (locale == null || locale.isBlank()) {
             return LexiconRegistry.getInstance().getDefault();

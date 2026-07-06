@@ -1,6 +1,7 @@
 package io.aster.policy.lexicon;
 
 import aster.core.lexicon.LexiconRegistry;
+import io.aster.policy.parser.DynamicCnlExecutor;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -538,6 +539,9 @@ public class HotPlugLexiconLoader {
         }
         loadedJars.put(fileName, new LoadedJar(sha256, Set.copyOf(introduced), newLoader));
         LOG.infof("Hot-plugged %s (sha256=%s, lexicons=%s)", fileName, sha256, introduced);
+        // 新 lexicon 集已生效 → 主动清编译缓存，让旧指纹的 Core IR 立即释放、下次编译走新 lexicon。
+        // 正确性非必需（CoreIrCacheKey 含 lexicon 指纹自然失效），是热插拔后主动释放陈旧产物。
+        DynamicCnlExecutor.clearCompilationCaches();
         return new LoadResult("ok",
             (isReplace ? "replaced" : "loaded") + " jar; registered " + introduced,
             introduced);
@@ -753,6 +757,11 @@ public class HotPlugLexiconLoader {
         if (!removedTransformersRef.get().isEmpty()) {
             LOG.infof("Unregistered transformers %s (jar %s)",
                 removedTransformersRef.get(), fileName);
+        }
+        // lexicon/transformer 实际下线才清编译缓存（unregisterByOwner 返回空表示该 jar 无注册项、无变更）。
+        // 与 load-success 对称：让被卸载语言的旧 Core IR 立即释放。
+        if (!removedRef.get().isEmpty() || !removedTransformersRef.get().isEmpty()) {
+            DynamicCnlExecutor.clearCompilationCaches();
         }
         closeQuietly(entry.loader());
     }

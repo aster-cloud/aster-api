@@ -54,9 +54,11 @@ class GenericOutboxSchedulerTest {
         }
 
         TestOutboxScheduler scheduler = scheduler(action -> replayResultUni(), 5);
-        scheduler.processOutbox();
+        // 按本测试租户处理，避免依赖"全表只有本测试数据"（fast 套件共享物理 anomaly_actions
+        // 表，别的测试并存的行会被无参 processOutbox 捞入 limit、被全表 fetchAll 数入断言 → flaky）。
+        scheduler.processOutbox("tenant-batch");
 
-        List<AnomalyActionEntity> actions = fetchAll();
+        List<AnomalyActionEntity> actions = fetchAll("tenant-batch");
         long done = actions.stream().filter(a -> a.status == OutboxStatus.DONE).count();
         long pending = actions.stream().filter(a -> a.status == OutboxStatus.PENDING).count();
         assertEquals(5, done, "批处理应该只消费 5 条记录");
@@ -116,11 +118,11 @@ class GenericOutboxSchedulerTest {
 
         // 模拟并发场景：快速连续调用两次 processOutbox()
         // PESSIMISTIC_WRITE 锁确保第一次调用处理完后，第二次调用发现事件已经不是 PENDING 状态而跳过
-        scheduler.processOutbox();
-        scheduler.processOutbox();
+        scheduler.processOutbox("tenant-concurrent");
+        scheduler.processOutbox("tenant-concurrent");
 
         // 验证：事件只被执行一次
-        List<AnomalyActionEntity> entities = fetchAll();
+        List<AnomalyActionEntity> entities = fetchAll("tenant-concurrent");
         assertEquals(1, entities.size());
         assertEquals(OutboxStatus.DONE, entities.get(0).status);
         assertEquals(1, counter.get(), "事件只应被执行一次（PESSIMISTIC_WRITE 锁 + 状态检查保证）");
@@ -136,11 +138,11 @@ class GenericOutboxSchedulerTest {
 
         persistAction("VERIFY_REPLAY", "tenant-idempotent", workflowPayload(), Instant.now());
 
-        scheduler.processOutbox();
-        scheduler.processOutbox();
+        scheduler.processOutbox("tenant-idempotent");
+        scheduler.processOutbox("tenant-idempotent");
 
         assertEquals(1, counter.get());
-        AnomalyActionEntity entity = fetchAll().get(0);
+        AnomalyActionEntity entity = fetchAll("tenant-idempotent").get(0);
         assertEquals(OutboxStatus.DONE, entity.status);
     }
 
@@ -220,6 +222,20 @@ class GenericOutboxSchedulerTest {
         return QuarkusTransaction.requiringNew().call(() ->
             Panache.getEntityManager()
                 .createQuery("FROM AnomalyActionEntity ORDER BY createdAt", AnomalyActionEntity.class)
+                .getResultList()
+        );
+    }
+
+    /**
+     * 按租户过滤——避免依赖"全表只有本测试数据"。fast 套件共享物理 anomaly_actions 表，
+     * 全表查询会数入其它测试并存的行导致断言漂移 flaky；各测试用唯一租户 + 本方法过滤天然隔离。
+     */
+    private List<AnomalyActionEntity> fetchAll(String tenantId) {
+        return QuarkusTransaction.requiringNew().call(() ->
+            Panache.getEntityManager()
+                .createQuery("FROM AnomalyActionEntity WHERE tenantId = :tenant ORDER BY createdAt",
+                    AnomalyActionEntity.class)
+                .setParameter("tenant", tenantId)
                 .getResultList()
         );
     }

@@ -290,17 +290,21 @@ public class DynamicCnlExecutor {
         long startTime = System.currentTimeMillis();
 
         try {
+            // cacheKey == null 表示 lexicon 指纹算不出（罕见异常路径）→ 完全跳过缓存，
+            // 直接编译（既不查也不存），保守避免跨 lexicon 版本串用。
             CoreIrCacheKey cacheKey = coreIrCacheKey(source, locale, identifierIndex, aliasSet, aliasesTrusted);
-            CompiledCoreIr compiled = coreIrCache.get(cacheKey);
+            CompiledCoreIr compiled = cacheKey == null ? null : coreIrCache.get(cacheKey);
             if (compiled != null) {
                 coreIrCacheHits.incrementAndGet();
                 LOG.debugf("Core IR 缓存命中: module=%s, key=%s", compiled.moduleName(), cacheKey.key());
             } else {
-                coreIrCacheMisses.incrementAndGet();
+                if (cacheKey != null) {
+                    coreIrCacheMisses.incrementAndGet();
+                }
                 compiled = compileCoreIr(
                     source, locale, identifierIndex, aliasSet, aliasesTrusted,
                     functionName, legacyEvaluateSentinel, tenantId, moduleResolver, modulesEnabled);
-                if (compiled.cacheable()) {
+                if (cacheKey != null && compiled.cacheable()) {
                     if (coreIrCache.size() >= CACHE_MAX) {
                         coreIrCache.clear();
                     }
@@ -459,8 +463,14 @@ public class DynamicCnlExecutor {
             payload.put("aliasesTrusted", aliasesTrusted);
             // lexicon 是可热插拔/下线的：同一 locale 在 lexicon 被替换/禁用/恢复后 parse 结果会变。
             // 纳入当前 locale 实际解析用的 lexicon 内容指纹，使 lexicon 变更后旧 Core IR 自然失效
-            // （否则跨 lexicon 版本命中 = stale/错误 Core IR）。指纹失败时返回唯一值 → 该次不复用缓存。
-            payload.put("lexicon", InProcessCnlParser.lexiconFingerprintForLocale(locale));
+            // （否则跨 lexicon 版本命中 = stale/错误 Core IR）。
+            String lexiconFingerprint = InProcessCnlParser.lexiconFingerprintForLocale(locale);
+            if (lexiconFingerprint == null) {
+                // 指纹算不出 → 无法保证 lexicon 未变 → 放弃缓存该次（返回 null，调用方跳过缓存）。
+                // 确定性处理，不引入随机源。
+                return null;
+            }
+            payload.put("lexicon", lexiconFingerprint);
             return new CoreIrCacheKey(sha256(MAPPER.writeValueAsString(payload)));
         } catch (Exception e) {
             throw new DynamicExecutionException("构建 Core IR 缓存 key 失败: " + e.getMessage(), e);

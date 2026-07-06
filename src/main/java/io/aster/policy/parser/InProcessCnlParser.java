@@ -282,6 +282,9 @@ public class InProcessCnlParser {
      * 把当前 lexicon 的内容纳入缓存 key，使 lexicon 变更后旧 Core IR 自然失效（无需 registry
      * listener 主动清缓存）。指纹涵盖 getLexiconForLocale 的完整解析结果（含禁用→fallback），
      * 因为它对同一 locale 调同一 getLexiconForLocale 拿到的就是实际 parse 用的那个 lexicon。
+     *
+     * @return lexicon 内容指纹；计算失败时返回 {@code null}，调用方据此**放弃缓存该次编译产物**
+     *   （保守：指纹算不出就无法保证 lexicon 未变，不缓存好过缓存可能过时的 Core IR）。
      */
     public static String lexiconFingerprintForLocale(String locale) {
         try {
@@ -297,10 +300,10 @@ public class InProcessCnlParser {
             payload.put("aliases", aliases);
             return io.aster.common.JacksonMappers.DEFAULT.writeValueAsString(payload);
         } catch (Exception e) {
-            // 指纹计算失败：返回一个每次不同的标记，使该次 key 唯一 → 保守地不复用缓存
-            // （宁可 miss 也不返回可能过时的 Core IR）。不抛异常，不阻断执行。
-            LOG.warnf("计算 lexicon 指纹失败（locale=%s），本次跳过 Core IR 缓存复用: %s", locale, e.getMessage());
-            return "fingerprint-unavailable:" + java.util.UUID.randomUUID();
+            // 指纹计算失败（极罕见异常路径）：返回 null，调用方放弃缓存（确定性处理，不引入
+            // 随机源）。不抛异常、不阻断执行。
+            LOG.warnf("计算 lexicon 指纹失败（locale=%s），本次跳过 Core IR 缓存: %s", locale, e.getMessage());
+            return null;
         }
     }
 

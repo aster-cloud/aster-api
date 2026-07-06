@@ -1,6 +1,7 @@
 package io.aster.policy.lexicon;
 
 import aster.core.lexicon.LexiconRegistry;
+import io.aster.policy.parser.DynamicCnlExecutor;
 import io.quarkus.redis.datasource.RedisDataSource;
 import io.quarkus.redis.datasource.pubsub.PubSubCommands;
 import io.quarkus.redis.datasource.set.SetCommands;
@@ -155,7 +156,7 @@ public class LexiconAvailabilityService {
             return;
         }
         for (String id : desired) {
-            LexiconRegistry.getInstance().markUnavailable(id);
+            applyMarkUnavailable(id);
         }
         // 本副本实际下线、但 SET 已不含的 → 恢复（覆盖丢失的 enable 事件）。
         // 用 disabledIds() 归一化集合与 SET 差分；SET 成员若大小写不一致，先归一化再比较。
@@ -163,7 +164,7 @@ public class LexiconAvailabilityService {
         Set<String> toEnable = new HashSet<>(LexiconRegistry.getInstance().disabledIds());
         toEnable.removeAll(desiredNormalized);
         for (String id : toEnable) {
-            LexiconRegistry.getInstance().markAvailable(id);
+            applyMarkAvailable(id);
         }
         if (!desired.isEmpty() || !toEnable.isEmpty()) {
             LOG.infof("lexicon 可用性对账完成：禁用集=%s，恢复=%s", desired, toEnable);
@@ -200,10 +201,39 @@ public class LexiconAvailabilityService {
         String op = payload.substring(0, sep);
         String id = payload.substring(sep + 1);
         switch (op) {
-            case "disable" -> LexiconRegistry.getInstance().markUnavailable(id);
-            case "enable" -> LexiconRegistry.getInstance().markAvailable(id);
+            case "disable" -> applyMarkUnavailable(id);
+            case "enable" -> applyMarkAvailable(id);
             default -> LOG.warnf("忽略未知可用性广播 op: %s", payload);
         }
+    }
+
+    /**
+     * lexicon 可用性变更的**唯一本地生效点**：改注册表状态 + 主动清 Core IR 编译缓存。
+     *
+     * <p>disable/enable/远程广播/周期对账四条路径全部经此，避免"改了注册表却漏清缓存"的
+     * 遗漏类 bug（本仓跨副本一致性历史上多次栽在"某条路径漏改"）。
+     *
+     * <p>只在**本副本真正发生状态变化时**（{@code markUnavailable} 返回 true）才清缓存：
+     * 幂等重放（已是该状态）不触发无谓清空，避免高频对账周期性抖掉热缓存。清缓存对正确性
+     * 非必需（{@code CoreIrCacheKey} 含 lexicon 指纹自然失效），是主动释放陈旧编译产物。
+     *
+     * @return 本副本是否发生状态变化（透传 {@link LexiconRegistry#markUnavailable} 语义）
+     */
+    private boolean applyMarkUnavailable(String id) {
+        boolean changed = LexiconRegistry.getInstance().markUnavailable(id);
+        if (changed) {
+            DynamicCnlExecutor.clearCompilationCaches();
+        }
+        return changed;
+    }
+
+    /** 见 {@link #applyMarkUnavailable}：恢复语言的对称生效点，状态真变化时同样主动清编译缓存。 */
+    private boolean applyMarkAvailable(String id) {
+        boolean changed = LexiconRegistry.getInstance().markAvailable(id);
+        if (changed) {
+            DynamicCnlExecutor.clearCompilationCaches();
+        }
+        return changed;
     }
 
     /**
@@ -213,7 +243,7 @@ public class LexiconAvailabilityService {
      * @return 本副本是否发生状态变化（与 {@link LexiconRegistry#markUnavailable} 一致语义）
      */
     public boolean disable(String id) {
-        boolean changed = LexiconRegistry.getInstance().markUnavailable(id);
+        boolean changed = applyMarkUnavailable(id);
         if (isBackbone(id)) {
             // core 已拒绝；不污染 Redis SET / 广播。changed 必为 false。
             return changed;
@@ -228,7 +258,7 @@ public class LexiconAvailabilityService {
      * @return 本副本是否发生状态变化
      */
     public boolean enable(String id) {
-        boolean changed = LexiconRegistry.getInstance().markAvailable(id);
+        boolean changed = applyMarkAvailable(id);
         persistAndBroadcast(id, false);
         return changed;
     }

@@ -115,6 +115,22 @@ public class DynamicCnlExecutor {
         coreIrCacheBypasses.set(0);
     }
 
+    /**
+     * lexicon 热插拔时主动清编译产物缓存（Core IR + Source）。
+     *
+     * 正确性上非必需——CoreIrCacheKey 已含 lexicon 指纹，某 locale 被禁用/启用后
+     * 该 locale 的旧 key 自然不再命中，指纹变化即天然失效。本方法是"锦上添花"：
+     * 热插拔属低频运维事件，主动清让陈旧 key 立即释放堆内存（避免被禁 locale 的
+     * 编译产物长期滞留缓存），并保证下一次编译走全新 lexicon 状态、无任何时序窗口。
+     *
+     * 只清编译缓存，不动 coreIrCacheHits/Misses/Bypasses 计数器——那是进程级性能
+     * 遥测（累计命中率），与 lexicon 生命周期无关，清零会污染监控读数。
+     */
+    public static void clearCompilationCaches() {
+        coreIrCache.clear();
+        sourceCache.clear();
+    }
+
     static CacheStats cacheStatsForTest() {
         return new CacheStats(
             coreIrCacheHits.get(),

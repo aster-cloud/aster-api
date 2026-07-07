@@ -79,7 +79,16 @@ class PolicyEvaluationE2ETest {
             .body("result.reason", equalTo("Test approval"))
             .body("error", nullValue());
 
-        // 验证审计日志记录了评估操作
+        // 验证审计日志记录了评估操作。审计经 @ObservesAsync 异步持久化，需等落库后再断言，
+        // 否则 full-suite 负载下即时查询会早于异步写入完成（time race）。用 REST 端点轮询等待
+        // （await 的轮询线程无 CDI 请求上下文/事务，不能直接跑 blocking Panache 查询——照本类
+        // line ~215 的范例走 REST），落库后再用 Panache 在测试主线程读取详情断言。
+        await().atMost(Duration.ofSeconds(3)).until(() -> {
+            var response = given().header("X-Tenant-Id", TENANT_A)
+                .get("/api/v1/audit/type/POLICY_EVALUATION");
+            return response.statusCode() == 200 && !response.jsonPath().getList("$").isEmpty();
+        });
+
         List<AuditLog> logs = AuditLog.findByEventType("POLICY_EVALUATION", TENANT_A);
         assertThat(logs).isNotEmpty();
         assertThat(logs.get(0).policyModule).isEqualTo(POLICY_MODULE);

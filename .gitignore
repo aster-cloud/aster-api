@@ -8,6 +8,10 @@
 build/
 !gradle/wrapper/gradle-wrapper.jar
 
+# Gradle 测试结果产物（JUnit XML + binary），部分工具会拷贝到仓库根 test/；
+# 真测试源码在 src/test/，不受影响。
+/test/
+
 # Claude
 .claude/
 

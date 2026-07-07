@@ -215,9 +215,15 @@ public class AuditLog extends PanacheEntityBase {
     /**
      * 查询指定租户的最新哈希值（用于构建哈希链）
      * 返回 NULL 表示该租户的第一条记录（genesis block）
+     *
+     * <p>按 {@code id desc}（BIGSERIAL，严格单调=真实追加顺序）取链尾，而非 timestamp。
+     * 并发追加下事件的 wall-clock timestamp 与实际持久化（id）顺序可能不一致——若按
+     * timestamp 取「最新」会选到非链尾节点，导致 prev_hash 指向非末端 → 链分叉（issue #115）。
+     * 以 id 定义链顺序还能抵御时钟回拨/乱序。须与 {@code AuditEventListener} 的 per-tenant
+     * advisory lock 配合：advisory lock 串行化写、id-desc 取真链尾，二者缺一都会 fork。
      */
     public static String findLatestHash(String tenantId) {
-        AuditLog log = find("tenantId = ?1 and currentHash is not null order by timestamp desc, id desc", tenantId)
+        AuditLog log = find("tenantId = ?1 and currentHash is not null order by id desc", tenantId)
             .firstResult();
         return log != null ? log.currentHash : null;
     }

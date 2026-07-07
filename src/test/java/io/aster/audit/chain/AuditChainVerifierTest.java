@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -215,6 +216,70 @@ public class AuditChainVerifierTest {
 
         assertTrue(result.isValid(), "Chain should be valid (legacy records skipped)");
         assertEquals(2, result.getRecordsVerified(), "Should verify only 2 records with hashes");
+    }
+
+    @Test
+    void testValidChainWithReversedTimestamps() throws Exception {
+        // issue #115：链顺序由 id（追加顺序）定义，而非 wall-clock timestamp。
+        // 直接构造一条【合法】链：id 升序 = 追加顺序，每条 hash 用自己的 timestamp 正确算出并
+        // 链接；但 timestamp 设成【与 id 相反】的顺序（模拟并发乱序/时钟回拨——每条 hash 仍与
+        // 自己的 timestamp 一致，是合法链，非篡改）。若 verifier 按 timestamp 遍历，会从错误的
+        // 一端开始，把合法链误报为 prev_hash 断裂；按 id 遍历则正确。
+        String tenantId = "tenant-ts-reversed";
+        Instant start = Instant.parse("2020-01-01T00:00:00Z");
+        Instant end = Instant.parse("2020-12-31T00:00:00Z");
+
+        int n = 5;
+        // id 第 k 条（k=0..n-1）的 timestamp 逆序：k=0 最新、k=n-1 最旧。
+        // 追加顺序（插入顺序 = id 升序）从 genesis 起链接。
+        String prevHash = null;
+        for (int k = 0; k < n; k++) {
+            // 逆序整点 timestamp（k 越小 ts 越大）；整点无亚秒，DB round-trip 后 Instant.toString 稳定，
+            // 与生产 truncatedTo(MICROS) 一致，保证 hash 复算可对上。
+            Instant ts = start.plus(java.time.Duration.ofHours(n - k)).truncatedTo(ChronoUnit.MICROS);
+            String module = "test.module";
+            String function = "func" + k;
+            String currentHash = computeChainHash(prevHash, "POLICY_EVALUATION", ts, tenantId, module, function, true);
+            insertAuditRow(tenantId, ts, module, function, prevHash, currentHash);
+            prevHash = currentHash;
+        }
+        waitForAuditRecord(tenantId, n);
+
+        ChainVerificationResult result = verifier.verifyChain(tenantId, start, end);
+
+        assertTrue(result.isValid(),
+            "timestamp 逆序但 id 顺序成合法链，verifier 应判合法（按 id 遍历）。reason="
+                + result.getReason());
+        assertEquals(n, result.getRecordsVerified(), "应验证全部 " + n + " 条");
+        assertNull(result.getBrokenAt());
+    }
+
+    /** 复刻生产 hash 公式（与 AuditEventListener.computeHashChain 一致），用于构造合法测试链。 */
+    private String computeChainHash(String prevHash, String eventType, Instant timestamp,
+                                    String tenantId, String module, String function, boolean success) {
+        StringBuilder content = new StringBuilder();
+        if (prevHash != null) {
+            content.append(prevHash);
+        }
+        content.append(eventType);
+        content.append(timestamp.toString());
+        content.append(tenantId);
+        content.append(module != null ? module : "");
+        content.append(function != null ? function : "");
+        content.append(Boolean.toString(success));
+        return org.apache.commons.codec.digest.DigestUtils.sha256Hex(content.toString());
+    }
+
+    /** 直接插入一条带哈希的审计行（id 由 BIGSERIAL 按插入顺序分配 = 追加顺序）。 */
+    private void insertAuditRow(String tenantId, Instant ts, String module, String function,
+                                String prevHash, String currentHash) {
+        pgPool.preparedQuery(
+            "INSERT INTO audit_logs (event_type, timestamp, tenant_id, policy_module, policy_function, " +
+            "success, prev_hash, current_hash) VALUES ('POLICY_EVALUATION', $1, $2, $3, $4, true, $5, $6)")
+            .execute(io.vertx.mutiny.sqlclient.Tuple.of(
+                java.time.LocalDateTime.ofInstant(ts, java.time.ZoneOffset.UTC),
+                tenantId, module, function, prevHash, currentHash))
+            .await().indefinitely();
     }
 
     @Test

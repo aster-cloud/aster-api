@@ -103,12 +103,17 @@ public class AuditChainVerifier {
         return ChainVerificationResult.valid(totalVerified);
     }
 
+    // 链遍历必须按 id ASC（BIGSERIAL=真实追加顺序）排序，与写入侧 findLatestHash 的 id-desc
+    // 取链尾一致（issue #115）。并发追加下事件 wall-clock timestamp 与 id 顺序可能不一致，
+    // 若按 timestamp 遍历会把合法链误判为 prev_hash 断裂（假篡改告警）。timestamp 仅用于
+    // 时间窗筛选（选哪些记录参与验证），不参与链顺序。
+
     /**
      * 查询审计日志
      */
     private List<AuditLog> fetchAuditLogs(String tenantId, Instant startTime, Instant endTime) {
         return AuditLog.find(
-            "tenantId = ?1 AND timestamp >= ?2 AND timestamp <= ?3 ORDER BY timestamp ASC, id ASC",
+            "tenantId = ?1 AND timestamp >= ?2 AND timestamp <= ?3 ORDER BY id ASC",
             tenantId, startTime, endTime
         ).list();
     }
@@ -124,7 +129,7 @@ public class AuditChainVerifier {
         int pageSize
     ) {
         return AuditLog.find(
-            "tenantId = ?1 AND timestamp >= ?2 AND timestamp <= ?3 ORDER BY timestamp ASC, id ASC",
+            "tenantId = ?1 AND timestamp >= ?2 AND timestamp <= ?3 ORDER BY id ASC",
             tenantId, startTime, endTime
         ).page(page, pageSize).list();
     }

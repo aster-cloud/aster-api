@@ -8,8 +8,10 @@ import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.ObservesAsync;
 import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.apache.commons.codec.digest.DigestUtils;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
@@ -28,6 +30,12 @@ public class AuditEventListener {
 
     @Inject
     BusinessMetrics businessMetrics;
+
+    @Inject
+    EntityManager entityManager;
+
+    @ConfigProperty(name = "quarkus.datasource.db-kind", defaultValue = "postgresql")
+    String dbKind;
 
     /**
      * 监听审计事件并持久化。
@@ -57,6 +65,14 @@ public class AuditEventListener {
             log.errorMessage = event.errorMessage();
             log.reason = extractReason(event.metadata());
             log.metadata = serializeMetadata(event.metadata());
+
+            // 串行化同租户的哈希链追加，消除 TOCTOU 分叉（issue #115）。
+            // @ObservesAsync 是并发多线程投递：同租户两条事件并发进入时，若各自独立
+            // read-latest-then-persist，会都读到同一 prev_hash → 链分叉（同一 prev_hash
+            // 挂两条后继），削弱防篡改语义。用 per-tenant PostgreSQL advisory lock 在本
+            // 事务内串行化「读最新→算哈希→持久化」，锁在事务提交时自动释放，不同租户仍并行。
+            // 复用 PostgresEventStore 的 pg_advisory_xact_lock 先例（同仓既有模式）。
+            acquireTenantChainLock(log.tenantId);
 
             // 计算哈希链（Phase 0 Task 3.2）
             computeHashChain(log);
@@ -130,6 +146,38 @@ public class AuditEventListener {
             Log.errorf(e, "Failed to serialize metadata");
             return "{\"error\":\"serialization_failed\"}";
         }
+    }
+
+    /**
+     * 获取 per-tenant 的哈希链追加锁（PostgreSQL advisory lock），串行化同租户的
+     * 「读最新哈希→算当前哈希→持久化」，消除 @ObservesAsync 并发下的链分叉（issue #115）。
+     *
+     * <p>{@code pg_advisory_xact_lock} 在当前事务提交/回滚时自动释放；同租户第二个线程会
+     * 阻塞到第一个提交后才继续，从而读到刚写入的最新哈希，保证链无分叉。锁按 tenantId 隔离，
+     * 不同租户并行不受影响。H2（部分单测后端）不支持 advisory lock → 跳过（H2 场景不测并发）。
+     */
+    private void acquireTenantChainLock(String tenantId) {
+        if ("h2".equalsIgnoreCase(dbKind) || tenantId == null) {
+            return;
+        }
+        long lockId = tenantLockId(tenantId);
+        entityManager.createNativeQuery("SELECT pg_advisory_xact_lock(:lockId)")
+                .setParameter("lockId", lockId)
+                .getSingleResult();
+    }
+
+    /**
+     * 把 tenantId 稳定映射到一个 64 位锁 ID（取 SHA-256 前 8 字节）。用密码学哈希而非
+     * {@code String.hashCode()} 以降低不同租户碰撞到同一锁 ID 的概率；即便偶发碰撞也只是
+     * 让两个租户短暂串行化（纯性能影响，不损正确性——每个租户仍读自己的链最新值）。
+     */
+    public static long tenantLockId(String tenantId) {
+        byte[] digest = DigestUtils.sha256(tenantId);
+        long id = 0L;
+        for (int i = 0; i < 8; i++) {
+            id = (id << 8) | (digest[i] & 0xffL);
+        }
+        return id;
     }
 
     /**

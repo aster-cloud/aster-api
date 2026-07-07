@@ -66,7 +66,17 @@ public class AnomalyActionExecutor {
      * @param action 异常动作实体
      * @return 验证结果
      */
-    @Transactional
+    // #57 修复：移除此前标注在返回 Uni 方法上的 @Transactional（误导性假保证）。
+    // JTA 事务在方法返回（生成 Uni 对象）时即提交/关闭，而真正的 DB 工作
+    // （replayWorkflow 内的多段 + recordVerificationResult）发生在 .transformToUni 的
+    // *延迟订阅*阶段，本就不在该 @Transactional 作用域内——所以这个外层注解是假保证。
+    // 各下游调用（tryAcquireBlocking / replayWorkflow 的 prepareReplay+processWorkflow+reloadState /
+    // recordVerificationResult）都带自己的 @Transactional 注解。注意其实际事务边界依调用路径而定：
+    // 在 outbox 主路径（GenericOutboxScheduler.processSingleEvent 用 QuarkusTransaction.requiringNew()
+    // 包住整个 executeEvent().await()）下，这些 @Transactional（默认 REQUIRED）会【加入】外层
+    // outbox 事务，而非各自独立提交；在无外层事务的调用路径下才各自独立。无论哪种，都有事务覆盖，
+    // 不再是"假保证"。真正的长事务边界优化（拆分 outbox 标记事务与 handler 执行事务）见后续 issue。
+    // 本方法开头的同步部分只做一次幂等 INSERT（tryAcquireBlocking 自带事务）与只读 findByWorkflowId。
     public Uni<VerificationResult> executeReplayVerification(AnomalyActionEntity action) {
         String idempotencyKey = String.format("REPLAY_%s_%s", action.anomalyId, action.id);
         boolean acquired = inboxGuard.tryAcquireBlocking(idempotencyKey, "VERIFY_REPLAY", resolveInboxTenant(action));
@@ -196,6 +206,12 @@ public class AnomalyActionExecutor {
      * @param action 异常动作实体
      * @return 回滚是否成功
      */
+    // #57：本方法保留 @Transactional，因为 performAutoRollback 的全部阻塞 DB 工作
+    // （findById / getActiveVersion / rollbackToVersion 写入）都【同步】执行在方法体内，
+    // 返回的是已解析的 Uni.createFrom().item(...)，故 JTA 事务确实覆盖了这些写入。
+    // ⚠️ 约束：任何把 performAutoRollback 的 DB 工作移入 .onItem()/.transformToUni 延迟链的
+    // 重构都会让工作逃出本事务作用域（见 executeReplayVerification 的 #57 注释）——若需异步化，
+    // 必须同时移除本 @Transactional 并让各段自带独立事务。
     @Transactional
     public Uni<Boolean> executeAutoRollback(AnomalyActionEntity action) {
         String idempotencyKey = String.format("ROLLBACK_%s_%s", action.anomalyId, action.id);

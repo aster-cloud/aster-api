@@ -24,6 +24,15 @@ import java.util.List;
  * - 仅负责状态迁移和事件发布
  * - 不实现具体业务逻辑（Replay/Rollback 由 AnomalyActionExecutor 调用现有服务）
  * - 通过 Event<AuditEvent> 集成到现有审计体系
+ *
+ * <p><b>#57 持久化模型约束</b>：本类底层是 <em>blocking</em> Hibernate ORM（AnomalyReportEntity
+ * 为 orm.panache）。{@code submitVerificationAction}/{@code updateStatus}/{@code recordVerificationResult}
+ * 标注 {@code @Transactional} 且返回 {@code Uni}——之所以正确，是因为其全部 {@code persist()}
+ * 写入都<b>同步</b>执行在方法体内，返回的是已解析的 {@code Uni.createFrom().item(...)}，故 JTA 事务
+ * 确实覆盖这些写入。⚠️ 铁律：这些方法内的 DB 写入必须保持同步，<b>不得</b>移入 {@code .onItem()}/
+ * {@code .transformToUni} 延迟链——否则工作会逃出 {@code @Transactional} 作用域（JTA 事务在 Uni 对象
+ * 生成即提交），造成无事务写入。若需异步化，须移除 {@code @Transactional} 并让各段自带独立事务
+ * （参见 AnomalyActionExecutor.executeReplayVerification 与 WorkflowSchedulerService.replayWorkflow）。
  */
 @ApplicationScoped
 public class AnomalyWorkflowService {

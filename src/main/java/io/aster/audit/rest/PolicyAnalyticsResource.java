@@ -294,7 +294,12 @@ public class PolicyAnalyticsResource {
      */
     @POST
     @Path("/anomalies/{id}/actions/verify")
+    @Blocking
     public Uni<Response> triggerVerification(@PathParam("id") Long id) {
+        // #57 修复：本方法返回 Uni 但直接执行阻塞 Panache（下方 AnomalyReportEntity.find）
+        // 及调用 @Transactional 的 submitVerificationAction（其 body eager 执行阻塞 JDBC）。
+        // 无 @Blocking 时 Uni 装配在事件循环线程上运行 → 阻塞 event loop（同资源的
+        // updateAnomalyStatus 已带 @Blocking，此处遗漏）。补 @Blocking 让整条调用在 worker 线程执行。
         // Phase 4.3: 强制租户验证
         String tenantId = tenantContext.getCurrentTenant();
 

@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -160,6 +161,127 @@ class GenericOutboxSchedulerTest {
 
         assertEquals(1, doneA);
         assertEquals(1, pendingB);
+    }
+
+    // ==================== issue #119：长事务拆分 + lease token + reclaim ====================
+
+    @Test
+    void testLeaseTokenSetDuringRunAndClearedOnDone() throws Exception {
+        // 拆分后：claim 事务写入 lease token，handler 执行中该行应为 RUNNING 且 token 非空；
+        // finalize 后 token 被清空。用 handler 内快照捕获执行中状态。
+        AnomalyActionEntity action = persistAction(
+            "VERIFY_REPLAY", "tenant-lease", workflowPayload(), Instant.now().minusSeconds(5));
+
+        String[] tokenDuringRun = new String[1];
+        OutboxStatus[] statusDuringRun = new OutboxStatus[1];
+        TestOutboxScheduler scheduler = scheduler(a -> {
+            // handler 在无外层 outbox 事务下运行；此刻另开事务读该行的持久化状态。
+            AnomalyActionEntity mid = findById(action.id);
+            statusDuringRun[0] = mid.status;
+            tokenDuringRun[0] = mid.leaseToken;
+            return replayResultUni();
+        }, 5);
+
+        scheduler.processOutbox("tenant-lease");
+
+        assertEquals(OutboxStatus.RUNNING, statusDuringRun[0], "handler 执行期间该行应为 RUNNING");
+        assertNotNull(tokenDuringRun[0], "claim 应写入 lease token");
+
+        AnomalyActionEntity done = findById(action.id);
+        assertEquals(OutboxStatus.DONE, done.status);
+        assertNull(done.leaseToken, "finalize 后应清空 lease token");
+    }
+
+    @Test
+    void testStaleRunningIsReclaimedAndReprocessed() {
+        // 模拟崩溃遗留：一条 RUNNING、startedAt 远早于 reclaimTimeout、带旧 token。
+        // 下一轮 processOutbox 应先回收为 PENDING（清 token），再重新领取并执行完成。
+        Long anomalyId = createTestAnomaly();
+        Long id = QuarkusTransaction.requiringNew().call(() -> {
+            AnomalyActionEntity e = new AnomalyActionEntity();
+            e.anomalyId = anomalyId;
+            e.actionType = "VERIFY_REPLAY";
+            e.status = OutboxStatus.RUNNING;                     // 卡死的 RUNNING
+            e.payload = workflowPayload();
+            e.tenantId = "tenant-reclaim";
+            e.createdAt = Instant.now().minusSeconds(1200);
+            e.startedAt = Instant.now().minus(Duration.ofMinutes(10)); // 远超 5min reclaimTimeout
+            e.leaseToken = "STALE-TOKEN";
+            e.persist();
+            return e.id;
+        });
+
+        AtomicInteger runs = new AtomicInteger();
+        TestOutboxScheduler scheduler = scheduler(a -> {
+            runs.incrementAndGet();
+            return replayResultUni();
+        }, 5);
+        scheduler.processOutbox("tenant-reclaim");
+
+        AnomalyActionEntity reloaded = findById(id);
+        assertEquals(OutboxStatus.DONE, reloaded.status, "stale RUNNING 应被回收→重投递→完成");
+        assertEquals(1, runs.get(), "回收后应重新执行一次 handler");
+        assertNull(reloaded.leaseToken, "完成后 token 清空");
+    }
+
+    @Test
+    void testFreshRunningIsNotReclaimed() {
+        // 一条 RUNNING、startedAt 很近（模拟另一 pod 正在正常执行）→ 不应被回收，handler 不应被触发。
+        Long anomalyId = createTestAnomaly();
+        Long id = QuarkusTransaction.requiringNew().call(() -> {
+            AnomalyActionEntity e = new AnomalyActionEntity();
+            e.anomalyId = anomalyId;
+            e.actionType = "VERIFY_REPLAY";
+            e.status = OutboxStatus.RUNNING;
+            e.payload = workflowPayload();
+            e.tenantId = "tenant-fresh-running";
+            e.createdAt = Instant.now().minusSeconds(10);
+            e.startedAt = Instant.now().minusSeconds(5);       // 远未过期
+            e.leaseToken = "ACTIVE-TOKEN";
+            e.persist();
+            return e.id;
+        });
+
+        AtomicInteger runs = new AtomicInteger();
+        TestOutboxScheduler scheduler = scheduler(a -> {
+            runs.incrementAndGet();
+            return replayResultUni();
+        }, 5);
+        scheduler.processOutbox("tenant-fresh-running");
+
+        AnomalyActionEntity reloaded = findById(id);
+        assertEquals(OutboxStatus.RUNNING, reloaded.status, "未过期 RUNNING 不应被回收");
+        assertEquals("ACTIVE-TOKEN", reloaded.leaseToken, "未过期 RUNNING 的 token 不应变");
+        assertEquals(0, runs.get(), "未过期 RUNNING 不应被重新执行");
+    }
+
+    @Test
+    void testLateFinalizeDoesNotClobberReclaimedReattempt() throws Exception {
+        // ABA 核心场景：旧 attempt 的 handler 执行期间，该行被回收并被新 attempt 重新领取（token 变），
+        // 旧 attempt 迟到的 finalize 必须因 token 失配而放弃，不得覆盖新 attempt 的状态。
+        // 用 handler 内“把该行改成另一 attempt 的 RUNNING+新 token”模拟被抢占，然后旧 attempt 成功返回。
+        AnomalyActionEntity action = persistAction(
+            "VERIFY_REPLAY", "tenant-aba", workflowPayload(), Instant.now().minusSeconds(5));
+
+        TestOutboxScheduler scheduler = scheduler(a -> {
+            // 模拟：回收线程 + 新 attempt 已介入，把行改成新 token 的 RUNNING（新 attempt 尚未完成）。
+            QuarkusTransaction.requiringNew().run(() -> {
+                AnomalyActionEntity row = Panache.getEntityManager()
+                    .find(AnomalyActionEntity.class, action.id);
+                row.leaseToken = "NEW-ATTEMPT-TOKEN";
+                row.startedAt = Instant.now();
+                row.persist();
+            });
+            return replayResultUni(); // 旧 attempt 成功，随后尝试 finalize（应被 token 守卫拦下）
+        }, 5);
+
+        scheduler.processOutbox("tenant-aba");
+
+        AnomalyActionEntity reloaded = findById(action.id);
+        assertEquals(OutboxStatus.RUNNING, reloaded.status,
+            "旧 attempt 的迟到 finalize 不得把新 attempt 的 RUNNING 覆盖为 DONE");
+        assertEquals("NEW-ATTEMPT-TOKEN", reloaded.leaseToken,
+            "新 attempt 的 token 应保持不变（旧 attempt 未清空它）");
     }
 
     private void awaitRelease(CountDownLatch release) {

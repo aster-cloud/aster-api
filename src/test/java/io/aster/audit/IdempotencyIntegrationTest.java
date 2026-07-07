@@ -158,7 +158,16 @@ public class IdempotencyIntegrationTest {
     }
 
     @Test
-    void testReplayVerificationIdempotency() {
+    void testReplayVerificationIsReentrant() {
+        // issue #119（方案 C）：outbox 长事务拆分后，VERIFY_REPLAY handler 不再「执行前」抢 inbox 坑
+        // （早提交无释放的 marker 会让崩溃后 reclaim 重投递被误跳过 = 丢事件）。replay 本身改为可重入
+        // ——投递级并发去重由 outbox claim（PESSIMISTIC_WRITE + status 双检 + lease token）保证；
+        // 真正的「不重复副作用」幂等下沉到 recordVerificationResultOnce（marker 与结果写入同事务），
+        // 见 AnomalyReplayVerificationIntegrationTest.testRecordVerificationResultOnce_*。
+        //
+        // 本用例走 clockTimes=null 的降级路径：executeReplayVerification 返回一个「无法验证」结果但
+        // 不记录（不触发 recordVerificationResultOnce），故不写 marker。断言新契约：重复直接调用不再
+        // 返回 null（不再有执行前 dedup），且降级路径不写 inbox marker。
         UUID workflowId = UUID.randomUUID();
         persistWorkflowState(workflowId, null);
         Long anomalyId = createTestAnomaly(POLICY_PREFIX + "replay", null, "VERIFYING");
@@ -174,11 +183,17 @@ public class IdempotencyIntegrationTest {
         Assertions.assertNotNull(first);
         Assertions.assertEquals(workflowId.toString(), first.workflowId());
 
+        // 新契约：重复直接调用不再被执行前 inbox guard 拦成 null——replay 可重入。
         VerificationResult duplicate = actionExecutor.executeReplayVerification(action)
             .await().indefinitely();
-        Assertions.assertNull(duplicate);
+        Assertions.assertNotNull(duplicate, "#119：replay 改为可重入，重复调用应返回结果而非 null");
+        Assertions.assertEquals(workflowId.toString(), duplicate.workflowId());
 
-        Assertions.assertTrue(inboxExists(normalizeKey(internalTenant(anomalyId), replayKey(anomalyId, action.id))));
+        // 降级路径（clockTimes 缺失）不记录结果，故不写 REPLAY marker——marker 只在
+        // recordVerificationResultOnce 内与结果写入同事务产生。
+        Assertions.assertFalse(
+            inboxExists(normalizeKey(internalTenant(anomalyId), replayKey(anomalyId, action.id))),
+            "#119：执行前不再写 inbox marker（降级路径也不记录）");
     }
 
     @Test

@@ -71,10 +71,11 @@ dependencies {
     implementation 'io.quarkus:quarkus-smallrye-graphql'
     implementation 'commons-codec:commons-codec:1.22.0'
 
-    // Persistence - Hibernate Panache + PostgreSQL + Flyway + Reactive Inbox
+    // Persistence - Hibernate ORM Panache (blocking) + PostgreSQL + Flyway
+    // #57：全应用（生产+测试）已移除 reactive 持久化 —— audit inbox 岛统一到 blocking JDBC。
+    // 生产无 reactive 数据源/连接池（连接预算 96→48）。hibernate-reactive-panache +
+    // reactive-pg-client 均已删除；测试 DB setup/cleanup 走 blocking BlockingDbTestHelper。
     implementation 'io.quarkus:quarkus-hibernate-orm-panache'
-    implementation 'io.quarkus:quarkus-hibernate-reactive-panache'
-    implementation 'io.quarkus:quarkus-reactive-pg-client'
     implementation 'io.quarkus:quarkus-jdbc-postgresql'
     implementation 'io.quarkus:quarkus-flyway'
 

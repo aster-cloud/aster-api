@@ -43,15 +43,9 @@ public class PostgresTestResource implements QuarkusTestResourceLifecycleManager
 
         postgres.start();
 
-        String reactiveUrl = String.format(
-            "postgresql://%s:%d/%s",
-            postgres.getHost(),
-            postgres.getMappedPort(5432),
-            postgres.getDatabaseName()
-        );
+        // #57：reactive 数据源已下线（生产+测试都去 reactive），只需 blocking JDBC 配置。
         return Map.of(
             "quarkus.datasource.jdbc.url", postgres.getJdbcUrl(),
-            "quarkus.datasource.reactive.url", reactiveUrl,
             "quarkus.datasource.username", postgres.getUsername(),
             "quarkus.datasource.password", postgres.getPassword(),
             "quarkus.datasource.db-kind", "postgresql"

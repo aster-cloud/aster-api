@@ -10,7 +10,7 @@ import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.mutiny.Uni;
-import io.vertx.mutiny.sqlclient.Pool;
+import io.aster.test.BlockingDbTestHelper;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,16 +34,12 @@ import java.util.function.Function;
 class GenericOutboxSchedulerTest {
 
     @Inject
-    Pool pgPool;
+    BlockingDbTestHelper db;
 
     @BeforeEach
     void resetState() {
-        pgPool.query("DELETE FROM anomaly_actions")
-            .execute()
-            .await().indefinitely();
-        pgPool.query("DELETE FROM anomaly_reports")
-            .execute()
-            .await().indefinitely();
+        db.execute("DELETE FROM anomaly_actions");
+        db.execute("DELETE FROM anomaly_reports");
     }
 
     @Test

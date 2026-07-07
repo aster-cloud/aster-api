@@ -7,7 +7,7 @@ import io.aster.test.PostgresTestResource;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-import io.vertx.mutiny.sqlclient.Pool;
+import io.aster.test.BlockingDbTestHelper;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,16 +27,14 @@ import static org.hamcrest.Matchers.*;
 public class TamperDetectionIntegrationTest {
 
     @Inject
-    Pool pgPool;
+    BlockingDbTestHelper db;
 
     @Inject
     Event<AuditEvent> auditEventProducer;
 
     @BeforeEach
     void cleanup() {
-        pgPool.query("DELETE FROM audit_logs")
-            .execute()
-            .await().indefinitely();
+        db.execute("DELETE FROM audit_logs");
     }
 
     @Test
@@ -84,9 +82,7 @@ public class TamperDetectionIntegrationTest {
         }
 
         // 篡改中间记录
-        pgPool.query("UPDATE audit_logs SET policy_module = 'hacked.module' WHERE id IN (SELECT id FROM audit_logs WHERE tenant_id = '" + tenantId + "' ORDER BY timestamp LIMIT 1 OFFSET 1)")
-            .execute()
-            .await().indefinitely();
+        db.execute("UPDATE audit_logs SET policy_module = 'hacked.module' WHERE id IN (SELECT id FROM audit_logs WHERE tenant_id = ? ORDER BY timestamp LIMIT 1 OFFSET 1)", tenantId);
 
         Instant end = Instant.now().plusSeconds(60); // +1 minute buffer
 

@@ -6,7 +6,7 @@ import io.aster.policy.event.EventType;
 import io.aster.test.PostgresTestResource;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import io.vertx.mutiny.sqlclient.Pool;
+import io.aster.test.BlockingDbTestHelper;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,16 +29,14 @@ public class AuditChainVerifierTest {
     AuditChainVerifier verifier;
 
     @Inject
-    Pool pgPool;
+    BlockingDbTestHelper db;
 
     @Inject
     Event<AuditEvent> auditEventProducer;
 
     @BeforeEach
     void cleanup() {
-        pgPool.query("DELETE FROM audit_logs")
-            .execute()
-            .await().indefinitely();
+        db.execute("DELETE FROM audit_logs");
     }
 
     @Test
@@ -79,9 +77,7 @@ public class AuditChainVerifierTest {
         }
 
         // 篡改中间记录的 metadata（修改 policyModule）
-        pgPool.query("UPDATE audit_logs SET policy_module = 'hacked.module' WHERE id IN (SELECT id FROM audit_logs WHERE tenant_id = '" + tenantId + "' ORDER BY timestamp LIMIT 1 OFFSET 1)")
-            .execute()
-            .await().indefinitely();
+        db.execute("UPDATE audit_logs SET policy_module = 'hacked.module' WHERE id IN (SELECT id FROM audit_logs WHERE tenant_id = ? ORDER BY timestamp LIMIT 1 OFFSET 1)", tenantId);
 
         Instant end = Instant.now();
 
@@ -108,9 +104,7 @@ public class AuditChainVerifierTest {
         }
 
         // 删除第2条记录（索引1）
-        pgPool.query("DELETE FROM audit_logs WHERE id IN (SELECT id FROM audit_logs WHERE tenant_id = '" + tenantId + "' ORDER BY timestamp LIMIT 1 OFFSET 1)")
-            .execute()
-            .await().indefinitely();
+        db.execute("DELETE FROM audit_logs WHERE id IN (SELECT id FROM audit_logs WHERE tenant_id = ? ORDER BY timestamp LIMIT 1 OFFSET 1)", tenantId);
 
         Instant end = Instant.now();
 
@@ -136,12 +130,12 @@ public class AuditChainVerifierTest {
             Thread.sleep(50);
         }
 
-        // 手动插入伪造记录（prev_hash 和 current_hash 错误）
+        // 手动插入伪造记录（prev_hash 和 current_hash 错误）。timestamp 用 UTC 挂钟绑定
+        // （与其它插入一致），避免 Timestamp.from(Instant) 的 JVM 时区偏移把该记录挤出验证时间窗。
         Instant fakeTime = Instant.now().plusSeconds(10);
-        pgPool.query("INSERT INTO audit_logs (event_type, timestamp, tenant_id, policy_module, policy_function, success, prev_hash, current_hash) " +
-            "VALUES ('POLICY_EVALUATION', '" + fakeTime + "', '" + tenantId + "', 'fake.module', 'fakeFunc', true, 'fake_prev_hash', 'fake_current_hash')")
-            .execute()
-            .await().indefinitely();
+        db.execute("INSERT INTO audit_logs (event_type, timestamp, tenant_id, policy_module, policy_function, success, prev_hash, current_hash) " +
+            "VALUES ('POLICY_EVALUATION', ?, ?, 'fake.module', 'fakeFunc', true, 'fake_prev_hash', 'fake_current_hash')",
+            java.sql.Timestamp.valueOf(java.time.LocalDateTime.ofInstant(fakeTime, java.time.ZoneOffset.UTC)), tenantId);
 
         Instant end = Instant.now().plusSeconds(20);
 
@@ -197,10 +191,8 @@ public class AuditChainVerifierTest {
         Instant start = Instant.parse("2025-01-15T10:00:00Z");
 
         // 手动插入旧记录（没有哈希值）
-        pgPool.query("INSERT INTO audit_logs (event_type, timestamp, tenant_id, policy_module, policy_function, success) " +
-            "VALUES ('POLICY_EVALUATION', NOW(), '" + tenantId + "', 'legacy.module', 'legacyFunc', true)")
-            .execute()
-            .await().indefinitely();
+        db.execute("INSERT INTO audit_logs (event_type, timestamp, tenant_id, policy_module, policy_function, success) " +
+            "VALUES ('POLICY_EVALUATION', NOW(), ?, 'legacy.module', 'legacyFunc', true)", tenantId);
 
         // 创建新记录（有哈希值）
         for (int i = 0; i < 2; i++) {
@@ -273,13 +265,11 @@ public class AuditChainVerifierTest {
     /** 直接插入一条带哈希的审计行（id 由 BIGSERIAL 按插入顺序分配 = 追加顺序）。 */
     private void insertAuditRow(String tenantId, Instant ts, String module, String function,
                                 String prevHash, String currentHash) {
-        pgPool.preparedQuery(
+        db.execute(
             "INSERT INTO audit_logs (event_type, timestamp, tenant_id, policy_module, policy_function, " +
-            "success, prev_hash, current_hash) VALUES ('POLICY_EVALUATION', $1, $2, $3, $4, true, $5, $6)")
-            .execute(io.vertx.mutiny.sqlclient.Tuple.of(
-                java.time.LocalDateTime.ofInstant(ts, java.time.ZoneOffset.UTC),
-                tenantId, module, function, prevHash, currentHash))
-            .await().indefinitely();
+            "success, prev_hash, current_hash) VALUES ('POLICY_EVALUATION', ?, ?, ?, ?, true, ?, ?)",
+            java.sql.Timestamp.valueOf(java.time.LocalDateTime.ofInstant(ts, java.time.ZoneOffset.UTC)),
+            tenantId, module, function, prevHash, currentHash);
     }
 
     @Test

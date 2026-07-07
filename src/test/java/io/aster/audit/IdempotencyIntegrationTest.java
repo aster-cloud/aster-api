@@ -2,7 +2,6 @@ package io.aster.audit;
 
 import io.aster.audit.entity.AnomalyActionEntity;
 import io.aster.audit.entity.AnomalyReportEntity;
-import io.aster.audit.inbox.InboxEvent;
 import io.aster.audit.rest.model.VerificationResult;
 import io.aster.audit.service.AnomalyActionExecutor;
 import io.aster.policy.entity.PolicyVersion;

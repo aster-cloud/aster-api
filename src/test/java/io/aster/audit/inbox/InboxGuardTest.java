@@ -1,33 +1,29 @@
 package io.aster.audit.inbox;
 
+import io.aster.test.BlockingDbTestHelper;
 import io.aster.test.PostgresTestResource;
-import io.quarkus.hibernate.reactive.panache.Panache;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.vertx.core.runtime.context.VertxContextSafetyToggle;
-import io.smallrye.mutiny.Uni;
-import io.vertx.core.Context;
-import io.vertx.core.impl.ContextInternal;
-import io.vertx.mutiny.core.Vertx;
-import io.vertx.mutiny.sqlclient.Pool;
-import io.vertx.mutiny.sqlclient.Tuple;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * InboxGuard 幂等性保护服务测试
- * 验证核心 CAS 行为与清理任务
+ * 验证核心 CAS 行为与清理任务（#57 后已统一为 blocking 实现）。
+ *
+ * <p>{@code tryAcquire} 仍暴露 {@code Uni} 接口，但底层是 blocking JDBC 经 worker pool
+ * offload——测试直接 {@code .await()} 即可（不再需要 Vert.x 上下文脚手架）。
+ * {@code tryAcquireBlocking}/{@code scheduledCleanup} 是同步方法，直接调用。
+ * 测试 DB 的 setup/cleanup 用 blocking {@link BlockingDbTestHelper}（#57 后测试也去 reactive）。
  */
 @QuarkusTest
 @QuarkusTestResource(PostgresTestResource.class)
@@ -37,26 +33,17 @@ class InboxGuardTest {
     InboxGuard inboxGuard;
 
     @Inject
-    Vertx vertx;
-
-    @Inject
-    Pool pgPool;
+    BlockingDbTestHelper db;
 
     @BeforeEach
     void cleanInbox() {
-        runOnVertx(() ->
-            pgPool.query("DELETE FROM inbox_events")
-                .execute()
-                .replaceWith((Void) null)
-        );
+        db.execute("DELETE FROM inbox_events");
     }
 
     @Test
     void testTryAcquireSuccess() {
-        Boolean acquired = runOnVertx(() ->
-            inboxGuard.tryAcquire("test-key-success", "TEST_EVENT", "tenant-1")
-        );
-
+        Boolean acquired = inboxGuard.tryAcquire("test-key-success", "TEST_EVENT", "tenant-1")
+            .await().atMost(Duration.ofSeconds(10));
         assertThat(acquired).isTrue();
     }
 
@@ -65,27 +52,32 @@ class InboxGuardTest {
         String key = "test-key-duplicate";
         String tenant = "tenant-duplicate";
 
-        Boolean first = runOnVertx(() ->
-            inboxGuard.tryAcquire(key, "TEST_EVENT", tenant)
-        );
-        Boolean second = runOnVertx(() ->
-            inboxGuard.tryAcquire(key, "TEST_EVENT", tenant)
-        );
+        Boolean first = inboxGuard.tryAcquire(key, "TEST_EVENT", tenant)
+            .await().atMost(Duration.ofSeconds(10));
+        Boolean second = inboxGuard.tryAcquire(key, "TEST_EVENT", tenant)
+            .await().atMost(Duration.ofSeconds(10));
 
         assertThat(first).isTrue();
         assertThat(second).isFalse();
     }
 
     @Test
+    void testTryAcquireBlockingDuplicate() {
+        // 直接测 blocking 入口（@Blocking REST / @Scheduled outbox 走这个）。
+        String key = "test-key-blocking";
+        String tenant = "tenant-blocking";
+        assertThat(inboxGuard.tryAcquireBlocking(key, "TEST_EVENT", tenant)).isTrue();
+        assertThat(inboxGuard.tryAcquireBlocking(key, "TEST_EVENT", tenant)).isFalse();
+    }
+
+    @Test
     void testDifferentTenantsSeparate() {
         String key = "test-key-tenant-scope";
 
-        Boolean tenantOne = runOnVertx(() ->
-            inboxGuard.tryAcquire(key, "TEST_EVENT", "tenant-A")
-        );
-        Boolean tenantTwo = runOnVertx(() ->
-            inboxGuard.tryAcquire(key, "TEST_EVENT", "tenant-B")
-        );
+        Boolean tenantOne = inboxGuard.tryAcquire(key, "TEST_EVENT", "tenant-A")
+            .await().atMost(Duration.ofSeconds(10));
+        Boolean tenantTwo = inboxGuard.tryAcquire(key, "TEST_EVENT", "tenant-B")
+            .await().atMost(Duration.ofSeconds(10));
 
         assertThat(tenantOne).isTrue();
         assertThat(tenantTwo).isTrue();
@@ -93,12 +85,10 @@ class InboxGuardTest {
 
     @Test
     void testNullKeyHandling() {
-        Boolean nullKey = runOnVertx(() ->
-            inboxGuard.tryAcquire(null, "TEST_EVENT", "tenant-null")
-        );
-        Boolean blankKey = runOnVertx(() ->
-            inboxGuard.tryAcquire("   ", "TEST_EVENT", "tenant-null")
-        );
+        Boolean nullKey = inboxGuard.tryAcquire(null, "TEST_EVENT", "tenant-null")
+            .await().atMost(Duration.ofSeconds(10));
+        Boolean blankKey = inboxGuard.tryAcquire("   ", "TEST_EVENT", "tenant-null")
+            .await().atMost(Duration.ofSeconds(10));
 
         assertThat(nullKey).isFalse();
         assertThat(blankKey).isFalse();
@@ -109,56 +99,25 @@ class InboxGuardTest {
         persistCustomEvent("cleanup-old", Instant.now().minus(30, ChronoUnit.DAYS));
         persistCustomEvent("cleanup-new", Instant.now().minus(1, ChronoUnit.DAYS));
 
-        runOnVertx(inboxGuard::scheduledCleanup);
+        // scheduledCleanup 现为 blocking void，直接调用（@Transactional 生效）。
+        inboxGuard.scheduledCleanup();
 
-        boolean oldExists = inboxRecordExists("cleanup-old");
-        boolean newExists = inboxRecordExists("cleanup-new");
-
-        assertThat(oldExists).isFalse();
-        assertThat(newExists).isTrue();
+        assertThat(inboxRecordExists("cleanup-old")).isFalse();
+        assertThat(inboxRecordExists("cleanup-new")).isTrue();
     }
 
     private void persistCustomEvent(String key, Instant processedAt) {
-        LocalDateTime timestamp = LocalDateTime.ofInstant(processedAt, ZoneOffset.UTC);
-
-        runOnVertx(() ->
-            pgPool.preparedQuery("INSERT INTO inbox_events (idempotency_key, event_type, tenant_id, processed_at, created_at) VALUES ($1, $2, $3, $4, $5)")
-                .execute(Tuple.of(
-                    key,
-                    "TEST_EVENT",
-                    "tenant-cleanup",
-                    timestamp,
-                    timestamp
-                ))
-                .replaceWith((Void) null)
-        );
+        // processed_at 是无时区 TIMESTAMP，存 UTC 挂钟（与 scheduledCleanup 的 DB CURRENT_TIMESTAMP
+        // 及 tryAcquireBlocking 插入语义一致）。用 UTC LocalDateTime→Timestamp.valueOf 绑定。
+        java.sql.Timestamp ts = java.sql.Timestamp.valueOf(
+            LocalDateTime.ofInstant(processedAt, ZoneOffset.UTC));
+        db.execute(
+            "INSERT INTO inbox_events (idempotency_key, event_type, tenant_id, processed_at, created_at) "
+                + "VALUES (?, ?, ?, ?, ?)",
+            key, "TEST_EVENT", "tenant-cleanup", ts, ts);
     }
 
     private boolean inboxRecordExists(String key) {
-        return runOnVertx(() ->
-            pgPool.preparedQuery("SELECT COUNT(*) AS cnt FROM inbox_events WHERE idempotency_key = $1")
-                .execute(Tuple.of(key))
-                .map(rows -> {
-                    java.util.Iterator<io.vertx.mutiny.sqlclient.Row> iterator = rows.iterator();
-                    return iterator.hasNext() && iterator.next().getLong("cnt") > 0;
-                })
-        );
-    }
-
-    private <T> T runOnVertx(Supplier<Uni<T>> action) {
-        CompletableFuture<T> future = new CompletableFuture<>();
-        Context context = ((ContextInternal) vertx.getDelegate().getOrCreateContext()).duplicate();
-        context.runOnContext(ignored -> {
-            Context current = io.vertx.core.Vertx.currentContext();
-            if (current != null) {
-                VertxContextSafetyToggle.setContextSafe(current, true);
-            }
-            action.get().subscribe().with(future::complete, future::completeExceptionally);
-        });
-        try {
-            return future.get(10, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            throw new RuntimeException("Reactive operation failed", e);
-        }
+        return db.queryLong("SELECT COUNT(*) AS cnt FROM inbox_events WHERE idempotency_key = ?", key) > 0;
     }
 }

@@ -7,7 +7,7 @@ import io.aster.policy.event.EventType;
 import io.aster.test.PostgresTestResource;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import io.vertx.mutiny.sqlclient.Pool;
+import io.aster.test.BlockingDbTestHelper;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,14 +38,14 @@ public class AuditHashChainConcurrencyTest {
     private static final int CONCURRENT_EVENTS = 30;
 
     @Inject
-    Pool pgPool;
+    BlockingDbTestHelper db;
 
     @Inject
     Event<AuditEvent> auditEventProducer;
 
     @BeforeEach
     void cleanup() {
-        pgPool.query("DELETE FROM audit_logs").execute().await().indefinitely();
+        db.execute("DELETE FROM audit_logs");
     }
 
     @Test

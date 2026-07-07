@@ -1,6 +1,7 @@
 package io.aster.policy.security;
 
 import io.quarkus.scheduler.Scheduled;
+import io.aster.policy.scheduler.BackgroundSchedulerSkipPredicate;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
@@ -13,7 +14,8 @@ public class NonceCleanupScheduler {
     @Inject
     NonceService nonceService;
 
-    @Scheduled(every = "5m", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
+    @Scheduled(every = "5m", concurrentExecution = Scheduled.ConcurrentExecution.SKIP,
+               skipExecutionIf = BackgroundSchedulerSkipPredicate.class)
     void cleanupExpiredNonces() {
         long deleted = nonceService.evictExpired();
         if (deleted > 0) {

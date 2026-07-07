@@ -3,6 +3,7 @@ package io.aster.audit.inbox;
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
 import io.quarkus.logging.Log;
 import io.quarkus.scheduler.Scheduled;
+import io.aster.policy.scheduler.BackgroundSchedulerSkipPredicate;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -72,7 +73,8 @@ public class InboxGuard {
      * 定时清理旧的 Inbox 事件（每 24 小时执行）
      * TTL 默认 7 天，可通过配置修改
      */
-    @Scheduled(every = "24h", identity = "inbox-cleanup")
+    @Scheduled(every = "24h", identity = "inbox-cleanup",
+               skipExecutionIf = BackgroundSchedulerSkipPredicate.class)
     @WithTransaction
     Uni<Void> scheduledCleanup() {
         Log.info("Starting scheduled inbox events cleanup");

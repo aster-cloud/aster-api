@@ -5,6 +5,7 @@ import io.aster.audit.entity.AnomalyActionPayload;
 import io.aster.audit.outbox.GenericOutboxScheduler;
 import io.aster.audit.service.AnomalyActionExecutor;
 import io.quarkus.scheduler.Scheduled;
+import io.aster.policy.scheduler.BackgroundSchedulerSkipPredicate;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -23,7 +24,8 @@ public class AnomalyActionScheduler extends GenericOutboxScheduler<AnomalyAction
     @Inject
     AnomalyActionExecutor executor;
 
-    @Scheduled(every = "5m", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
+    @Scheduled(every = "5m", concurrentExecution = Scheduled.ConcurrentExecution.SKIP,
+               skipExecutionIf = BackgroundSchedulerSkipPredicate.class)
     public void consumeActions() {
         processOutbox();
     }

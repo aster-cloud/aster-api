@@ -1,6 +1,7 @@
 package io.aster.policy.metrics;
 
 import io.quarkus.scheduler.Scheduled;
+import io.aster.policy.scheduler.BackgroundSchedulerSkipPredicate;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -24,7 +25,8 @@ public class WaadrRefreshScheduler {
     @Scheduled(
         cron = "0 30 0 ? * MON",
         concurrentExecution = Scheduled.ConcurrentExecution.SKIP,
-        identity = "waadr-weekly-refresh"
+        identity = "waadr-weekly-refresh",
+        skipExecutionIf = BackgroundSchedulerSkipPredicate.class
     )
     @Transactional
     public void refreshWeekly() {

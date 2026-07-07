@@ -6,6 +6,7 @@ import io.aster.audit.service.AnomalyWorkflowService;
 import io.aster.audit.service.PolicyAnalyticsService;
 import io.quarkus.logging.Log;
 import io.quarkus.scheduler.Scheduled;
+import io.aster.policy.scheduler.BackgroundSchedulerSkipPredicate;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -57,7 +58,8 @@ public class AnomalyDetectionScheduler {
      * concurrentExecution = SKIP：如果前一次任务未完成，跳过本次执行
      */
     @Scheduled(cron = "${anomaly.detection.cron:0 0 * * * ?}",
-               concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
+               concurrentExecution = Scheduled.ConcurrentExecution.SKIP,
+               skipExecutionIf = BackgroundSchedulerSkipPredicate.class)
     @Transactional
     public void detectAndPersistAnomalies() {
         Log.infof("开始执行异常检测任务（threshold=%.2f, days=%d）", threshold, days);

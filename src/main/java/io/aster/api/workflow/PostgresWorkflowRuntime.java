@@ -10,6 +10,7 @@ import io.aster.policy.service.PolicyVersionService;
 import io.aster.policy.tenant.TenantContext;
 import io.quarkus.logging.Log;
 import io.quarkus.scheduler.Scheduled;
+import io.aster.policy.scheduler.BackgroundSchedulerSkipPredicate;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -300,7 +301,8 @@ public class PostgresWorkflowRuntime implements WorkflowRuntime {
      * 防止内存泄漏：清理超过 TTL 的 workflow 结果 future 和 clock 实例。
      * 默认每小时执行一次，TTL 默认 24 小时。
      */
-    @Scheduled(every = "1h")
+    @Scheduled(every = "1h",
+               skipExecutionIf = BackgroundSchedulerSkipPredicate.class)
     void cleanupExpiredFutures() {
         Instant threshold = Instant.now().minus(ttlHours, ChronoUnit.HOURS);
         int removedFutures = 0;

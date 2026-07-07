@@ -1,6 +1,7 @@
 package io.aster.policy.security;
 
 import io.quarkus.scheduler.Scheduled;
+import io.aster.policy.scheduler.BackgroundSchedulerSkipPredicate;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -379,7 +380,8 @@ public class RateLimiter {
      * 定期清理已无活动记录的 idle 标识符，防止高基数流量导致内存无界增长。
      * 每 5 分钟执行一次：清除空的时间戳队列和零计数的连接计数器。
      */
-    @Scheduled(every = "5m")
+    @Scheduled(every = "5m",
+               skipExecutionIf = BackgroundSchedulerSkipPredicate.class)
     void evictIdleEntries() {
         Instant cutoff = Instant.now().minus(Duration.ofMinutes(5));
         // R-Round-3 关键：清理和 tryAcquire / remaining / resetAtEpochSecond

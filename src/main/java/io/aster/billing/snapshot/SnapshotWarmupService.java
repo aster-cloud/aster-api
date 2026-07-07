@@ -4,6 +4,7 @@ import io.aster.billing.PlanGateConfig;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
+import io.aster.policy.scheduler.BackgroundSchedulerSkipPredicate;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.client.WebClient;
@@ -126,7 +127,8 @@ public class SnapshotWarmupService {
         t.start();
     }
 
-    @Scheduled(every = "1h", delayed = "10m")
+    @Scheduled(every = "1h", delayed = "10m",
+               skipExecutionIf = BackgroundSchedulerSkipPredicate.class)
     void hourlyReconcile() {
         if (!config.enabled()) return;
         try {

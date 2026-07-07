@@ -747,4 +747,82 @@ class AnomalyReplayVerificationIntegrationTest {
         PolicyVersion.deleteById(v1.id);
     }
 
+    /**
+     * issue #119：VERIFY_REPLAY 结果记录幂等（方案 C）。
+     *
+     * <p>outbox 长事务拆分后，若「record 已提交但 outbox finalize 前崩溃」，reclaim 会重投递同一
+     * VERIFY_REPLAY。重投递必须命中 recordVerificationResultOnce 内与 record 同事务提交的 inbox
+     * marker → 跳过 record → <b>不重复创建 AUTO_ROLLBACK</b>。本测试用「对同一 action 连续调用两次
+     * recordVerificationResultOnce」模拟重投递，断言 AUTO_ROLLBACK 数量始终为 1。
+     */
+    @Test
+    @Transactional
+    void testRecordVerificationResultOnce_DuplicateReplayDoesNotDuplicateRollback() {
+        // v1 历史正常版本（回滚目标，须 APPROVED）
+        PolicyVersion v1 = new PolicyVersion();
+        v1.policyId = testPolicyId;
+        v1.version = Instant.now().minusSeconds(3600).toEpochMilli();
+        v1.moduleName = "test.module";
+        v1.functionName = "testFunction";
+        v1.content = "v1 content";
+        v1.tenantId = "test-tenant";
+        v1.active = false;
+        v1.status = io.aster.policy.entity.VersionStatus.APPROVED;
+        v1.createdAt = Instant.now().minusSeconds(3600);
+        v1.persist();
+
+        PolicyVersion v2 = PolicyVersion.findById(testVersionId);
+
+        AnomalyReportEntity anomaly = new AnomalyReportEntity();
+        anomaly.anomalyType = "PERFORMANCE_DEGRADATION";
+        anomaly.versionId = v2.id;
+        anomaly.policyId = testPolicyId;
+        anomaly.severity = "CRITICAL";
+        anomaly.status = "VERIFYING";
+        anomaly.description = "dup replay";
+        anomaly.detectedAt = Instant.now();
+        anomaly.tenantId = "test-tenant";
+        anomaly.persist();
+
+        // 触发本次验证的 VERIFY_REPLAY outbox 动作（提供幂等键 REPLAY_{anomalyId}_{actionId}）
+        AnomalyActionEntity replayAction = new AnomalyActionEntity();
+        replayAction.anomalyId = anomaly.id;
+        replayAction.actionType = "VERIFY_REPLAY";
+        replayAction.status = OutboxStatus.RUNNING;
+        replayAction.payload = "{\"workflowId\":\"" + UUID.randomUUID() + "\"}";
+        replayAction.tenantId = "test-tenant";
+        replayAction.createdAt = Instant.now();
+        replayAction.persist();
+
+        VerificationResult result = new VerificationResult(
+            true,  // replaySucceeded
+            true,  // anomalyReproduced ← 触发 AUTO_ROLLBACK 创建
+            replayAction.payload,
+            Instant.now(),
+            1000L, 1200L
+        );
+
+        // 第一次记录：应创建 1 个 AUTO_ROLLBACK
+        Boolean first = workflowService.recordVerificationResultOnce(replayAction, result)
+            .await().indefinitely();
+        assertTrue(first, "首次记录应成功");
+
+        long afterFirst = AnomalyActionEntity
+            .count("anomalyId = ?1 and actionType = 'AUTO_ROLLBACK'", anomaly.id);
+        assertEquals(1, afterFirst, "首次记录应创建 1 个 AUTO_ROLLBACK");
+
+        // 第二次记录（模拟 reclaim 重投递同一 action）：marker 已存在 → 跳过 record → 不新增回滚
+        Boolean second = workflowService.recordVerificationResultOnce(replayAction, result)
+            .await().indefinitely();
+        assertTrue(second, "重复记录应幂等返回 true");
+
+        long afterSecond = AnomalyActionEntity
+            .count("anomalyId = ?1 and actionType = 'AUTO_ROLLBACK'", anomaly.id);
+        assertEquals(1, afterSecond,
+            "重投递命中 inbox marker → 不得重复创建 AUTO_ROLLBACK（#119 方案 C）");
+
+        // 清理
+        PolicyVersion.deleteById(v1.id);
+    }
+
 }

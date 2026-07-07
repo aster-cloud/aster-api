@@ -51,6 +51,15 @@ public abstract class GenericOutboxEntity<P> extends PanacheEntityBase {
     @Column(name = "error_message", columnDefinition = "TEXT")
     public String errorMessage;
 
+    /**
+     * 租约令牌（issue #119）：每次 claim（事务A 标 RUNNING）生成一个新值，
+     * finalize（事务B）以 {@code status=RUNNING AND leaseToken=?} 为条件推进终态，
+     * reclaim 回收过期 RUNNING 时清空。用于在「长事务拆分 + stale reclaim 重投递」下
+     * 区分同一行的不同 claim attempt，避免旧 attempt 迟到的 finalize 错误覆盖新 attempt。
+     */
+    @Column(name = "lease_token", length = 64)
+    public String leaseToken;
+
     @PrePersist
     protected void assignCreatedAt() {
         if (this.createdAt == null) {

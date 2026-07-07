@@ -2,6 +2,7 @@ package io.aster.audit.service;
 
 import io.aster.audit.entity.AnomalyReportEntity;
 import io.aster.audit.entity.AnomalyActionEntity;
+import io.aster.audit.inbox.InboxGuard;
 import io.aster.audit.outbox.OutboxStatus;
 import io.aster.audit.rest.model.VerificationResult;
 import io.aster.policy.entity.PolicyVersion;
@@ -39,6 +40,9 @@ public class AnomalyWorkflowService {
 
     @Inject
     Event<AuditEvent> auditEvent;
+
+    @Inject
+    InboxGuard inboxGuard;
 
     /**
      * 提交验证动作到队列
@@ -159,6 +163,54 @@ public class AnomalyWorkflowService {
         ));
 
         return Uni.createFrom().item(true);
+    }
+
+    /**
+     * 幂等记录验证结果（issue #119：方案 C）。
+     *
+     * <p>outbox 长事务拆分后，VERIFY_REPLAY handler 在无外层事务下运行；原「执行前抢 inbox 坑」的
+     * 幂等模型不再安全（marker 早于结果独立提交 → 崩溃后 reclaim 重投递被误跳过 = 丢事件）。本方法把
+     * inbox marker 的获取与 {@link #recordVerificationResult}（状态更新 + 可能创建的 AUTO_ROLLBACK
+     * action）放在<b>同一事务</b>内原子提交：
+     * <ul>
+     *   <li>marker 未获取到（重投递命中已有 marker）→ 不再重复 record、不重复创建 AUTO_ROLLBACK；</li>
+     *   <li>崩溃在本事务提交前 → marker 也未提交 → reclaim 重投递可正常重试，不丢事件。</li>
+     * </ul>
+     * 投递级并发去重由 outbox claim（PESSIMISTIC_WRITE + status 双检 + lease token）提供，故不需要
+     * 「执行前」占坑。幂等键 {@code REPLAY_{anomalyId}_{actionId}} 与租户派生与旧路径保持一致。
+     *
+     * @param action             触发本次验证的 outbox 动作（提供 anomalyId + actionId + tenant）
+     * @param verificationResult 验证结果对象
+     * @return 成功标志；若本次为重复投递（marker 已存在）则跳过 record 后仍返回 true（幂等成功）
+     */
+    @Transactional
+    public Uni<Boolean> recordVerificationResultOnce(AnomalyActionEntity action, VerificationResult verificationResult) {
+        String idempotencyKey = String.format("REPLAY_%s_%s", action.anomalyId, action.id);
+        // tryAcquireBlocking 自带 @Transactional(REQUIRED)：在本方法事务内自我调用会加入同一事务，
+        // 与后续 recordVerificationResult 的写入原子提交。
+        boolean acquired = inboxGuard.tryAcquireBlocking(idempotencyKey, "VERIFY_REPLAY", resolveReplayTenant(action));
+        if (!acquired) {
+            Log.infof("检测到重复 Replay 验证结果记录，跳过（幂等）：%s", idempotencyKey);
+            return Uni.createFrom().item(true);
+        }
+        return recordVerificationResult(action.anomalyId, verificationResult);
+    }
+
+    /**
+     * VERIFY_REPLAY 幂等键的租户派生，与 AnomalyActionExecutor 旧 resolveInboxTenant 一致：
+     * 优先 action.tenantId，缺失则用异常 ID 派生 {@code ANOMALY-<id>} 命名空间。
+     */
+    private String resolveReplayTenant(AnomalyActionEntity action) {
+        if (action == null) {
+            return null;
+        }
+        if (action.tenantId != null && !action.tenantId.isBlank()) {
+            return action.tenantId;
+        }
+        if (action.anomalyId == null) {
+            return null;
+        }
+        return "ANOMALY-" + action.anomalyId;
     }
 
     /**

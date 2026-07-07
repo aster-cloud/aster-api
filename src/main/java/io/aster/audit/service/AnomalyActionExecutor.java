@@ -66,24 +66,21 @@ public class AnomalyActionExecutor {
      * @param action 异常动作实体
      * @return 验证结果
      */
-    // #57 修复：移除此前标注在返回 Uni 方法上的 @Transactional（误导性假保证）。
-    // JTA 事务在方法返回（生成 Uni 对象）时即提交/关闭，而真正的 DB 工作
-    // （replayWorkflow 内的多段 + recordVerificationResult）发生在 .transformToUni 的
-    // *延迟订阅*阶段，本就不在该 @Transactional 作用域内——所以这个外层注解是假保证。
-    // 各下游调用（tryAcquireBlocking / replayWorkflow 的 prepareReplay+processWorkflow+reloadState /
-    // recordVerificationResult）都带自己的 @Transactional 注解。注意其实际事务边界依调用路径而定：
-    // 在 outbox 主路径（GenericOutboxScheduler.processSingleEvent 用 QuarkusTransaction.requiringNew()
-    // 包住整个 executeEvent().await()）下，这些 @Transactional（默认 REQUIRED）会【加入】外层
-    // outbox 事务，而非各自独立提交；在无外层事务的调用路径下才各自独立。无论哪种，都有事务覆盖，
-    // 不再是"假保证"。真正的长事务边界优化（拆分 outbox 标记事务与 handler 执行事务）见后续 issue。
-    // 本方法开头的同步部分只做一次幂等 INSERT（tryAcquireBlocking 自带事务）与只读 findByWorkflowId。
+    // #57：移除此前标注在返回 Uni 方法上的 @Transactional（误导性假保证）——真正 DB 工作在
+    // .transformToUni 延迟订阅阶段，不在该注解作用域内。
+    //
+    // #119：outbox 长事务拆分后，本 handler 在【无外层事务】下运行（下游各 @Transactional 自开
+    // 独立事务）。原先「执行前 tryAcquireBlocking 抢 inbox 坑」的幂等模型在拆分后不再安全：inbox
+    // 标记会先于 replay 结果独立提交，若崩溃在 replay 完成前，reclaim 重投递会被这条早提交的 inbox
+    // 标记误判为「已处理」→ outbox 被标 DONE 而 replay 实际从未完成 = 丢事件。
+    //
+    // 修法（方案 C）：不再执行前占坑。replay 在 outbox claim 的投递级幂等（PESSIMISTIC_WRITE +
+    // status 双检 + lease token）保护下重放（只读 + 触发 replay，可重入），幂等标记 marker 下沉到
+    // recordVerificationResult **同一事务**内写入——见 AnomalyWorkflowService.recordVerificationResultOnce：
+    // marker 与「anomaly 状态更新 + 可能创建的 AUTO_ROLLBACK action」原子提交。这样重投递若命中已有
+    // marker，会跳过 record → 不重复创建 AUTO_ROLLBACK；若崩溃在 record 提交前，marker 也未提交 →
+    // reclaim 重投递可正常重试，不丢。
     public Uni<VerificationResult> executeReplayVerification(AnomalyActionEntity action) {
-        String idempotencyKey = String.format("REPLAY_%s_%s", action.anomalyId, action.id);
-        boolean acquired = inboxGuard.tryAcquireBlocking(idempotencyKey, "VERIFY_REPLAY", resolveInboxTenant(action));
-        if (!acquired) {
-            LOG.infof("检测到重复 Replay 验证请求，跳过执行：%s", idempotencyKey);
-            return Uni.createFrom().nullItem();
-        }
         AnomalyActionPayload payload = action.deserializePayload();
         return performReplayVerification(action, payload);
     }
@@ -154,8 +151,8 @@ public class AnomalyActionExecutor {
                         replayWorkflow.durationMs
                     );
 
-                    // 7. 记录验证结果到 anomaly_reports（响应式）
-                    return anomalyWorkflowService.recordVerificationResult(action.anomalyId, result)
+                    // 7. 记录验证结果到 anomaly_reports（#119：marker 与结果写入同一事务幂等）
+                    return anomalyWorkflowService.recordVerificationResultOnce(action, result)
                         .replaceWith(result);
                 })
                 .onFailure(IllegalStateException.class).recoverWithUni(e -> {
@@ -168,7 +165,7 @@ public class AnomalyActionExecutor {
                         originalDurationMs,
                         null
                     );
-                    return anomalyWorkflowService.recordVerificationResult(action.anomalyId, result)
+                    return anomalyWorkflowService.recordVerificationResultOnce(action, result)
                         .replaceWith(result);
                 })
                 .onFailure(TimeoutException.class).recoverWithUni(e -> {
@@ -181,7 +178,7 @@ public class AnomalyActionExecutor {
                         originalDurationMs,
                         null
                     );
-                    return anomalyWorkflowService.recordVerificationResult(action.anomalyId, result)
+                    return anomalyWorkflowService.recordVerificationResultOnce(action, result)
                         .replaceWith(result);
                 })
                 .onFailure().invoke(e -> {

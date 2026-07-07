@@ -246,6 +246,97 @@ public class AuditChainVerifierTest {
         assertNull(result.getBrokenAt());
     }
 
+    @Test
+    void testWindowExcludingGenesisIsValid() throws Exception {
+        // issue #118：时间窗不含 genesis 但链合法。构造 6 条合法链（genesis + 5），
+        // 只验证【后 3 条】的时间窗（不含 genesis）——窗口首条非 genesis，其 prev_hash 指向
+        // 窗外前驱。修复前会误报断链；修复后应查到前驱存在 → 判合法。
+        String tenantId = "tenant-window-no-genesis";
+        Instant base = Instant.parse("2021-06-01T00:00:00Z");
+
+        int n = 6;
+        String prevHash = null;
+        Instant[] times = new Instant[n];
+        for (int k = 0; k < n; k++) {
+            Instant ts = base.plus(java.time.Duration.ofHours(k)).truncatedTo(ChronoUnit.MICROS);
+            times[k] = ts;
+            String cur = computeChainHash(prevHash, "POLICY_EVALUATION", ts, tenantId, "test.module", "func" + k, true);
+            insertAuditRow(tenantId, ts, "test.module", "func" + k, prevHash, cur);
+            prevHash = cur;
+        }
+        waitForAuditRecord(tenantId, n);
+
+        // 时间窗只覆盖第 3~5 条（index 3,4,5），不含 genesis（index 0）。
+        Instant windowStart = times[3];
+        Instant windowEnd = times[5].plusSeconds(1);
+        ChainVerificationResult result = verifier.verifyChain(tenantId, windowStart, windowEnd);
+
+        assertTrue(result.isValid(),
+            "窗口不含 genesis 但链合法，应查窗外前驱后判合法。reason=" + result.getReason());
+        assertEquals(3, result.getRecordsVerified(), "应验证窗内 3 条");
+        assertNull(result.getBrokenAt());
+    }
+
+    @Test
+    void testWindowFirstRecordMissingPredecessorIsInvalid() throws Exception {
+        // issue #118 反向：窗口首条的 prev_hash 指向一个【不存在】的前驱（前驱被删/伪造）。
+        // 应真报断链（而非因窗外而放过）。
+        String tenantId = "tenant-missing-predecessor";
+        Instant ts0 = Instant.parse("2021-07-01T01:00:00Z").truncatedTo(ChronoUnit.MICROS);
+
+        // 只插一条记录，其 prev_hash 指向一个 tenant 内不存在的 hash。
+        String bogusPrev = "deadbeef".repeat(8); // 64 hex, 不对应任何记录
+        String cur = computeChainHash(bogusPrev, "POLICY_EVALUATION", ts0, tenantId, "test.module", "func0", true);
+        insertAuditRow(tenantId, ts0, "test.module", "func0", bogusPrev, cur);
+        waitForAuditRecord(tenantId, 1);
+
+        Instant start = Instant.parse("2021-07-01T00:00:00Z");
+        Instant end = Instant.parse("2021-07-01T02:00:00Z");
+        ChainVerificationResult result = verifier.verifyChain(tenantId, start, end);
+
+        assertFalse(result.isValid(), "prev_hash 指向不存在前驱=真断链，应判无效");
+        assertNotNull(result.getBrokenAt());
+        assertTrue(result.getReason() != null && result.getReason().contains("prev_hash mismatch"),
+            "reason 应指出 prev_hash 断链。实际=" + result.getReason());
+    }
+
+    @Test
+    void testPaginatedFirstPageAllLegacySeedsOnLaterPage() throws Exception {
+        // Codex #118 审查：分页时首页全 legacy（无 hash）、第二页才出现第一条非 genesis 记录。
+        // seed 逻辑必须延迟到遇到第一条 hashed 记录，否则会用 null seed 误报。
+        // 构造：先 2 条 legacy（无 hash）+ 一条合法链（genesis + 3）。pageSize=2 → 首页全 legacy。
+        String tenantId = "tenant-paginated-legacy-first";
+        Instant base = Instant.parse("2021-08-01T00:00:00Z");
+
+        // 2 条 legacy（prev_hash/current_hash 均 null）
+        for (int i = 0; i < 2; i++) {
+            Instant ts = base.plus(java.time.Duration.ofMinutes(i)).truncatedTo(ChronoUnit.MICROS);
+            db.execute(
+                "INSERT INTO audit_logs (event_type, timestamp, tenant_id, policy_module, policy_function, success) "
+                    + "VALUES ('POLICY_EVALUATION', ?, ?, 'legacy', 'fn', true)",
+                java.sql.Timestamp.valueOf(java.time.LocalDateTime.ofInstant(ts, java.time.ZoneOffset.UTC)),
+                tenantId);
+        }
+        // 合法链 genesis + 3
+        String prevHash = null;
+        int n = 4;
+        for (int k = 0; k < n; k++) {
+            Instant ts = base.plus(java.time.Duration.ofHours(1 + k)).truncatedTo(ChronoUnit.MICROS);
+            String cur = computeChainHash(prevHash, "POLICY_EVALUATION", ts, tenantId, "test.module", "func" + k, true);
+            insertAuditRow(tenantId, ts, "test.module", "func" + k, prevHash, cur);
+            prevHash = cur;
+        }
+        waitForAuditRecord(tenantId, 2 + n);
+
+        Instant start = Instant.parse("2021-07-31T00:00:00Z");
+        Instant end = Instant.parse("2021-08-02T00:00:00Z");
+        // pageSize=2 → 首页是 2 条 legacy。seed 应在第二页（首条 hashed=genesis）才发生。
+        ChainVerificationResult result = verifier.verifyChainPaginated(tenantId, start, end, 2);
+
+        assertTrue(result.isValid(),
+            "首页全 legacy、后续页出现合法链，分页应正确 seed 而非误报。reason=" + result.getReason());
+    }
+
     /** 复刻生产 hash 公式（与 AuditEventListener.computeHashChain 一致），用于构造合法测试链。 */
     private String computeChainHash(String prevHash, String eventType, Instant timestamp,
                                     String tenantId, String module, String function, boolean success) {

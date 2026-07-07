@@ -38,7 +38,14 @@ public class AuditChainVerifier {
     @Transactional
     public ChainVerificationResult verifyChain(String tenantId, Instant startTime, Instant endTime) {
         List<AuditLog> logs = fetchAuditLogs(tenantId, startTime, endTime);
-        return verifyChainInternal(logs);
+        // issue #118：时间窗可能不含 genesis。用窗外前驱的 hash 作初始 expectedPrevHash，
+        // 否则窗口首条（非 genesis）的非 null prev_hash 会与默认 null 比对而误报断链。
+        SeedResult seed = resolveInitialExpectedPrevHash(tenantId, logs);
+        if (seed.kind == SeedResult.Kind.BROKEN) {
+            return seed.brokenChain;
+        }
+        // 非分页：整窗一次取全，NOT_FOUND（全 legacy）等价于 seed=null（无 hashed 记录需校验）。
+        return verifyChainInternal(logs, seed.expectedPrevHash);
     }
 
     /**
@@ -60,11 +67,27 @@ public class AuditChainVerifier {
         int page = 0;
         int totalVerified = 0;
         String expectedPrevHash = null;
+        boolean seeded = false;
 
         while (true) {
             List<AuditLog> logs = fetchAuditLogsPage(tenantId, startTime, endTime, page, pageSize);
             if (logs.isEmpty()) {
                 break;
+            }
+
+            // issue #118：首个含 hashed 记录的页，若首条非 genesis，用窗外前驱 hash 作初始
+            // expectedPrevHash。Codex 审查：若某页全 legacy（NOT_FOUND），不能标记已 seed，
+            // 须让后续页继续尝试（否则第二页才出现的非 genesis 首条会用 null seed 误报）。
+            if (!seeded) {
+                SeedResult seed = resolveInitialExpectedPrevHash(tenantId, logs);
+                if (seed.kind == SeedResult.Kind.BROKEN) {
+                    return seed.brokenChain;
+                }
+                if (seed.kind == SeedResult.Kind.SEEDED) {
+                    expectedPrevHash = seed.expectedPrevHash;
+                    seeded = true;
+                }
+                // NOT_FOUND：本页全 legacy，不 seed，继续下一页（seeded 仍 false）。
             }
 
             for (AuditLog log : logs) {
@@ -135,14 +158,88 @@ public class AuditChainVerifier {
     }
 
     /**
-     * 验证哈希链内部逻辑
+     * 解析初始 expectedPrevHash（issue #118）。给定按 id 升序的窗口记录：
+     * 找第一个非 legacy（有 hash）记录，若其 prev_hash 非 null（即窗口首条不是 genesis），
+     * 说明它的前驱在时间窗外——查该前驱（tenant 内 current_hash == 首条 prev_hash）：
+     * <ul>
+     *   <li>前驱存在 → 返回首条 prev_hash 作初始 expectedPrevHash（继续正常验证，合法链切片不再误报）；</li>
+     *   <li>前驱不存在 → 返回 brokenChain（prev_hash 指向不存在的记录=前驱被删/伪造=真断链）。</li>
+     * </ul>
+     * 首条是 genesis（prev_hash=null）或窗口全为 legacy → 返回 null seed（沿用原语义）。
      */
-    private ChainVerificationResult verifyChainInternal(List<AuditLog> logs) {
+    private SeedResult resolveInitialExpectedPrevHash(String tenantId, List<AuditLog> logs) {
+        AuditLog firstHashed = null;
+        for (AuditLog log : logs) {
+            if (log.currentHash != null) {
+                firstHashed = log;
+                break;
+            }
+        }
+        if (firstHashed == null) {
+            // 这批记录全是 legacy（无 hash）→ 尚未遇到需 seed 的记录（Codex #118 审查：
+            // 分页时首页全 legacy 不能标记为已 seed，须让后续页继续尝试 seed）。
+            return SeedResult.notFound();
+        }
+        if (firstHashed.prevHash == null) {
+            // 首条即 genesis → 初始 null（原语义）。
+            return SeedResult.of(null);
+        }
+        // 首条非 genesis：其前驱在窗外，确认真实存在【且 id 更小=链序更早】。
+        AuditLog predecessor = AuditLog.findPredecessorByCurrentHash(tenantId, firstHashed.prevHash, firstHashed.id);
+        if (predecessor == null) {
+            String message = String.format(
+                "prev_hash mismatch at record id=%d: predecessor (current_hash=%s) not found — chain broken",
+                firstHashed.id,
+                firstHashed.prevHash.substring(0, Math.min(8, firstHashed.prevHash.length())) + "...");
+            Log.warnf(message);
+            return SeedResult.broken(ChainVerificationResult.invalid(firstHashed.timestamp, message, 0));
+        }
+        // 前驱存在 → 用其 hash（=首条 prev_hash）作初始 expectedPrevHash。
+        return SeedResult.of(firstHashed.prevHash);
+    }
+
+    /**
+     * resolveInitialExpectedPrevHash 的三态返回（Codex #118 审查）：
+     * SEEDED（含 seed 值，可能为 null=genesis）、NOT_FOUND（本批全 legacy，尚未确定 seed，
+     * 分页时后续页应继续尝试）、BROKEN（前驱不存在=真断链，提前判定）。
+     */
+    private static final class SeedResult {
+        enum Kind { SEEDED, NOT_FOUND, BROKEN }
+
+        final Kind kind;
+        final String expectedPrevHash;
+        final ChainVerificationResult brokenChain;
+
+        private SeedResult(Kind kind, String expectedPrevHash, ChainVerificationResult brokenChain) {
+            this.kind = kind;
+            this.expectedPrevHash = expectedPrevHash;
+            this.brokenChain = brokenChain;
+        }
+
+        static SeedResult of(String hash) {
+            return new SeedResult(Kind.SEEDED, hash, null);
+        }
+
+        static SeedResult notFound() {
+            return new SeedResult(Kind.NOT_FOUND, null, null);
+        }
+
+        static SeedResult broken(ChainVerificationResult result) {
+            return new SeedResult(Kind.BROKEN, null, result);
+        }
+    }
+
+    /**
+     * 验证哈希链内部逻辑。initialExpectedPrevHash 为窗口首条应链接的前驱 hash
+     * （issue #118：时间窗不含 genesis 时由 resolveInitialExpectedPrevHash 解析得来；
+     * 首条是 genesis 时为 null）。
+     */
+    private ChainVerificationResult verifyChainInternal(List<AuditLog> logs, String initialExpectedPrevHash) {
         if (logs.isEmpty()) {
             return ChainVerificationResult.valid(0);
         }
 
-        String expectedPrevHash = null;
+        String expectedPrevHash = initialExpectedPrevHash;
         int recordsVerified = 0;
 
         for (AuditLog log : logs) {

@@ -227,4 +227,19 @@ public class AuditLog extends PanacheEntityBase {
             .firstResult();
         return log != null ? log.currentHash : null;
     }
+
+    /**
+     * 查该租户内、id 小于 beforeId、current_hash == 给定值的前驱记录（issue #118）。
+     * 用于时间窗验证时定位窗外前驱：窗口首条（非 genesis）的 prev_hash 指向前驱，本方法确认
+     * 该前驱真实存在【且在链顺序上更早】（id 更小），以区分「合法链的时间窗切片」（前驱存在→
+     * 用其 hash 作初始 expectedPrevHash）与「前驱被删/伪造」（前驱不存在→真断链）。
+     * <p>加 {@code id < beforeId} 约束避免脏数据下 current_hash 重复时 seed 到错误方向
+     * （Codex #118 审查）；按 id 降序取最近的合法前驱。current_hash 有索引（idx_audit_logs_current_hash），
+     * 叠加 tenant + id 范围过滤，admin 验证路径的额外一次查询开销可接受。
+     */
+    public static AuditLog findPredecessorByCurrentHash(String tenantId, String currentHash, Long beforeId) {
+        return find("tenantId = ?1 and currentHash = ?2 and id < ?3 order by id desc",
+                tenantId, currentHash, beforeId)
+            .firstResult();
+    }
 }

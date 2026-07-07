@@ -1,0 +1,230 @@
+{
+  "kind" : "Module",
+  "name" : "scale.tmpl",
+  "decls" : [ {
+    "kind" : "Func",
+    "name" : "evaluate",
+    "typeParams" : [ ],
+    "params" : [ {
+      "name" : "amount",
+      "type" : {
+        "kind" : "TypeName",
+        "name" : "Float",
+        "origin" : {
+          "file" : null,
+          "start" : {
+            "line" : 3,
+            "col" : 21
+          },
+          "end" : {
+            "line" : 3,
+            "col" : 27
+          }
+        }
+      },
+      "annotations" : [ ]
+    } ],
+    "ret" : {
+      "kind" : "TypeName",
+      "name" : "Text",
+      "origin" : {
+        "file" : null,
+        "start" : {
+          "line" : 3,
+          "col" : 1
+        },
+        "end" : {
+          "line" : 6,
+          "col" : 24
+        }
+      }
+    },
+    "annotations" : [ ],
+    "retAnnotations" : [ ],
+    "effects" : [ ],
+    "effectCaps" : [ ],
+    "effectCapsExplicit" : false,
+    "piiLevel" : "",
+    "piiCategories" : [ ],
+    "body" : {
+      "kind" : "Block",
+      "statements" : [ {
+        "kind" : "If",
+        "cond" : {
+          "kind" : "Call",
+          "target" : {
+            "kind" : "Name",
+            "name" : ">=",
+            "origin" : {
+              "file" : null,
+              "start" : {
+                "line" : 4,
+                "col" : 13
+              },
+              "end" : {
+                "line" : 4,
+                "col" : 15
+              }
+            }
+          },
+          "args" : [ {
+            "kind" : "Name",
+            "name" : "amount",
+            "origin" : {
+              "file" : null,
+              "start" : {
+                "line" : 4,
+                "col" : 6
+              },
+              "end" : {
+                "line" : 4,
+                "col" : 12
+              }
+            }
+          }, {
+            "kind" : "Int",
+            "value" : 100,
+            "origin" : {
+              "file" : null,
+              "start" : {
+                "line" : 4,
+                "col" : 16
+              },
+              "end" : {
+                "line" : 4,
+                "col" : 19
+              }
+            }
+          } ],
+          "origin" : {
+            "file" : null,
+            "start" : {
+              "line" : 4,
+              "col" : 6
+            },
+            "end" : {
+              "line" : 4,
+              "col" : 19
+            }
+          }
+        },
+        "thenBlock" : {
+          "kind" : "Block",
+          "statements" : [ {
+            "kind" : "Return",
+            "expr" : {
+              "kind" : "Bool",
+              "value" : true,
+              "origin" : {
+                "file" : null,
+                "start" : {
+                  "line" : 5,
+                  "col" : 12
+                },
+                "end" : {
+                  "line" : 5,
+                  "col" : 16
+                }
+              }
+            },
+            "origin" : {
+              "file" : null,
+              "start" : {
+                "line" : 5,
+                "col" : 5
+              },
+              "end" : {
+                "line" : 5,
+                "col" : 17
+              }
+            }
+          } ],
+          "origin" : {
+            "file" : null,
+            "start" : {
+              "line" : 5,
+              "col" : 5
+            },
+            "end" : {
+              "line" : 5,
+              "col" : 17
+            }
+          }
+        },
+        "elseBlock" : null,
+        "origin" : {
+          "file" : null,
+          "start" : {
+            "line" : 4,
+            "col" : 3
+          },
+          "end" : {
+            "line" : 6,
+            "col" : 9
+          }
+        }
+      }, {
+        "kind" : "Return",
+        "expr" : {
+          "kind" : "Bool",
+          "value" : false,
+          "origin" : {
+            "file" : null,
+            "start" : {
+              "line" : 6,
+              "col" : 10
+            },
+            "end" : {
+              "line" : 6,
+              "col" : 15
+            }
+          }
+        },
+        "origin" : {
+          "file" : null,
+          "start" : {
+            "line" : 6,
+            "col" : 3
+          },
+          "end" : {
+            "line" : 6,
+            "col" : 16
+          }
+        }
+      } ],
+      "origin" : {
+        "file" : null,
+        "start" : {
+          "line" : 4,
+          "col" : 3
+        },
+        "end" : {
+          "line" : 6,
+          "col" : 16
+        }
+      }
+    },
+    "origin" : {
+      "file" : null,
+      "start" : {
+        "line" : 3,
+        "col" : 1
+      },
+      "end" : {
+        "line" : 6,
+        "col" : 24
+      }
+    }
+  } ],
+  "origin" : {
+    "file" : null,
+    "start" : {
+      "line" : 1,
+      "col" : 1
+    },
+    "end" : {
+      "line" : 6,
+      "col" : 21
+    }
+  }
+}

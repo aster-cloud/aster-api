@@ -47,30 +47,43 @@ export const options = {
   summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
 };
 
-// 10 条 tier1 等价规则的最简代表（覆盖多 lexicon + 常见控制流）
+// 5 条 tier1 等价规则的最简代表（覆盖多 lexicon + 常见控制流）。
+// 用当前有效的块式 CNL 语法（Module. / Rule … produce: / Return / at least /
+// is equal to）。旧版的终端简写形式（`given amount: amount > 100.`、内联
+// `if … then … else`）在 Phase 1-2 解析器迁移后已不再解析，会导致每个请求
+// 返回 CNL 语法错误——本脚本因此长期在测「错误响应延迟」而非真实编译。
+// 以下 5 条均已对当前编译器实测通过。
 const SAMPLES = [
   {
-    source: 'Module perf.simple. Rule evaluate given amount: amount > 100.',
+    source:
+      'Module perf.simple.\n\nRule evaluate given amount, produce:\n' +
+      '  If amount at least 100\n    Return true.\n  Return false.',
     context: { amount: 150 },
     functionName: 'evaluate',
   },
   {
-    source: 'Module perf.compare. Rule evaluate given score: score >= 60 and score <= 100.',
+    source:
+      'Module perf.compare.\n\nRule evaluate given score, produce:\n' +
+      '  If score at least 60\n    Return true.\n  Return false.',
     context: { score: 75 },
     functionName: 'evaluate',
   },
   {
-    source: 'Module perf.ifthen. Rule evaluate given age: if age >= 18 then "adult" else "minor".',
+    source:
+      'Module perf.ifthen.\n\nRule evaluate given age, produce:\n' +
+      '  If age at least 18\n    Return "adult".\n  Return "minor".',
     context: { age: 25 },
     functionName: 'evaluate',
   },
   {
-    source: 'Module perf.arith. Rule evaluate given a, b: a * 2 + b.',
+    source: 'Module perf.arith.\n\nRule evaluate given a, b, produce:\n  Return a * 2 + b.',
     context: { a: 10, b: 5 },
     functionName: 'evaluate',
   },
   {
-    source: 'Module perf.string. Rule evaluate given name: name == "alice".',
+    source:
+      'Module perf.string.\n\nRule evaluate given name, produce:\n' +
+      '  If name is equal to "alice"\n    Return true.\n  Return false.',
     context: { name: 'alice' },
     functionName: 'evaluate',
   },

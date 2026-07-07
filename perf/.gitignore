@@ -1,0 +1,6 @@
+# k6 容量/回归测试的运行产物（每次跑生成，不入库）
+*-summary.json
+evaluate.json
+capacity-results/
+scale-capacity-summary.json
+heap*.csv

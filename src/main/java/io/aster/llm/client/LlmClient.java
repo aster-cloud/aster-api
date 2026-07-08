@@ -1,5 +1,6 @@
 package io.aster.llm.client;
 
+import io.aster.llm.model.LlmChatResult;
 import io.aster.llm.model.LlmRequest;
 import io.aster.llm.model.LlmRuntimeOptions;
 import io.aster.llm.model.LlmStreamEvent;
@@ -32,7 +33,7 @@ public interface LlmClient {
      *
      * @param request LLM 请求（stream=false）
      * @param options 本次调用的运行时凭证与目标
-     * @return 完整响应文本
+     * @return 完整响应文本 + 真实 token 用量（issue #185）
      */
-    Uni<String> chat(LlmRequest request, LlmRuntimeOptions options);
+    Uni<LlmChatResult> chat(LlmRequest request, LlmRuntimeOptions options);
 }

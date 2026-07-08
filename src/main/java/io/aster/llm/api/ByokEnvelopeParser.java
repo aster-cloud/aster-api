@@ -66,4 +66,31 @@ public class ByokEnvelopeParser {
         }
         return override;
     }
+
+    /**
+     * 从【已 HMAC 验签】的 body 顶层解析 {@code _usage.requestId}（issue #185）——cloud 生成、注入、
+     * 签名后传来，aster-api 成功后带同一 requestId 回填真实 token。未验签 / 无 envelope / 非 JSON
+     * 返回 null（该次不做精确回填，cloud 侧占位 0/0 仍在）。
+     */
+    public String parseRequestId(ContainerRequestContext ctx) {
+        if (ctx == null || !InternalCallerFilter.isHmacVerified(ctx)) {
+            return null;
+        }
+        Object raw = ctx.getProperty(InternalCallerFilter.VERIFIED_BODY_PROP);
+        if (!(raw instanceof byte[] bodyBytes) || bodyBytes.length == 0) {
+            return null;
+        }
+        try {
+            JsonObject usage = new JsonObject(new String(bodyBytes, StandardCharsets.UTF_8))
+                .getJsonObject("_usage");
+            if (usage == null) {
+                return null;
+            }
+            String requestId = usage.getString("requestId");
+            return (requestId == null || requestId.isBlank()) ? null : requestId;
+        } catch (Exception e) {
+            LOG.debug("解析 _usage envelope 失败，跳过 token 回填");
+            return null;
+        }
+    }
 }

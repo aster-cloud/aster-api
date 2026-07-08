@@ -62,22 +62,28 @@ public class SseEventParser {
      */
     private LlmStreamEvent parseOpenAiEvent(JsonNode root) {
         JsonNode choices = root.path("choices");
+        // issue #185：开启 stream_options.include_usage 后，最后一帧 choices 为空、根部带 usage。
+        // 该帧要产出 USAGE 事件（真实 token）。注意：不能在 finish_reason=stop 时就 DONE，否则会在
+        // usage 帧到达前提前结束流 → 拿不到 token（Codex 审查）。真正的结束由 [DONE] 标记触发。
         if (!choices.isArray() || choices.isEmpty()) {
+            JsonNode usage = root.path("usage");
+            if (usage.isObject()) {
+                int prompt = usage.path("prompt_tokens").asInt(0);
+                int completion = usage.path("completion_tokens").asInt(0);
+                if (prompt > 0 || completion > 0) {
+                    return LlmStreamEvent.usage(new io.aster.llm.model.LlmUsage(prompt, completion));
+                }
+            }
             return null;
         }
 
         JsonNode firstChoice = choices.get(0);
-        String finishReason = firstChoice.path("finish_reason").asText(null);
-
-        if ("stop".equals(finishReason)) {
-            return LlmStreamEvent.done();
-        }
-
         String content = firstChoice.path("delta").path("content").asText(null);
         if (content != null) {
             return LlmStreamEvent.delta(content);
         }
 
+        // finish_reason=stop 不再直接 DONE：继续等 usage 帧 + [DONE] 标记（见上）。
         return null;
     }
 
@@ -95,6 +101,17 @@ public class SseEventParser {
             case "content_block_delta" -> {
                 String text = root.path("delta").path("text").asText(null);
                 yield text != null ? LlmStreamEvent.delta(text) : null;
+            }
+            // issue #185：Anthropic 流式 usage 分散在 message_start(input_tokens) 与
+            // message_delta(output_tokens 累计绝对值)。各产出一个 USAGE 事件，业务层 attempt 内取
+            // max（累计 output 取 latest，避免 overcount）、attempt 间 plus（LlmProxyService）。
+            case "message_start" -> {
+                int input = root.path("message").path("usage").path("input_tokens").asInt(0);
+                yield input > 0 ? LlmStreamEvent.usage(new io.aster.llm.model.LlmUsage(input, 0)) : null;
+            }
+            case "message_delta" -> {
+                int output = root.path("usage").path("output_tokens").asInt(0);
+                yield output > 0 ? LlmStreamEvent.usage(new io.aster.llm.model.LlmUsage(0, output)) : null;
             }
             case "message_stop" -> LlmStreamEvent.done();
             case "error" -> {

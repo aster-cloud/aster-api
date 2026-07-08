@@ -2,9 +2,11 @@ package io.aster.llm.client;
 
 import io.aster.llm.config.LlmConfig;
 import io.aster.llm.metrics.LlmMetrics;
+import io.aster.llm.model.LlmChatResult;
 import io.aster.llm.model.LlmRequest;
 import io.aster.llm.model.LlmRuntimeOptions;
 import io.aster.llm.model.LlmStreamEvent;
+import io.aster.llm.model.LlmUsage;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import io.vertx.core.buffer.Buffer;
@@ -201,7 +203,7 @@ public class VertxLlmClient implements LlmClient {
     }
 
     @Override
-    public Uni<String> chat(LlmRequest request, LlmRuntimeOptions options) {
+    public Uni<LlmChatResult> chat(LlmRequest request, LlmRuntimeOptions options) {
         String apiKey = options.apiKey();
         String provider = options.provider();
         URI baseUri = URI.create(options.baseUrl());
@@ -242,8 +244,9 @@ public class VertxLlmClient implements LlmClient {
                 try {
                     JsonObject responseJson = response.bodyAsJsonObject();
                     String content = extractContent(responseJson, provider);
-                    recordTokenUsage(responseJson, request.model());
-                    emitter.complete(content);
+                    LlmUsage usage = extractUsage(responseJson, provider);
+                    recordTokenUsage(usage, request.model());
+                    emitter.complete(new LlmChatResult(content, usage));
                 } catch (Exception e) {
                     emitter.fail(new RuntimeException("LLM 响应解析失败", e));
                 }
@@ -251,7 +254,8 @@ public class VertxLlmClient implements LlmClient {
         });
     }
 
-    private JsonObject buildRequestBody(LlmRequest request, LlmRuntimeOptions options) {
+    // package-private for unit testing（stream_options 条件 + role 映射是纯逻辑，值得锁定）
+    JsonObject buildRequestBody(LlmRequest request, LlmRuntimeOptions options) {
         String provider = options.provider();
         if ("anthropic".equals(provider)) {
             return buildAnthropicBody(request);
@@ -270,13 +274,23 @@ public class VertxLlmClient implements LlmClient {
                 .put("content", msg.content()));
         }
 
-        return new JsonObject()
+        JsonObject body = new JsonObject()
             .put("model", request.model())
             .put("messages", messages)
             .put("temperature", request.temperature())
             .put("max_tokens", request.maxTokens())
             .put("stream", request.stream());
+        // issue #185：OpenAI 兼容流式默认不返回 usage，须显式请求末帧带 usage。但部分兼容代理会
+        // 严格校验未知字段直接 400，故只对【原生 OpenAI】开启；其他兼容代理（如 rightcode）不加，
+        // 退化为无 usage 帧（SSE token 回填 0，cloud 占位 0/0 仍在，不影响配额/BYOK）。Codex 审查。
+        if (request.stream() && isNativeOpenAi) {
+            body.put("stream_options", new JsonObject().put("include_usage", true));
+        }
+        return body;
     }
+
+    /** BYOK Anthropic 默认模型：当请求模型非 claude 系（如平台默认 gpt-4o-mini）时替换，避免打错模型。 */
+    private static final String ANTHROPIC_DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
 
     /**
      * 构造 Anthropic Messages API 请求体（Phase 2 BYOK）。
@@ -286,9 +300,6 @@ public class VertxLlmClient implements LlmClient {
      * 且 {@code messages} 只允许 user/assistant 交替角色。这里把所有 system/developer 消息合并到
      * top-level system，其余按 user/assistant 放入 messages。
      */
-    /** BYOK Anthropic 默认模型：当请求模型非 claude 系（如平台默认 gpt-4o-mini）时替换，避免打错模型。 */
-    private static final String ANTHROPIC_DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
-
     // package-private for unit testing（Anthropic Messages API 结构是纯逻辑，值得锁定）
     JsonObject buildAnthropicBody(LlmRequest request) {
         // 模型兜底：Anthropic 不认 OpenAI 模型名（如平台默认 gpt-4o-mini），非 claude 系一律用默认。
@@ -366,19 +377,31 @@ public class VertxLlmClient implements LlmClient {
     }
 
     /**
-     * 从非流式响应中解析 token 用量并写入 Counter
-     *
-     * 与 OpenAI 兼容的 provider 在响应根部返回 usage 字段；流式 SSE 通常不返回，
-     * 因此此方法仅在非流式分支调用。
+     * 从非流式响应根部解析 token 用量（issue #185）。OpenAI 兼容: usage.prompt_tokens/
+     * completion_tokens；Anthropic Messages API: usage.input_tokens/output_tokens。
+     * provider 未返回 usage 时返回 null（不精确回填）。
      */
-    private void recordTokenUsage(JsonObject body, String model) {
-        if (body == null) return;
+    LlmUsage extractUsage(JsonObject body, String provider) {
+        if (body == null) return null;
         JsonObject usage = body.getJsonObject("usage");
-        if (usage == null) return;
-        int prompt = usage.getInteger("prompt_tokens", 0);
-        int completion = usage.getInteger("completion_tokens", 0);
-        if (prompt > 0 || completion > 0) {
-            llmMetrics.recordTokens(model != null ? model : "unknown", prompt, completion);
+        if (usage == null) return null;
+        int prompt;
+        int completion;
+        if ("anthropic".equals(provider)) {
+            prompt = usage.getInteger("input_tokens", 0);
+            completion = usage.getInteger("output_tokens", 0);
+        } else {
+            prompt = usage.getInteger("prompt_tokens", 0);
+            completion = usage.getInteger("completion_tokens", 0);
+        }
+        return new LlmUsage(prompt, completion);
+    }
+
+    /** 把 token 用量写入 Prometheus Counter（本地指标；精确回填 cloud 见 LlmProxyService）。 */
+    private void recordTokenUsage(LlmUsage usage, String model) {
+        if (usage != null && usage.hasTokens()) {
+            llmMetrics.recordTokens(model != null ? model : "unknown",
+                usage.promptTokens(), usage.completionTokens());
         }
     }
 

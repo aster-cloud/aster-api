@@ -3,6 +3,7 @@ package io.aster.llm.client;
 import io.aster.llm.config.LlmConfig;
 import io.aster.llm.metrics.LlmMetrics;
 import io.aster.llm.model.LlmRequest;
+import io.aster.llm.model.LlmRuntimeOptions;
 import io.aster.llm.model.LlmStreamEvent;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
@@ -52,17 +53,19 @@ public class VertxLlmClient implements LlmClient {
     }
 
     @Override
-    public Multi<LlmStreamEvent> streamChat(LlmRequest request, String apiKey) {
+    public Multi<LlmStreamEvent> streamChat(LlmRequest request, LlmRuntimeOptions options) {
+        String apiKey = options.apiKey();
+        String provider = options.provider();
         return Multi.createFrom().emitter(emitter -> {
             try {
-                URI baseUri = URI.create(config.baseUrl());
-                String chatPath = resolveChatPath(baseUri, config.provider());
-                JsonObject body = buildRequestBody(request);
+                URI baseUri = URI.create(options.baseUrl());
+                String chatPath = resolveChatPath(baseUri, provider);
+                JsonObject body = buildRequestBody(request, options);
                 int port = resolvePort(baseUri);
                 boolean ssl = "https".equals(baseUri.getScheme());
 
-                LOG.infof("LLM 流式请求: provider=%s, model=%s, url=%s:%d%s",
-                    config.provider(), request.model(), baseUri.getHost(), port, chatPath);
+                LOG.infof("LLM 流式请求: provider=%s, model=%s, url=%s:%d%s, source=%s",
+                    provider, request.model(), baseUri.getHost(), port, chatPath, options.source());
 
                 // 使用底层 HttpClient 获取 response stream，避免 WebClient.sendJsonObject 缓冲整个响应体
                 io.vertx.core.http.HttpClientOptions clientOptions = new io.vertx.core.http.HttpClientOptions()
@@ -79,7 +82,7 @@ public class VertxLlmClient implements LlmClient {
                     .putHeader("Accept", "text/event-stream");
 
                 // 注入认证头
-                switch (config.provider()) {
+                switch (provider) {
                     case "anthropic" -> {
                         reqOptions.putHeader("x-api-key", apiKey);
                         reqOptions.putHeader("anthropic-version", "2023-06-01");
@@ -119,11 +122,12 @@ public class VertxLlmClient implements LlmClient {
                         int statusCode = clientResponse.statusCode();
 
                         if (statusCode != 200) {
-                            // 非 200：缓冲错误体后关闭
+                            // 非 200：不回显 provider 原始错误体（红队：BYOK 下 provider 错误体可能
+                            // 含 key 前缀/鉴权诊断/请求片段）。只记 status+provider，前端给泛化错误。
                             clientResponse.bodyHandler(errBuf -> {
-                                String errBody = errBuf != null ? errBuf.toString() : "(empty)";
-                                LOG.errorf("LLM API 错误: status=%d, body=%s", statusCode, errBody);
-                                emitter.emit(LlmStreamEvent.error("LLM API 错误 (" + statusCode + "): " + errBody));
+                                LOG.errorf("LLM API 错误: status=%d, provider=%s, source=%s (错误体已脱敏)",
+                                    statusCode, provider, options.source());
+                                emitter.emit(LlmStreamEvent.error("LLM API 错误 (" + statusCode + ")"));
                                 emitter.complete();
                                 httpClient.close();
                             });
@@ -147,7 +151,7 @@ public class VertxLlmClient implements LlmClient {
                                 line = line.stripTrailing();
                                 if (line.startsWith("data: ") || line.startsWith("data:")) {
                                     String data = line.startsWith("data: ") ? line.substring(6) : line.substring(5);
-                                    LlmStreamEvent event = sseParser.parseLine(data, config.provider());
+                                    LlmStreamEvent event = sseParser.parseLine(data, provider);
                                     if (event != null) {
                                         if (event.type() == LlmStreamEvent.Type.DONE) {
                                             emitter.complete();
@@ -166,7 +170,7 @@ public class VertxLlmClient implements LlmClient {
                                 String tail = byteBufferHolder[0].toString().stripTrailing();
                                 if (tail.startsWith("data: ") || tail.startsWith("data:")) {
                                     String data = tail.startsWith("data: ") ? tail.substring(6) : tail.substring(5);
-                                    LlmStreamEvent event = sseParser.parseLine(data, config.provider());
+                                    LlmStreamEvent event = sseParser.parseLine(data, provider);
                                     if (event != null && event.type() != LlmStreamEvent.Type.DONE) {
                                         emitter.emit(event);
                                     }
@@ -196,16 +200,18 @@ public class VertxLlmClient implements LlmClient {
     }
 
     @Override
-    public Uni<String> chat(LlmRequest request, String apiKey) {
-        URI baseUri = URI.create(config.baseUrl());
-        String chatPath = resolveChatPath(baseUri, config.provider());
+    public Uni<String> chat(LlmRequest request, LlmRuntimeOptions options) {
+        String apiKey = options.apiKey();
+        String provider = options.provider();
+        URI baseUri = URI.create(options.baseUrl());
+        String chatPath = resolveChatPath(baseUri, provider);
         int port = resolvePort(baseUri);
 
         LlmRequest nonStreamRequest = new LlmRequest(
             request.model(), request.messages(),
             request.temperature(), request.maxTokens(), false
         );
-        JsonObject body = buildRequestBody(nonStreamRequest);
+        JsonObject body = buildRequestBody(nonStreamRequest, options);
 
         return Uni.createFrom().emitter(emitter -> {
             HttpRequest<Buffer> httpRequest = getClient()
@@ -214,7 +220,7 @@ public class VertxLlmClient implements LlmClient {
                 .timeout(config.timeout().toMillis())
                 .putHeader("Content-Type", "application/json");
 
-            addAuthHeaders(httpRequest, apiKey, config.provider());
+            addAuthHeaders(httpRequest, apiKey, provider);
 
             httpRequest.sendJsonObject(body, ar -> {
                 if (ar.failed()) {
@@ -224,15 +230,17 @@ public class VertxLlmClient implements LlmClient {
 
                 HttpResponse<Buffer> response = ar.result();
                 if (response.statusCode() != 200) {
-                    String errorBody = response.body() != null ? response.bodyAsString() : "(empty)";
+                    // 不回显 provider 原始错误体（红队：BYOK 下可能含 key 前缀/鉴权诊断）。
+                    LOG.errorf("LLM API 错误: status=%d, provider=%s, source=%s (错误体已脱敏)",
+                        response.statusCode(), provider, options.source());
                     emitter.fail(new RuntimeException(
-                        "LLM API 错误 (" + response.statusCode() + "): " + errorBody));
+                        "LLM API 错误 (" + response.statusCode() + ")"));
                     return;
                 }
 
                 try {
                     JsonObject responseJson = response.bodyAsJsonObject();
-                    String content = extractContent(responseJson, config.provider());
+                    String content = extractContent(responseJson, provider);
                     recordTokenUsage(responseJson, request.model());
                     emitter.complete(content);
                 } catch (Exception e) {
@@ -242,20 +250,19 @@ public class VertxLlmClient implements LlmClient {
         });
     }
 
-    private JsonObject buildRequestBody(LlmRequest request) {
+    private JsonObject buildRequestBody(LlmRequest request, LlmRuntimeOptions options) {
+        String provider = options.provider();
+        if ("anthropic".equals(provider)) {
+            return buildAnthropicBody(request);
+        }
+        boolean isNativeOpenAi = "openai".equals(provider)
+            && options.baseUrl().contains("api.openai.com");
         JsonArray messages = new JsonArray();
-        boolean isNativeOpenAi = "openai".equals(config.provider())
-            && config.baseUrl().contains("api.openai.com");
         for (var msg : request.messages()) {
             String role = msg.role();
-            if ("developer".equals(role)) {
-                // "developer" 角色仅 OpenAI 原生 API 支持，
-                // 其他提供商和 OpenAI 兼容代理需映射为 system
-                if ("anthropic".equals(config.provider())) {
-                    role = "user";
-                } else if (!isNativeOpenAi) {
-                    role = "system";
-                }
+            if ("developer".equals(role) && !isNativeOpenAi) {
+                // "developer" 角色仅 OpenAI 原生 API 支持，OpenAI 兼容代理需映射为 system
+                role = "system";
             }
             messages.add(new JsonObject()
                 .put("role", role)
@@ -268,6 +275,50 @@ public class VertxLlmClient implements LlmClient {
             .put("temperature", request.temperature())
             .put("max_tokens", request.maxTokens())
             .put("stream", request.stream());
+    }
+
+    /**
+     * 构造 Anthropic Messages API 请求体（Phase 2 BYOK）。
+     *
+     * <p>与 OpenAI Chat Completions 的关键差异：Anthropic 的 system prompt 是 <b>top-level</b>
+     * {@code system} 字段，不能作为 {@code role=system} 塞进 {@code messages}（会被拒/忽略）。
+     * 且 {@code messages} 只允许 user/assistant 交替角色。这里把所有 system/developer 消息合并到
+     * top-level system，其余按 user/assistant 放入 messages。
+     */
+    /** BYOK Anthropic 默认模型：当请求模型非 claude 系（如平台默认 gpt-4o-mini）时替换，避免打错模型。 */
+    private static final String ANTHROPIC_DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
+
+    // package-private for unit testing（Anthropic Messages API 结构是纯逻辑，值得锁定）
+    JsonObject buildAnthropicBody(LlmRequest request) {
+        // 模型兜底：Anthropic 不认 OpenAI 模型名（如平台默认 gpt-4o-mini），非 claude 系一律用默认。
+        String model = request.model();
+        if (model == null || !model.toLowerCase(java.util.Locale.ROOT).startsWith("claude")) {
+            model = ANTHROPIC_DEFAULT_MODEL;
+        }
+        StringBuilder system = new StringBuilder();
+        JsonArray messages = new JsonArray();
+        for (var msg : request.messages()) {
+            String role = msg.role();
+            if ("system".equals(role) || "developer".equals(role)) {
+                if (system.length() > 0) system.append("\n\n");
+                system.append(msg.content());
+            } else {
+                // assistant 保留，其余（含未知角色）归一为 user
+                String mapped = "assistant".equals(role) ? "assistant" : "user";
+                messages.add(new JsonObject().put("role", mapped).put("content", msg.content()));
+            }
+        }
+
+        JsonObject body = new JsonObject()
+            .put("model", model)
+            .put("messages", messages)
+            .put("max_tokens", request.maxTokens())
+            .put("temperature", request.temperature())
+            .put("stream", request.stream());
+        if (system.length() > 0) {
+            body.put("system", system.toString());
+        }
+        return body;
     }
 
     private void addAuthHeaders(HttpRequest<Buffer> request, String apiKey, String provider) {

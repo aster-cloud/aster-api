@@ -54,8 +54,14 @@ public class AiAssistantResource {
     @Inject
     io.aster.llm.safety.SafetyEventReporter safetyReporter;
 
+    @Inject
+    ByokEnvelopeParser byokParser;
+
     @Context
     RoutingContext routingContext;
+
+    @Context
+    jakarta.ws.rs.container.ContainerRequestContext requestContext;
 
     /**
      * NL-to-CNL 策略生成（SSE 流式）
@@ -82,7 +88,7 @@ public class AiAssistantResource {
         }
         LOG.infof("AI 生成请求: tenant=%s, locale=%s, goal=%.50s...",
             tenantId, request.getLocaleOrDefault(), request.goal());
-        return llmProxyService.streamGenerate(tenantId, request);
+        return llmProxyService.streamGenerate(tenantId, request, parseByok());
     }
 
     /**
@@ -103,7 +109,7 @@ public class AiAssistantResource {
             return refusalStream(v);
         }
         LOG.infof("AI 优化建议请求: tenant=%s, locale=%s", tenantId, request.getLocaleOrDefault());
-        return llmProxyService.streamSuggest(tenantId, request);
+        return llmProxyService.streamSuggest(tenantId, request, parseByok());
     }
 
     /**
@@ -132,7 +138,7 @@ public class AiAssistantResource {
                     .build()
             );
         }
-        return llmProxyService.complete(tenantId, request);
+        return llmProxyService.complete(tenantId, request, parseByok());
     }
 
     private void checkEnabled() {
@@ -147,6 +153,22 @@ public class AiAssistantResource {
         }
         String tenant = routingContext.request().getHeader("X-Tenant-Id");
         return tenant == null || tenant.isBlank() ? "default" : tenant.trim();
+    }
+
+    /**
+     * 解析本次请求的 BYOK 覆盖；present-invalid（已验签 body 带 _byok 但字段无效）→ 400，
+     * 与 service/resolver 的 no-fallback 语义一致（不静默回退平台）。
+     */
+    private io.aster.llm.model.ByokOverride parseByok() {
+        try {
+            return byokParser.parse(requestContext);
+        } catch (IllegalArgumentException e) {
+            throw new WebApplicationException(
+                Response.status(400)
+                    .entity(Map.of("error", "invalid_byok", "message", e.getMessage()))
+                    .type(MediaType.APPLICATION_JSON)
+                    .build());
+        }
     }
 
     /**

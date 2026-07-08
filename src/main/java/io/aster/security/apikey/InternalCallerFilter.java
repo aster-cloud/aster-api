@@ -57,6 +57,13 @@ public class InternalCallerFilter {
      */
     public static final String HMAC_VERIFIED_PROP = "aster.internal.hmac-verified";
 
+    /**
+     * 已 HMAC 验签的原始请求 body 字节（Phase 2 BYOK）。仅在签名<b>真正</b>通过后盖章，
+     * 供下游（如 AiAssistantResource）从<b>已验证</b>的 body 顶层解析 {@code _byok} envelope，
+     * 而不必重新读流、也不把 BYOK key 塞进业务 DTO。未验签的 public/trial 旁路不会设置它。
+     */
+    public static final String VERIFIED_BODY_PROP = "aster.internal.verified-body";
+
     @ConfigProperty(name = "aster.plan-gate.hmac-key")
     Optional<String> hmacKey;
 
@@ -326,6 +333,9 @@ public class InternalCallerFilter {
                 // trial 旁路路径在此之前就 return 了，天然不会设置它 → 逃生舱下带垃圾签名的
                 // 调用方拿不到结构词别名信任。
                 ctx.setProperty(HMAC_VERIFIED_PROP, Boolean.TRUE);
+                // Phase 2 BYOK：把已验签 body 字节挂到请求属性，供 resource 从可信 body 解析
+                // _byok envelope（只有走到这里=签名已过的请求才有；旁路路径拿不到）。
+                ctx.setProperty(VERIFIED_BODY_PROP, body);
 
                 // 签名通过后再消费 nonce（防重放）。requestHash 绑定 method/path/query/body，
                 // tenant 维度键（内部调用无浏览器 tenant 时用 "cloud-bff" 占位，跨 pod 唯一）。

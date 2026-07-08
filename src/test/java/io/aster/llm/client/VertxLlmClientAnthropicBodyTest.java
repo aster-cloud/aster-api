@@ -82,4 +82,35 @@ class VertxLlmClientAnthropicBodyTest {
         ), 0.0, 500, false);
         assertThat(client.buildAnthropicBody(req).getString("model")).startsWith("claude");
     }
+
+    // ==================== #185: stream_options.include_usage 条件 ====================
+
+    private io.aster.llm.model.LlmRuntimeOptions opts(String provider, String baseUrl) {
+        return new io.aster.llm.model.LlmRuntimeOptions("k", provider, baseUrl,
+            io.aster.llm.model.LlmRuntimeOptions.Source.PLATFORM);
+    }
+
+    @Test
+    @DisplayName("#185：native OpenAI 流式 → 加 stream_options.include_usage")
+    void nativeOpenAiStreamGetsStreamOptions() {
+        LlmRequest req = new LlmRequest("gpt-4o", List.of(new LlmRequest.Message("user", "hi")), 0.0, 100, true);
+        var body = client.buildRequestBody(req, opts("openai", "https://api.openai.com"));
+        assertThat(body.getJsonObject("stream_options").getBoolean("include_usage")).isTrue();
+    }
+
+    @Test
+    @DisplayName("★#185：OpenAI 兼容代理(rightcode) 流式 → 不加 stream_options（防严格代理 400）")
+    void compatProxyStreamNoStreamOptions() {
+        LlmRequest req = new LlmRequest("gpt-5.2", List.of(new LlmRequest.Message("user", "hi")), 0.0, 100, true);
+        var body = client.buildRequestBody(req, opts("rightcode", "https://right.codes/codex/v1"));
+        assertThat(body.containsKey("stream_options")).isFalse();
+    }
+
+    @Test
+    @DisplayName("#185：非流式 → 不加 stream_options（本就不需要，用响应根部 usage）")
+    void nonStreamNoStreamOptions() {
+        LlmRequest req = new LlmRequest("gpt-4o", List.of(new LlmRequest.Message("user", "hi")), 0.0, 100, false);
+        var body = client.buildRequestBody(req, opts("openai", "https://api.openai.com"));
+        assertThat(body.containsKey("stream_options")).isFalse();
+    }
 }

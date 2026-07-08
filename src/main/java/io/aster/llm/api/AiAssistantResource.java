@@ -88,7 +88,8 @@ public class AiAssistantResource {
         }
         LOG.infof("AI 生成请求: tenant=%s, locale=%s, goal=%.50s...",
             tenantId, request.getLocaleOrDefault(), request.goal());
-        return llmProxyService.streamGenerate(tenantId, request, parseByok());
+        return llmProxyService.streamGenerate(tenantId, request, parseByok(),
+            byokParser.parseRequestId(requestContext));
     }
 
     /**
@@ -109,7 +110,8 @@ public class AiAssistantResource {
             return refusalStream(v);
         }
         LOG.infof("AI 优化建议请求: tenant=%s, locale=%s", tenantId, request.getLocaleOrDefault());
-        return llmProxyService.streamSuggest(tenantId, request, parseByok());
+        return llmProxyService.streamSuggest(tenantId, request, parseByok(),
+            byokParser.parseRequestId(requestContext));
     }
 
     /**
@@ -138,7 +140,8 @@ public class AiAssistantResource {
                     .build()
             );
         }
-        return llmProxyService.complete(tenantId, request, parseByok());
+        return llmProxyService.complete(tenantId, request, parseByok(),
+            byokParser.parseRequestId(requestContext));
     }
 
     private void checkEnabled() {

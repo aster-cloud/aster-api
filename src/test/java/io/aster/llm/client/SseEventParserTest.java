@@ -36,11 +36,30 @@ class SseEventParserTest {
         }
 
         @Test
-        void parseFinishReason_stop应返回DONE() {
+        void parseFinishReason_stop不再直接DONE_等usage帧() {
+            // issue #185：开启 stream_options.include_usage 后，finish_reason=stop 帧之后还有 usage 帧。
+            // 若在 stop 就 DONE 会提前结束流、拿不到 token。stop 帧现在返回 null（继续等 usage + [DONE]）。
             String data = """
                 {"choices":[{"delta":{},"finish_reason":"stop"}]}""";
             LlmStreamEvent event = parser.parseLine(data, "openai");
+            assertThat(event).isNull();
+        }
 
+        @Test
+        void parseUsage帧_返回USAGE事件带真实token() {
+            // #185：choices 空 + 根部 usage → USAGE 事件
+            String data = """
+                {"choices":[],"usage":{"prompt_tokens":120,"completion_tokens":45}}""";
+            LlmStreamEvent event = parser.parseLine(data, "openai");
+            assertThat(event).isNotNull();
+            assertThat(event.type()).isEqualTo(LlmStreamEvent.Type.USAGE);
+            assertThat(event.usage().promptTokens()).isEqualTo(120);
+            assertThat(event.usage().completionTokens()).isEqualTo(45);
+        }
+
+        @Test
+        void parseDoneMarker_返回DONE() {
+            LlmStreamEvent event = parser.parseLine("[DONE]", "openai");
             assertThat(event).isNotNull();
             assertThat(event.type()).isEqualTo(LlmStreamEvent.Type.DONE);
         }
@@ -129,6 +148,30 @@ class SseEventParserTest {
             LlmStreamEvent event = parser.parseLine(data, "anthropic");
 
             assertThat(event).isNull();
+        }
+
+        @Test
+        void parseMessageStart_带input_tokens返回USAGE() {
+            // #185：Anthropic message_start 携带 input_tokens
+            String data = """
+                {"type":"message_start","message":{"usage":{"input_tokens":88,"output_tokens":1}}}""";
+            LlmStreamEvent event = parser.parseLine(data, "anthropic");
+            assertThat(event).isNotNull();
+            assertThat(event.type()).isEqualTo(LlmStreamEvent.Type.USAGE);
+            assertThat(event.usage().promptTokens()).isEqualTo(88);
+            assertThat(event.usage().completionTokens()).isEqualTo(0);
+        }
+
+        @Test
+        void parseMessageDelta_带output_tokens返回USAGE() {
+            // #185：Anthropic message_delta 携带累计 output_tokens
+            String data = """
+                {"type":"message_delta","delta":{},"usage":{"output_tokens":52}}""";
+            LlmStreamEvent event = parser.parseLine(data, "anthropic");
+            assertThat(event).isNotNull();
+            assertThat(event.type()).isEqualTo(LlmStreamEvent.Type.USAGE);
+            assertThat(event.usage().promptTokens()).isEqualTo(0);
+            assertThat(event.usage().completionTokens()).isEqualTo(52);
         }
     }
 

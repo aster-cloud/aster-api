@@ -101,8 +101,9 @@ public class VertxLlmClient implements LlmClient {
 
                 httpClient.request(reqOptions, reqAr -> {
                     if (reqAr.failed()) {
-                        LOG.errorf(reqAr.cause(), "LLM 连接失败");
-                        emitter.emit(LlmStreamEvent.error("LLM 连接失败: " + reqAr.cause().getMessage()));
+                        // 本地异常 message 记日志，不回显前端（红队硬化：可能含目标 host/URL 细节）
+                        LOG.errorf(reqAr.cause(), "LLM 连接失败: provider=%s", provider);
+                        emitter.emit(LlmStreamEvent.error("LLM 连接失败"));
                         emitter.complete();
                         httpClient.close();
                         return;
@@ -111,8 +112,8 @@ public class VertxLlmClient implements LlmClient {
                     io.vertx.core.http.HttpClientRequest clientRequest = reqAr.result();
                     clientRequest.response(respAr -> {
                         if (respAr.failed()) {
-                            LOG.errorf(respAr.cause(), "LLM 响应读取失败");
-                            emitter.emit(LlmStreamEvent.error("LLM 响应读取失败: " + respAr.cause().getMessage()));
+                            LOG.errorf(respAr.cause(), "LLM 响应读取失败: provider=%s", provider);
+                            emitter.emit(LlmStreamEvent.error("LLM 响应读取失败"));
                             emitter.complete();
                             httpClient.close();
                             return;
@@ -181,8 +182,8 @@ public class VertxLlmClient implements LlmClient {
                         });
 
                         clientResponse.exceptionHandler(ex -> {
-                            LOG.errorf(ex, "LLM 流式响应异常");
-                            emitter.emit(LlmStreamEvent.error("流式响应异常: " + ex.getMessage()));
+                            LOG.errorf(ex, "LLM 流式响应异常: provider=%s", provider);
+                            emitter.emit(LlmStreamEvent.error("流式响应异常"));
                             emitter.complete();
                             httpClient.close();
                         });
@@ -192,8 +193,8 @@ public class VertxLlmClient implements LlmClient {
                 });
 
             } catch (Exception e) {
-                LOG.errorf(e, "LLM 流式请求异常");
-                emitter.emit(LlmStreamEvent.error("请求异常: " + e.getMessage()));
+                LOG.errorf(e, "LLM 流式请求异常: provider=%s", provider);
+                emitter.emit(LlmStreamEvent.error("请求异常"));
                 emitter.complete();
             }
         });

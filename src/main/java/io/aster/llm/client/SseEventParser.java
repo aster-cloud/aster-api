@@ -98,8 +98,11 @@ public class SseEventParser {
             }
             case "message_stop" -> LlmStreamEvent.done();
             case "error" -> {
-                String message = root.path("error").path("message").asText("未知错误");
-                yield LlmStreamEvent.error(message);
+                // 红队硬化：provider（Anthropic）的 error.message 可能含 key 前缀/鉴权诊断/请求
+                // 片段，记日志但不回显前端，前端只给泛化文案（与 VertxLlmClient 非 200 脱敏一致）。
+                String errType = root.path("error").path("type").asText("");
+                LOG.errorf("Anthropic SSE error 帧: type=%s (message 已脱敏不回显)", errType);
+                yield LlmStreamEvent.error("LLM 流式响应错误");
             }
             default -> null;
         };

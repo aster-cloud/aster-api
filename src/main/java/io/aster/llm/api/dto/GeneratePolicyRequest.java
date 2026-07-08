@@ -1,5 +1,6 @@
 package io.aster.llm.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -12,6 +13,9 @@ import jakarta.validation.constraints.Size;
  * @param schema         期望的参数 schema JSON（可选，约束生成输出）
  * @param model          LLM 模型覆盖（可选，默认使用全局配置）
  */
+// Phase 2 BYOK：忽略顶层 _byok envelope（由 InternalCallerFilter 验签后 ByokEnvelopeParser
+// 从原始 body 解析，绝不进本 DTO——record toString 会泄漏 component，故 key 不可落 DTO）。
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record GeneratePolicyRequest(
     // 所有拼入 prompt 的用户字段都要设上限，否则可绕过 source 上限制造超大
     // prompt（内存 + LLM 调用成本）。existingSource 与 policy.rest.model

@@ -1,5 +1,6 @@
 package io.aster.llm.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -11,6 +12,8 @@ import jakarta.validation.constraints.Size;
  * @param focus  优化关注点（可选：performance / readability / simplification）
  * @param model  LLM 模型覆盖（可选）
  */
+// Phase 2 BYOK：忽略顶层 _byok envelope（见 GeneratePolicyRequest 注释）。
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record SuggestRequest(
     // 64KB 上限，与 policy.rest.model.CnlSourceLimits.MAX_SOURCE_LENGTH 对齐。
     @NotBlank(message = "source 不能为空")

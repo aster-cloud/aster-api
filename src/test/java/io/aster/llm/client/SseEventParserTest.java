@@ -109,14 +109,17 @@ class SseEventParserTest {
         }
 
         @Test
-        void parseError_应返回ERROR() {
+        void parseError_应返回ERROR_且脱敏不回显provider_message() {
+            // 红队硬化（Phase 4）：provider 的 error.message 可能含 key 前缀/鉴权诊断，不回显前端。
             String data = """
-                {"type":"error","error":{"message":"Rate limit exceeded"}}""";
+                {"type":"error","error":{"message":"Rate limit exceeded; key sk-ant-xxx invalid"}}""";
             LlmStreamEvent event = parser.parseLine(data, "anthropic");
 
             assertThat(event).isNotNull();
             assertThat(event.type()).isEqualTo(LlmStreamEvent.Type.ERROR);
-            assertThat(event.error()).isEqualTo("Rate limit exceeded");
+            // 泛化文案，绝不包含 provider 原始 message
+            assertThat(event.error()).isEqualTo("LLM 流式响应错误");
+            assertThat(event.error()).doesNotContain("sk-ant").doesNotContain("Rate limit");
         }
 
         @Test

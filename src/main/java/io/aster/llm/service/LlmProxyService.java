@@ -7,11 +7,13 @@ import io.aster.llm.api.dto.GeneratePolicyRequest;
 import io.aster.llm.api.dto.SuggestRequest;
 import io.aster.llm.client.LlmClient;
 import io.aster.llm.config.LlmConfig;
+import io.aster.llm.model.ByokOverride;
+import io.aster.llm.model.LlmRuntimeOptions;
 import io.aster.llm.model.LlmStreamEvent;
 import io.aster.llm.model.ValidationResult;
 import io.aster.llm.prompt.PromptComposer;
 import io.aster.llm.prompt.PromptContext;
-import io.aster.llm.tenant.TenantLlmKeyProvider;
+import io.aster.llm.tenant.LlmRuntimeOptionsResolver;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.aster.common.JacksonMappers;
 import io.smallrye.mutiny.Multi;
@@ -48,7 +50,7 @@ public class LlmProxyService {
     LlmConfig config;
 
     @Inject
-    TenantLlmKeyProvider keyProvider;
+    LlmRuntimeOptionsResolver optionsResolver;
 
     /**
      * 流式策略生成（含编译校验闭环）
@@ -60,10 +62,15 @@ public class LlmProxyService {
      * 4. 校验失败 → 输出 validation_error → 构建修复 Prompt → 重新生成
      * 5. 最多重试 maxAttempts 次
      */
-    public Multi<String> streamGenerate(String tenantId, GeneratePolicyRequest req) {
-        String apiKey = keyProvider.getApiKey(tenantId, config.provider());
-
-        if (apiKey == null || apiKey.isBlank()) {
+    public Multi<String> streamGenerate(String tenantId, GeneratePolicyRequest req, ByokOverride byok) {
+        LlmRuntimeOptions options;
+        try {
+            options = optionsResolver.resolve(tenantId, byok);
+        } catch (IllegalArgumentException e) {
+            // BYOK provider 非法：不回退平台 key，直接报错（红队铁律）
+            return Multi.createFrom().item(toJson(GeneratePolicyEvent.error("BYOK 凭证无效: " + e.getMessage())));
+        }
+        if (options.apiKey() == null || options.apiKey().isBlank()) {
             return Multi.createFrom().item(toJson(GeneratePolicyEvent.error("未配置 LLM API Key")));
         }
 
@@ -73,14 +80,14 @@ public class LlmProxyService {
             AtomicInteger attempt = new AtomicInteger(1);
             AtomicReference<PromptContext> currentCtx = new AtomicReference<>(ctx);
 
-            executeGenerateAttempt(currentCtx.get(), apiKey, req.getLocaleOrDefault(),
+            executeGenerateAttempt(currentCtx.get(), options, req.getLocaleOrDefault(),
                 attempt, maxAttempts, currentCtx, emitter);
         });
     }
 
     private void executeGenerateAttempt(
         PromptContext ctx,
-        String apiKey,
+        LlmRuntimeOptions options,
         String locale,
         AtomicInteger attempt,
         int maxAttempts,
@@ -92,7 +99,7 @@ public class LlmProxyService {
 
         LOG.infof("LLM 生成尝试 %d/%d", currentAttempt, maxAttempts);
 
-        llmClient.streamChat(ctx.toLlmRequest(), apiKey)
+        llmClient.streamChat(ctx.toLlmRequest(), options)
             .subscribe().with(
                 event -> {
                     if (event.type() == LlmStreamEvent.Type.DELTA && event.delta() != null) {
@@ -141,7 +148,7 @@ public class LlmProxyService {
                         emitter.emit(toJson(GeneratePolicyEvent.repairStart(nextAttempt, maxAttempts)));
 
                         // 递归重试
-                        executeGenerateAttempt(repairCtx, apiKey, locale,
+                        executeGenerateAttempt(repairCtx, options, locale,
                             attempt, maxAttempts, currentCtx, emitter);
                     } else {
                         // 超出重试次数
@@ -160,16 +167,20 @@ public class LlmProxyService {
     /**
      * 流式策略优化建议（直接透传 LLM 输出，无需编译校验）
      */
-    public Multi<String> streamSuggest(String tenantId, SuggestRequest req) {
-        String apiKey = keyProvider.getApiKey(tenantId, config.provider());
-
-        if (apiKey == null || apiKey.isBlank()) {
+    public Multi<String> streamSuggest(String tenantId, SuggestRequest req, ByokOverride byok) {
+        LlmRuntimeOptions options;
+        try {
+            options = optionsResolver.resolve(tenantId, byok);
+        } catch (IllegalArgumentException e) {
+            return Multi.createFrom().item(toJson(GeneratePolicyEvent.error("BYOK 凭证无效: " + e.getMessage())));
+        }
+        if (options.apiKey() == null || options.apiKey().isBlank()) {
             return Multi.createFrom().item(toJson(GeneratePolicyEvent.error("未配置 LLM API Key")));
         }
 
         PromptContext ctx = promptComposer.buildSuggestContext(tenantId, req);
 
-        return llmClient.streamChat(ctx.toLlmRequest(), apiKey)
+        return llmClient.streamChat(ctx.toLlmRequest(), options)
             .filter(event -> event.type() == LlmStreamEvent.Type.DELTA && event.delta() != null)
             .map(event -> event.delta());
     }
@@ -177,17 +188,27 @@ public class LlmProxyService {
     /**
      * 代码补全（非流式，低延迟）
      */
-    public Uni<CompleteResponse> complete(String tenantId, CompleteRequest req) {
-        String apiKey = keyProvider.getApiKey(tenantId, config.provider());
-
-        if (apiKey == null || apiKey.isBlank()) {
+    public Uni<CompleteResponse> complete(String tenantId, CompleteRequest req, ByokOverride byok) {
+        LlmRuntimeOptions options;
+        try {
+            options = optionsResolver.resolve(tenantId, byok);
+        } catch (IllegalArgumentException e) {
+            // BYOK provider 非法：显式 400，不回退平台 key、不返回假成功空补全（与 generate/suggest
+            // 的 no-fallback 语义一致，避免 cloud 记假 success）。
+            throw new jakarta.ws.rs.WebApplicationException(
+                jakarta.ws.rs.core.Response.status(400)
+                    .entity(java.util.Map.of("error", "invalid_byok", "message", e.getMessage()))
+                    .type(jakarta.ws.rs.core.MediaType.APPLICATION_JSON)
+                    .build());
+        }
+        if (options.apiKey() == null || options.apiKey().isBlank()) {
             return Uni.createFrom().item(new CompleteResponse("", config.model()));
         }
 
         PromptContext ctx = promptComposer.buildCompleteContext(tenantId, req);
         String model = req.model() != null ? req.model() : config.model();
 
-        return llmClient.chat(ctx.toLlmRequest(), apiKey)
+        return llmClient.chat(ctx.toLlmRequest(), options)
             .map(content -> new CompleteResponse(content, model))
             .onFailure().recoverWithItem(throwable -> {
                 LOG.errorf(throwable, "代码补全失败");

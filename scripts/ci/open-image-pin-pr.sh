@@ -24,6 +24,7 @@ IMAGE="${1:?usage: open-image-pin-pr.sh <IMAGE> <BRANCH>}"
 BRANCH="${2:?usage: open-image-pin-pr.sh <IMAGE> <BRANCH>}"
 K3S_REPO="${K3S_REPO:-wontlost-ltd/k3s}"
 LOCK_PATH="${LOCK_PATH:-apps/aster-lang/cloud/image-lock.yaml}"
+KUSTOMIZATION_PATH="${KUSTOMIZATION_PATH:-apps/aster-lang/cloud/kustomization.yaml}"
 YQ_VERSION="${YQ_VERSION:-v4.44.3}"
 
 : "${GH_TOKEN:?需要 GH_TOKEN（k3s-scoped token）}"
@@ -53,20 +54,28 @@ git_c() { git -c "http.https://github.com/.extraheader=${AUTH}" "$@"; }
 count="$(IMAGE="$IMAGE" yq '.images | map(select(.image == strenv(IMAGE))) | length' "$LOCK_PATH")"
 [[ "$count" == "1" ]] || { echo "::error::image-lock 中 ${IMAGE} 的 entry 数=${count} (需恰好 1)"; exit 1; }
 
-# ── 从最新 origin/main 重建固定分支，只改本 entry ──
+# Phase 3 keystone：kustomization 里本镜像也必须唯一存在（双写目标）。
+kcount="$(IMAGE="$IMAGE" yq '.images | map(select(.name == strenv(IMAGE))) | length' "$KUSTOMIZATION_PATH")"
+[[ "$kcount" == "1" ]] || { echo "::error::kustomization 中 ${IMAGE} 的 images entry 数=${kcount} (需恰好 1)"; exit 1; }
+
+# ── 从最新 origin/main 重建固定分支，双写本 entry（image-lock 验签真相 + kustomization 部署真相）──
 git checkout -B "$BRANCH" origin/main
 DIGEST="$DIGEST" SOURCE_SHA="$SOURCE_SHA" RUN_ID="$RUN_ID" IMAGE="$IMAGE" yq -i '
   (.images[] | select(.image == strenv(IMAGE))).digest    = strenv(DIGEST)  |
   (.images[] | select(.image == strenv(IMAGE))).sourceSha = strenv(SOURCE_SHA) |
   (.images[] | select(.image == strenv(IMAGE))).runId     = strenv(RUN_ID)
 ' "$LOCK_PATH"
+# kustomization：只改本镜像的 digest（部署真相），k3s verify 校验 == image-lock digest。
+DIGEST="$DIGEST" IMAGE="$IMAGE" yq -i '
+  (.images[] | select(.name == strenv(IMAGE))).digest = strenv(DIGEST)
+' "$KUSTOMIZATION_PATH"
 
 open_pr_number() {
   gh pr list -R "$K3S_REPO" --head "$BRANCH" --base main --state open \
     --json number --jq '.[0].number // empty'
 }
 
-if git diff --quiet -- "$LOCK_PATH"; then
+if git diff --quiet -- "$LOCK_PATH" "$KUSTOMIZATION_PATH"; then
   # 无变更：main 已是本 digest。若恰有 open PR 则确保 auto-merge，否则干净退出（不 create）。
   pr="$(open_pr_number)"
   if [[ -n "$pr" ]]; then
@@ -80,7 +89,7 @@ fi
 
 git config user.name  "aster-image-pin[bot]"
 git config user.email "301590099+aster-image-pin[bot]@users.noreply.github.com"
-git add "$LOCK_PATH"
+git add "$LOCK_PATH" "$KUSTOMIZATION_PATH"
 git commit -m "chore(image-pin): ${IMAGE##*/} → ${DIGEST} (sha ${SOURCE_SHA})"
 
 # ── force-with-lease 用远端实际 SHA 作基线（防同 App 并发 run 互相覆盖）──

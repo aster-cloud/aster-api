@@ -208,32 +208,15 @@ jobs:
             --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/deploy\.yml@refs/heads/main$" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
-      - name: Deploy to K3S
-        if: ${{ steps.staleguard.outputs.stale != 'true' }}
-        env:
-          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          mkdir -p ~/.kube
-          # Secret is stored base64-encoded to survive shell/yaml mangling of
-          # multiline PEM blocks. Decode straight to file.
-          echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
-          # Sanity check — fail fast with a useful message if decode produced
-          # something kubectl can't read.
-          kubectl --kubeconfig ~/.kube/config version --client=false --request-timeout=10s
-          # 部署用 `rollout restart`（非 `set image @digest`）。原因（红队 P2-G 上线实测教训）：
-          # 本集群由 **ArgoCD** 管理，deployment.spec 的 image 字段被对账回 git manifest 的
-          # 浮动 tag `jvm-latest`——`kubectl set image @digest` 会被 ArgoCD 立即还原，新副本集
-          # 被缩到 0，pod 从不真正切到新 digest（实测：set image 后运行 pod 仍是旧 digest）。
-          # `rollout restart` 触发 pod 重建，配合 `imagePullPolicy: Always` 重新拉取 jvm-latest。
-          # ⚠️ 注意（见上 Install cosign 处的 TOCTOU 遗留说明）：pod 实际拉取的是 **浮动 tag
-          # jvm-latest** 而非上一步验签的 ${DIGEST}——正常路径下 jvm-latest 就指向本次已验签的
-          # digest，但 verify→pull 之间 tag 若被替换则不再等价。闭合此窗口需 GitOps 侧 digest
-          # pin / 集群 admission 签名校验（单独立项）。此处如实标注，不声称"pod == 已验签内容"。
-          echo "expected digest behind jvm-latest for this rollout: ${DIGEST}"
-          kubectl rollout restart deployment/aster-api -n aster-cloud
-          kubectl rollout status deployment/aster-api -n aster-cloud --timeout=300s
+      # ── Phase 3 P3-2a：已移除 `Deploy to K3S`（kubectl rollout restart）发布语义 ──
+      # 统一 digest pin 全链上线后，发布真相 = image-pin-pr job 开 PR 改 k3s image-lock +
+      # kustomization digest → verify-image-pin 验签 → auto-merge → ArgoCD by-digest sync →
+      # 滚动更新。旧的 rollout restart 在 P3-0（kustomize 渲染 @digest）后已**不再是有效发布
+      # 通道**（deployment.spec 已是 @digest，restart 只重启当前 digest、不部署新 tag），故删除。
+      #
+      # ⚠️ 本 job（build+sign+verify）**不再直接部署**——它只产出已验签 digest 供下游 image-pin-pr
+      # 使用。若 image-pin-pr 失败 = 新版本不上线（fail-closed，可见：该 job 会红）。
+      # 回滚：git revert 本 commit 恢复 rollout restart（但注意：需配合 ArgoCD 侧才能真回旧 tag 发布）。
 
   # ── 统一 digest pin 设计 A′ Phase 2：CI 开 PR 到 k3s 改 image-lock ──────────────
   # 见 wontlost-ltd/k3s#4、k3s .github/image-pin/。独立 job：fail-loud 但**不阻塞**上面

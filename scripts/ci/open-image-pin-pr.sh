@@ -107,11 +107,14 @@ fi
 head_sha="$(git rev-parse HEAD)"
 pr="$(open_pr_number)"
 if [[ -z "$pr" ]]; then
+  # ★ 不在 create 时带 --label（label 缺失会让 create 整体失败，实测 could not add label）。
+  #   先建 PR，再单独加 label（非致命：label 是 ruleset auto-merge 门控之一，缺则由人工/后续补）。
   gh pr create -R "$K3S_REPO" --base main --head "$BRANCH" \
     --title "chore(image-pin): ${IMAGE##*/} digest bump" \
-    --body $'自动开启（源仓 CI）。\n\nimage: '"${IMAGE}"$'\ndigest: '"${DIGEST}"$'\nsourceSha: '"${SOURCE_SHA}"$'\nrunId: '"${RUN_ID}"$'\n\nstale/红：等待最新源仓 CI 重开，或对 latest main 手动 rerun（不允许旧 SHA 绕过 freshness）。' \
-    --label image-pin
+    --body $'自动开启（源仓 CI）。\n\nimage: '"${IMAGE}"$'\ndigest: '"${DIGEST}"$'\nsourceSha: '"${SOURCE_SHA}"$'\nrunId: '"${RUN_ID}"$'\n\nstale/红：等待最新源仓 CI 重开，或对 latest main 手动 rerun（不允许旧 SHA 绕过 freshness）。'
   pr="$(open_pr_number)"
+  gh pr edit "$pr" -R "$K3S_REPO" --add-label image-pin \
+    || echo "::warning::加 image-pin label 失败（label 是否存在？）——PR 已建，label 需人工补"
 else
   echo "复用 open PR #$pr"
 fi

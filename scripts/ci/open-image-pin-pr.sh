@@ -43,7 +43,10 @@ if ! command -v yq >/dev/null; then
 fi
 
 # ── clone k3s：token 走 extraheader，不写进 remote URL（不落 .git/config）──
-AUTH="AUTHORIZATION: bearer ${GH_TOKEN}"
+# ★ GitHub App installation token（ghs_*）over git HTTPS 用 **basic** auth（base64
+#   x-access-token:TOKEN），非 bearer——bearer 不被 github.com git 端点接受，会退化成
+#   提示 Username 而在 CI 失败（实测 fatal: could not read Username）。对齐 actions/checkout。
+AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
 git -c "http.https://github.com/.extraheader=${AUTH}" \
   clone --depth=1 "https://github.com/${K3S_REPO}.git" k3s
 cd k3s

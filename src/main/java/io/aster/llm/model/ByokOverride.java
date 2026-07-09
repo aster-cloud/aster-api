@@ -7,18 +7,29 @@ package io.aster.llm.model;
  * 经 {@code AiAssistantResource} 从原始 body 解析、剥离后构造，<b>不进业务 DTO、不进 PromptComposer、
  * 不进审计 vault、不打日志</b>。
  *
- * <p>安全：只携带 provider + 用户解密后的 apiKey。<b>不含 baseUrl</b>——baseUrl 由 aster-api 按
- * provider 查固定 allowlist 得到，绝不接受 cloud/用户传入的 URL（防 SSRF）。{@link #toString()} 脱敏。
+ * <p>安全：携带 provider + 用户解密后的 apiKey + 可选 baseUrl。baseUrl 来自 cloud 已验签 envelope，
+ * 但仍是用户配置派生值，aster-api 每次使用前必须重新经过管理员 allowlist + SSRF guard。
+ * {@link #toString()} 脱敏。
  */
-public record ByokOverride(String provider, String apiKey) {
+public record ByokOverride(String provider, String apiKey, String baseUrl) {
+
+    public ByokOverride(String provider, String apiKey) {
+        this(provider, apiKey, null);
+    }
 
     public boolean isValid() {
         return provider != null && !provider.isBlank()
             && apiKey != null && !apiKey.isBlank();
     }
 
+    public boolean hasCustomBaseUrl() {
+        return baseUrl != null && !baseUrl.isBlank();
+    }
+
     @Override
     public String toString() {
-        return "ByokOverride{provider=" + provider + ", apiKey=***}";
+        return "ByokOverride{provider=" + provider
+            + ", baseUrl=" + (hasCustomBaseUrl() ? baseUrl : "<default>")
+            + ", apiKey=***}";
     }
 }

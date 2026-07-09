@@ -6,11 +6,11 @@ import jakarta.ws.rs.container.ContainerRequestContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * ByokEnvelopeParser 单测（Phase 2 BYOK）：只对 HMAC 验签请求解析 _byok，未验签一律忽略。
@@ -20,12 +20,15 @@ class ByokEnvelopeParserTest {
     private final ByokEnvelopeParser parser = new ByokEnvelopeParser();
 
     private ContainerRequestContext ctx(boolean verified, String bodyJson) {
-        ContainerRequestContext ctx = mock(ContainerRequestContext.class);
-        when(ctx.getProperty(InternalCallerFilter.HMAC_VERIFIED_PROP))
-            .thenReturn(verified ? Boolean.TRUE : null);
-        when(ctx.getProperty(InternalCallerFilter.VERIFIED_BODY_PROP))
-            .thenReturn(bodyJson == null ? null : bodyJson.getBytes(StandardCharsets.UTF_8));
-        return ctx;
+        Map<String, Object> props = Map.of(
+            InternalCallerFilter.HMAC_VERIFIED_PROP, verified ? Boolean.TRUE : Boolean.FALSE,
+            InternalCallerFilter.VERIFIED_BODY_PROP, bodyJson == null ? new byte[0] : bodyJson.getBytes(StandardCharsets.UTF_8)
+        );
+        return (ContainerRequestContext) Proxy.newProxyInstance(
+            ContainerRequestContext.class.getClassLoader(),
+            new Class<?>[] { ContainerRequestContext.class },
+            (proxy, method, args) -> "getProperty".equals(method.getName()) ? props.get((String) args[0]) : null
+        );
     }
 
     @Test
@@ -36,6 +39,17 @@ class ByokEnvelopeParserTest {
         assertThat(byok).isNotNull();
         assertThat(byok.provider()).isEqualTo("openai");
         assertThat(byok.apiKey()).isEqualTo("sk-user");
+        assertThat(byok.baseUrl()).isNull();
+    }
+
+    @Test
+    @DisplayName("已验签 + _byok.baseUrl → 解析进 ByokOverride（后续 resolver 再校验）")
+    void parsesOptionalBaseUrl() {
+        String body = "{\"goal\":\"x\",\"_byok\":{\"provider\":\"openai\",\"apiKey\":\"sk-user\","
+            + "\"baseUrl\":\"https://llm-gateway.example.com/v1\"}}";
+        ByokOverride byok = parser.parse(ctx(true, body));
+        assertThat(byok).isNotNull();
+        assertThat(byok.baseUrl()).isEqualTo("https://llm-gateway.example.com/v1");
     }
 
     @Test

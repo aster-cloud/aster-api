@@ -12,8 +12,8 @@ import java.nio.charset.StandardCharsets;
 /**
  * 从【已 HMAC 验签】的内部请求 body 顶层解析 {@code _byok} envelope（Phase 2 BYOK）。
  *
- * <p>envelope 形如 {@code {"_byok": {"provider": "openai", "apiKey": "sk-..."}}}，由 aster-cloud
- * 在解密用户 BYOK key 后注入 body、并在注入<b>之后</b>签名（签名覆盖含 envelope 的最终 body）。
+ * <p>envelope 形如 {@code {"_byok": {"provider": "openai", "apiKey": "sk-...", "baseUrl": "https://..."}}}，
+ * 由 aster-cloud 在解密用户 BYOK key 后注入 body、并在注入<b>之后</b>签名（签名覆盖含 envelope 的最终 body）。
  *
  * <p>安全铁律：
  * <ul>
@@ -60,7 +60,8 @@ public class ByokEnvelopeParser {
             return null; // absent → 平台路径
         }
         // present：已验签 body 明确带 BYOK 意图，无效则 fail-closed（不回退平台）
-        ByokOverride override = new ByokOverride(env.getString("provider"), env.getString("apiKey"));
+        ByokOverride override = new ByokOverride(env.getString("provider"), env.getString("apiKey"),
+            env.getString("baseUrl"));
         if (!override.isValid()) {
             throw new IllegalArgumentException("_byok envelope 字段无效（provider/apiKey 缺失）");
         }

@@ -7,6 +7,7 @@ import io.aster.llm.model.LlmRequest;
 import io.aster.llm.model.LlmRuntimeOptions;
 import io.aster.llm.model.LlmStreamEvent;
 import io.aster.llm.model.LlmUsage;
+import io.aster.security.net.SsrfGuard;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import io.vertx.core.buffer.Buffer;
@@ -48,6 +49,9 @@ public class VertxLlmClient implements LlmClient {
     @Inject
     LlmMetrics llmMetrics;
 
+    @Inject
+    SsrfGuard ssrfGuard;
+
     // P0-R19: WebClient DCL consolidated into SharedWebClient.
     // mutinyVertx still injected for createHttpClient (non-WebClient path).
     private WebClient getClient() {
@@ -60,6 +64,7 @@ public class VertxLlmClient implements LlmClient {
         String provider = options.provider();
         return Multi.createFrom().emitter(emitter -> {
             try {
+                validateCustomEndpoint(options);
                 URI baseUri = URI.create(options.baseUrl());
                 String chatPath = resolveChatPath(baseUri, provider);
                 JsonObject body = buildRequestBody(request, options);
@@ -127,6 +132,9 @@ public class VertxLlmClient implements LlmClient {
                         if (statusCode != 200) {
                             // 非 200：不回显 provider 原始错误体（红队：BYOK 下 provider 错误体可能
                             // 含 key 前缀/鉴权诊断/请求片段）。只记 status+provider，前端给泛化错误。
+                            // SSRF 硬化：底层 HttpClient.request() 默认【不】跟随重定向，且此处把 3xx
+                            // 一并当错误终止——自定义端点若返回 302 到内网也不会被跟随（与非流式路径
+                            // WebClient.followRedirects(false) 语义一致）。
                             clientResponse.bodyHandler(errBuf -> {
                                 LOG.errorf("LLM API 错误: status=%d, provider=%s, source=%s (错误体已脱敏)",
                                     statusCode, provider, options.source());
@@ -206,6 +214,7 @@ public class VertxLlmClient implements LlmClient {
     public Uni<LlmChatResult> chat(LlmRequest request, LlmRuntimeOptions options) {
         String apiKey = options.apiKey();
         String provider = options.provider();
+        validateCustomEndpoint(options);
         URI baseUri = URI.create(options.baseUrl());
         String chatPath = resolveChatPath(baseUri, provider);
         int port = resolvePort(baseUri);
@@ -220,6 +229,7 @@ public class VertxLlmClient implements LlmClient {
             HttpRequest<Buffer> httpRequest = getClient()
                 .request(HttpMethod.POST, port, baseUri.getHost(), chatPath)
                 .ssl("https".equals(baseUri.getScheme()))
+                .followRedirects(false)
                 .timeout(config.timeout().toMillis())
                 .putHeader("Content-Type", "application/json");
 
@@ -260,8 +270,7 @@ public class VertxLlmClient implements LlmClient {
         if ("anthropic".equals(provider)) {
             return buildAnthropicBody(request);
         }
-        boolean isNativeOpenAi = "openai".equals(provider)
-            && options.baseUrl().contains("api.openai.com");
+        boolean isNativeOpenAi = options.wireFormat() == LlmRuntimeOptions.WireFormat.OPENAI_NATIVE;
         JsonArray messages = new JsonArray();
         for (var msg : request.messages()) {
             String role = msg.role();
@@ -340,6 +349,14 @@ public class VertxLlmClient implements LlmClient {
                 request.putHeader("anthropic-version", "2023-06-01");
             }
             default -> request.putHeader("Authorization", "Bearer " + apiKey);
+        }
+    }
+
+    private void validateCustomEndpoint(LlmRuntimeOptions options) {
+        if (options.customEndpoint()) {
+            // GA 只允许管理员 allowlist 自定义 endpoint；resolver 已校验一次。这里在真正出站前
+            // 再做 URL 规范化 + DNS/IP deny，避免后续代码路径绕过 resolver。
+            ssrfGuard.validate(options.baseUrl());
         }
     }
 

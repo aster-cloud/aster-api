@@ -33,6 +33,10 @@ YQ_VERSION="${YQ_VERSION:-v4.44.3}"
 : "${RUN_ID:?需要 RUN_ID}"
 [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::DIGEST 形状非法：$DIGEST"; exit 1; }
 
+# 向 CI 输出「本次是否需要等待迁移应用 + 具体 PR number」（Codex 审查必修:下游 Wait step
+# 按本次明确的 pr_number 等待,不从历史 --state all 反推）。本地无 GITHUB_OUTPUT 时 no-op。
+emit() { [[ -n "${GITHUB_OUTPUT:-}" ]] && printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT" || true; }
+
 # ── 安装 yq（可选 checksum 校验）──
 if ! command -v yq >/dev/null; then
   curl -fsSL -o /tmp/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
@@ -79,13 +83,15 @@ open_pr_number() {
 }
 
 if git diff --quiet -- "$LOCK_PATH" "$KUSTOMIZATION_PATH"; then
-  # 无变更：main 已是本 digest。若恰有 open PR 则确保 auto-merge，否则干净退出（不 create）。
+  # 无变更：main 已是本 digest。若恰有 open PR 则确保 auto-merge,否则干净退出（不 create）。
   pr="$(open_pr_number)"
   if [[ -n "$pr" ]]; then
-    echo "image-lock 已最新，复用 open PR #$pr 确保 auto-merge"
+    echo "image-lock 已最新,复用 open PR #$pr 确保 auto-merge"
     gh pr merge "$pr" -R "$K3S_REPO" --auto --squash --delete-branch
+    emit wait_required true; emit pr_number "$pr"
   else
-    echo "image-lock 已最新且无 open PR → 无需开 PR，退出"
+    echo "image-lock 已最新且无 open PR → 无需开 PR,退出"
+    emit wait_required false; emit pr_number ""
   fi
   exit 0
 fi
@@ -121,3 +127,5 @@ fi
 # enable auto-merge 失败必须 fail-loud（PR 开着不合＝发布链断）。
 gh pr merge "$pr" -R "$K3S_REPO" --auto --squash --delete-branch --match-head-commit "$head_sha"
 echo "image-pin PR #${pr} 就绪 (auto-merge enabled, head=${head_sha})"
+# 本次确有 digest 变更 + 开/复用了 PR → 下游必须等待迁移应用。
+emit wait_required true; emit pr_number "$pr"

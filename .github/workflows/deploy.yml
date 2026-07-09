@@ -91,6 +91,10 @@ jobs:
       # 投毒镜像，也无法在没有本 CI OIDC 身份的情况下产出通过校验的签名。
       id-token: write
       contents: read
+    # digest-pin Phase 2：把已验签 digest + 是否过时 暴露给下游 image-pin-pr job。
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      stale: ${{ steps.staleguard.outputs.stale }}
     steps:
       - uses: actions/checkout@v7
 
@@ -230,3 +234,59 @@ jobs:
           echo "expected digest behind jvm-latest for this rollout: ${DIGEST}"
           kubectl rollout restart deployment/aster-api -n aster-cloud
           kubectl rollout status deployment/aster-api -n aster-cloud --timeout=300s
+
+  # ── 统一 digest pin 设计 A′ Phase 2：CI 开 PR 到 k3s 改 image-lock ──────────────
+  # 见 wontlost-ltd/k3s#4、k3s .github/image-pin/。独立 job：fail-loud 但**不阻塞**上面
+  # 既有 rollout 发布路径（Phase 2 期间两条路径并存，Phase 3 再移除 rollout 发布语义）。
+  # ⚠️ 暂态（如实标注）：image-lock PR 合并后 ArgoCD 按 digest sync 一次 + 上面 rollout 一次
+  # ＝同一 digest 可能多一次滚动更新，结果一致（幂等），非安全冲突。
+  #
+  # 前置（人工，见 k3s SETUP.md）：本仓需配 vars.IMAGE_PIN_APP_ID +
+  # secrets.IMAGE_PIN_APP_PRIVATE_KEY（image-pin App id 4253193 的私钥）。未配置则本 job skip。
+  image-pin-pr:
+    needs: deploy
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.deploy.outputs.stale != 'true' && vars.IMAGE_PIN_APP_ID != '' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: image-pin-pr-aster-api        # per-image：不与 aster-cloud 的 job 互相取消
+      cancel-in-progress: true
+    steps:
+      - name: Final stale gate (再确认 github.sha 仍是 origin/main tip)
+        run: |
+          set -euo pipefail
+          # 减少 k3s 端 freshness fail-closed 噪音：开 PR 前再查一次，已过时则不开（下次 push 重建）。
+          tip="$(git ls-remote https://github.com/${{ github.repository }}.git refs/heads/main | cut -f1)"
+          echo "this run: ${GITHUB_SHA}  origin/main tip: ${tip}"
+          if [ "${GITHUB_SHA}" != "${tip}" ]; then
+            echo "::notice::main 已前进，本 run 过时 → 跳过 image-pin PR（下次 push 重建固定分支）"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+        id: stalegate
+
+      - name: Mint k3s-scoped token (跨 org：App 装在 wontlost-ltd/k3s)
+        if: ${{ steps.stalegate.outputs.skip != 'true' }}
+        id: k3stoken
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.IMAGE_PIN_APP_ID }}
+          private-key: ${{ secrets.IMAGE_PIN_APP_PRIVATE_KEY }}
+          owner: wontlost-ltd
+          repositories: k3s
+          permission-contents: write
+          permission-pull-requests: write
+
+      # checkout 本仓以取用共享脚本（image-pin-pr 是独立 job，需自己 checkout）。
+      - name: Checkout (for shared script)
+        if: ${{ steps.stalegate.outputs.skip != 'true' }}
+        uses: actions/checkout@v7
+
+      - name: Open/update image-pin PR to k3s
+        if: ${{ steps.stalegate.outputs.skip != 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.k3stoken.outputs.token }}
+          DIGEST: ${{ needs.deploy.outputs.digest }}
+          SOURCE_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          bash scripts/ci/open-image-pin-pr.sh \
+            docker.io/wontlost/aster-api image-pin/aster-api

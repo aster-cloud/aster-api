@@ -21,6 +21,8 @@ class LlmEndpointPolicyTest {
     void setUp() {
         policy = new LlmEndpointPolicy();
         policy.ssrfGuard = new SsrfGuard(host -> List.of(ip("93.184.216.34")));
+        policy.allowlistService = new ByokAllowlistService();
+        policy.allowlistService.ssrfGuard = policy.ssrfGuard;
         policy.endpointAllowlist = Optional.of(List.of(
             "https://llm-gateway.example.com/v1",
             "llm-alt.example.com:8443"
@@ -61,6 +63,35 @@ class LlmEndpointPolicyTest {
             "https://llm-alt.example.com:8443/v1");
 
         assertThat(endpoint.port()).isEqualTo(8443);
+    }
+
+    @Test
+    @DisplayName("Redis 动态 allowlist host 命中")
+    void allowsDynamicEndpoint() {
+        policy.allowlistService.add("dynamic-gateway.example.com");
+
+        ValidatedEndpoint endpoint = policy.validateByokEndpoint("openai",
+            "https://dynamic-gateway.example.com/v1/chat");
+
+        assertThat(endpoint.canonicalHost()).isEqualTo("dynamic-gateway.example.com");
+    }
+
+    @Test
+    @DisplayName("GET 视图标注 builtin/env/dynamic 来源，只有 dynamic 可删")
+    void endpointViewsExposeSource() {
+        policy.allowlistService.add("dynamic-gateway.example.com");
+
+        assertThat(policy.endpointViews())
+            .extracting(LlmEndpointPolicy.EndpointView::source)
+            .contains("builtin", "env", "dynamic");
+        assertThat(policy.endpointViews())
+            .filteredOn(v -> "dynamic-gateway.example.com".equals(v.host()))
+            .singleElement()
+            .satisfies(v -> assertThat(v.removable()).isTrue());
+        assertThat(policy.endpointViews())
+            .filteredOn(v -> "llm-gateway.example.com".equals(v.host()))
+            .singleElement()
+            .satisfies(v -> assertThat(v.removable()).isFalse());
     }
 
     @Test

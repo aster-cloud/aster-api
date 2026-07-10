@@ -37,6 +37,9 @@ public class LlmEndpointPolicy {
     @Inject
     SsrfGuard ssrfGuard;
 
+    @Inject
+    ByokAllowlistService allowlistService;
+
     @ConfigProperty(name = "aster.llm.byok.endpoint-allowlist")
     Optional<List<String>> endpointAllowlist = Optional.empty();
 
@@ -71,7 +74,35 @@ public class LlmEndpointPolicy {
                 allowed.add(parseAllowedEndpoint(entry));
             }
         }
+        if (allowlistService != null) {
+            for (String host : allowlistService.allowedHosts()) {
+                if (host != null && !host.isBlank()) {
+                    allowed.add(parseAllowedEndpoint(host));
+                }
+            }
+        }
         return allowed;
+    }
+
+    /** 管理端 GET 视图：带来源标注，UI 只允许删除 dynamic 项。 */
+    public List<EndpointView> endpointViews() {
+        List<EndpointView> out = new ArrayList<>();
+        for (AllowedEndpoint endpoint : BUILTIN) {
+            out.add(endpoint.view("builtin", null, false));
+        }
+        for (String entry : endpointAllowlist.orElse(List.of())) {
+            if (entry != null && !entry.isBlank()) {
+                out.add(parseAllowedEndpoint(entry).view("env", null, false));
+            }
+        }
+        if (allowlistService != null) {
+            for (ByokAllowlistService.AllowlistEntry entry : allowlistService.allowedEntries()) {
+                // 展示路径不做 DNS 校验，避免 host 后续 DNS 变坏时 admin UI 也无法列出/删除。
+                // 推理路径仍经 allowedEndpoints() -> parseAllowedEndpoint() -> SsrfGuard 重校验。
+                out.add(new EndpointView(entry.host(), 443, "", "dynamic", entry.tenantScope(), true));
+            }
+        }
+        return List.copyOf(out);
     }
 
     private AllowedEndpoint parseAllowedEndpoint(String entry) {
@@ -111,5 +142,20 @@ public class LlmEndpointPolicy {
                 || endpoint.pathPrefix().equals(pathPrefix)
                 || endpoint.pathPrefix().startsWith(pathPrefix.endsWith("/") ? pathPrefix : pathPrefix + "/");
         }
+
+        EndpointView view(String source, String tenantScope, boolean removable) {
+            return new EndpointView(host, port, pathPrefix == null ? "" : pathPrefix,
+                source, tenantScope, removable);
+        }
+    }
+
+    public record EndpointView(
+        String host,
+        int port,
+        String pathPrefix,
+        String source,
+        String tenantScope,
+        boolean removable
+    ) {
     }
 }

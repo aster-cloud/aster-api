@@ -112,6 +112,15 @@ class TenantFilterMessagesBypassTest {
     }
 
     @Test
+    @DisplayName("admin/byok-allowlist 跳过 tenant（资源内 HMAC）→ 不要求 X-Tenant-Id")
+    void byokAllowlistAdminPathBypassesTenant() throws Exception {
+        TenantFilter filter = newFilter();
+        ContainerRequestContext ctx = newCtx("POST", "/api/v1/admin/byok-allowlist", Map.of());
+        filter.filter(ctx);
+        verify(ctx, never()).abortWith(any());
+    }
+
+    @Test
     @DisplayName("兄弟路径不被误豁免：裸 /api/v1/messages（无 locale 段）仍要求 X-Tenant-Id")
     void bareMessagesPathNotExempt() throws Exception {
         // matchesMessagesPath 只匹配 `/api/v1/messages/` 前缀（必带 locale 段），

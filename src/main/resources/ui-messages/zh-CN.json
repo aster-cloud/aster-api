@@ -1445,7 +1445,7 @@
       "revokeDialogCancel": "取消",
       "advancedTitle": "高级设置（可选）",
       "providerUrl": "Provider URL",
-      "providerUrlHint": "自定义 API base URL（如代理或 OpenAI 兼容端点）。留空用默认。注：待后端支持后生效。",
+      "providerUrlHint": "自定义 API 基础 URL（如 OpenAI 兼容网关）。留空则用默认 OpenAI/Anthropic 端点。自定义域名需管理员批准加入白名单；未批准的 URL 会报错、不生效。",
       "tokenQuota": "月度 token 额度",
       "tokenQuotaPlaceholder": "如 1000000",
       "tokenQuotaHint": "限制此 key 每月可消耗的 token 数。留空为无限。",
@@ -3011,5 +3011,20 @@
     "defaultLocaleNote": "默认语言——始终可用，无法禁用。",
     "toggleAriaLabel": "切换 {language} 的可用性",
     "saveFailed": "更新失败，请重试。"
+  },
+  "byokAllowlistSettings": {
+    "title": "BYOK 端点白名单",
+    "description": "BYOK 自定义 Provider URL 允许指向的 host（服务端 SSRF 边界）。变更即时生效、跨所有副本，无需重新部署。",
+    "add": "添加",
+    "addPlaceholder": "如 gateway.example.com",
+    "remove": "移除",
+    "loading": "加载中…",
+    "loadFailed": "无法加载白名单。",
+    "mutateFailed": "变更失败。该 host 可能非法或解析到私网地址。",
+    "source": {
+      "builtin": "内置",
+      "env": "配置",
+      "dynamic": "动态"
+    }
   }
 }

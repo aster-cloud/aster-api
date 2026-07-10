@@ -1445,7 +1445,7 @@
       "revokeDialogCancel": "Abbrechen",
       "advancedTitle": "Erweitert (optional)",
       "providerUrl": "Provider-URL",
-      "providerUrlHint": "Benutzerdefinierte API-Basis-URL (z. B. ein Proxy oder OpenAI-kompatibler Endpunkt). Leer lassen für Standard. Hinweis: wirksam, sobald Backend-Unterstützung verfügbar ist.",
+      "providerUrlHint": "Benutzerdefinierte API-Basis-URL (z. B. ein OpenAI-kompatibles Gateway). Leer lassen für den Standard-Endpunkt (OpenAI/Anthropic). Benutzerdefinierte Domains müssen von einem Administrator freigegeben werden; nicht freigegebene URLs schlagen mit einem Fehler fehl.",
       "tokenQuota": "Monatliches Token-Kontingent",
       "tokenQuotaPlaceholder": "z. B. 1000000",
       "tokenQuotaHint": "Begrenzt die Tokens, die dieser Schlüssel pro Monat verbrauchen darf. Leer lassen für unbegrenzt.",
@@ -3011,5 +3011,20 @@
     "defaultLocaleNote": "Standardsprache — immer verfügbar, kann nicht deaktiviert werden.",
     "toggleAriaLabel": "Verfügbarkeit von {language} umschalten",
     "saveFailed": "Aktualisierung fehlgeschlagen. Bitte erneut versuchen."
+  },
+  "byokAllowlistSettings": {
+    "title": "BYOK-Endpunkt-Allowlist",
+    "description": "Hosts, auf die benutzerdefinierte BYOK-Provider-URLs zeigen dürfen (serverseitige SSRF-Grenze). Änderungen werden sofort und über alle Replikate hinweg wirksam – ohne erneute Bereitstellung.",
+    "add": "Hinzufügen",
+    "addPlaceholder": "z. B. gateway.example.com",
+    "remove": "Entfernen",
+    "loading": "Wird geladen…",
+    "loadFailed": "Allowlist konnte nicht geladen werden.",
+    "mutateFailed": "Änderung fehlgeschlagen. Der Host ist möglicherweise ungültig oder verweist auf eine private Adresse.",
+    "source": {
+      "builtin": "Integriert",
+      "env": "Konfiguration",
+      "dynamic": "Dynamisch"
+    }
   }
 }

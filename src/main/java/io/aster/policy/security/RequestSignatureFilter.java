@@ -43,7 +43,8 @@ public class RequestSignatureFilter {
                 || isLexiconReadPath(path)
                 || isMessagesReadPath(path)
                 || isLexiconAdminPath(path)
-                || isMessagesAdminPath(path)) {
+                || isMessagesAdminPath(path)
+                || isByokAllowlistAdminPath(path)) {
             return Uni.createFrom().voidItem();
         }
 
@@ -124,5 +125,13 @@ public class RequestSignatureFilter {
      */
     private static boolean isMessagesAdminPath(String path) {
         return path.startsWith("/api/v1/admin/messages/") || path.startsWith("api/v1/admin/messages/");
+    }
+
+    /**
+     * /api/v1/admin/byok-allowlist：资源内部 HMAC 控制的 SSRF allowlist 管理端点。
+     * 精确匹配，避免误豁免兄弟路径。
+     */
+    private static boolean isByokAllowlistAdminPath(String path) {
+        return "/api/v1/admin/byok-allowlist".equals(path) || "api/v1/admin/byok-allowlist".equals(path);
     }
 }

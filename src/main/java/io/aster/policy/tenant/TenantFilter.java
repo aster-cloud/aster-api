@@ -120,6 +120,7 @@ public class TenantFilter implements ContainerRequestFilter {
                 || path.startsWith("/api/v1/admin/lexicons/") || path.startsWith("api/v1/admin/lexicons/")
                 || path.equals("/api/v1/admin/lexicons") || path.equals("api/v1/admin/lexicons")
                 || path.startsWith("/api/v1/admin/messages/") || path.startsWith("api/v1/admin/messages/")
+                || path.equals("/api/v1/admin/byok-allowlist") || path.equals("api/v1/admin/byok-allowlist")
                 || path.startsWith("/api/internal/") || path.startsWith("api/internal/")) {
             LOG.debugf("Bypassing tenant validation for path: %s", path);
             // 豁免路径使用默认租户

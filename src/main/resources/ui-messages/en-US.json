@@ -1445,7 +1445,7 @@
       "revokeDialogCancel": "Cancel",
       "advancedTitle": "Advanced (optional)",
       "providerUrl": "Provider URL",
-      "providerUrlHint": "Custom API base URL (e.g. a proxy or OpenAI-compatible endpoint). Leave blank for the default. Note: takes effect once backend support ships.",
+      "providerUrlHint": "Custom API base URL (e.g. an OpenAI-compatible gateway). Leave blank for the default OpenAI/Anthropic endpoint. Custom domains must be approved by an administrator; unapproved URLs fall back with an error.",
       "tokenQuota": "Monthly token quota",
       "tokenQuotaPlaceholder": "e.g. 1000000",
       "tokenQuotaHint": "Cap the tokens this key may spend per month. Leave blank for unlimited.",
@@ -3011,5 +3011,20 @@
     "defaultLocaleNote": "Default language — always available, cannot be disabled.",
     "toggleAriaLabel": "Toggle availability of {language}",
     "saveFailed": "Could not update. Please try again."
+  },
+  "byokAllowlistSettings": {
+    "title": "BYOK endpoint allowlist",
+    "description": "Hosts that BYOK custom Provider URLs may point to (server-side SSRF boundary). Changes take effect immediately across all replicas — no redeploy.",
+    "add": "Add",
+    "addPlaceholder": "e.g. gateway.example.com",
+    "remove": "Remove",
+    "loading": "Loading…",
+    "loadFailed": "Could not load the allowlist.",
+    "mutateFailed": "Change failed. The host may be invalid or resolve to a private address.",
+    "source": {
+      "builtin": "Built-in",
+      "env": "Config",
+      "dynamic": "Dynamic"
+    }
   }
 }

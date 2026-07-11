@@ -1971,6 +1971,20 @@
       "enable": "开启",
       "disable": "关闭",
       "saving": "保存中…"
+    },
+    "structuralAliasGrants": {
+      "title": "结构词别名授权",
+      "description": "允许定义结构词关键字别名的用户（高级功能，请谨慎授权）。",
+      "granted": "已授权",
+      "notGranted": "未授权",
+      "grant": "授权",
+      "revoke": "撤销",
+      "saving": "保存中…",
+      "searchPlaceholder": "按邮箱、姓名或用户 ID 搜索",
+      "noResults": "无匹配用户。",
+      "pageOf": "第 {page} / {totalPages} 页 · 共 {total} 用户",
+      "prev": "上一页",
+      "next": "下一页"
     }
   },
   "renewal": {

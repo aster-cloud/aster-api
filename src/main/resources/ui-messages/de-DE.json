@@ -1971,6 +1971,20 @@
       "enable": "Aktivieren",
       "disable": "Deaktivieren",
       "saving": "Wird gespeichert…"
+    },
+    "structuralAliasGrants": {
+      "title": "Berechtigungen für strukturelle Aliase",
+      "description": "Benutzer, die strukturelle Schlüsselwort-Aliase definieren dürfen (fortgeschritten; mit Bedacht verwenden).",
+      "granted": "Erteilt",
+      "notGranted": "Nicht erteilt",
+      "grant": "Erteilen",
+      "revoke": "Widerrufen",
+      "saving": "Wird gespeichert…",
+      "searchPlaceholder": "Nach E-Mail, Name oder Benutzer-ID suchen",
+      "noResults": "Keine passenden Benutzer.",
+      "pageOf": "Seite {page} von {totalPages} · {total} Benutzer",
+      "prev": "Zurück",
+      "next": "Weiter"
     }
   },
   "renewal": {

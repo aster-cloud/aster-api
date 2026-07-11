@@ -1971,6 +1971,20 @@
       "enable": "Enable",
       "disable": "Disable",
       "saving": "Saving…"
+    },
+    "structuralAliasGrants": {
+      "title": "Structural alias grants",
+      "description": "Users allowed to define structural keyword aliases (advanced; use with care).",
+      "granted": "Granted",
+      "notGranted": "Not granted",
+      "grant": "Grant",
+      "revoke": "Revoke",
+      "saving": "Saving…",
+      "searchPlaceholder": "Search by email, name, or user ID",
+      "noResults": "No matching users.",
+      "pageOf": "Page {page} of {totalPages} · {total} users",
+      "prev": "Previous",
+      "next": "Next"
     }
   },
   "renewal": {

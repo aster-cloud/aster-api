@@ -25,10 +25,22 @@ import java.util.regex.Pattern;
  */
 public class CnlErrorListener extends BaseErrorListener {
 
+    /**
+     * 结构化语法诊断：携带 1-based 行列 + 友好消息，供编译端点透传给前端
+     * （Monaco 精确标错）。这是行列的唯一结构化真源——此前只被格式化进字符串。
+     *
+     * @param line        1-based 行号（ANTLR line 本就 1-based）
+     * @param column      1-based 列号（ANTLR charPositionInLine 是 0-based，+1）
+     * @param message     友好化后的中文消息（不含内部 token 名）
+     */
+    public record Diagnostic(int line, int column, String message) {}
+
     /** 友好化后的错误（去内部术语）。 */
     private final List<String> friendlyErrors = new ArrayList<>();
     /** 原始 ANTLR 错误（供日志/调试，不展示给用户）。 */
     private final List<String> rawErrors = new ArrayList<>();
+    /** 结构化诊断（含 1-based 行列），供编译端点映射为前端 diagnostics。 */
+    private final List<Diagnostic> diagnostics = new ArrayList<>();
 
     @Override
     public void syntaxError(
@@ -39,8 +51,16 @@ public class CnlErrorListener extends BaseErrorListener {
         String msg,
         RecognitionException e
     ) {
+        String friendly = humanize(msg);
         rawErrors.add(String.format("行 %d:%d - %s", line, charPositionInLine, msg));
-        friendlyErrors.add(String.format("行 %d 第 %d 列：%s", line, charPositionInLine + 1, humanize(msg)));
+        friendlyErrors.add(String.format("行 %d 第 %d 列：%s", line, charPositionInLine + 1, friendly));
+        // 行列归一到 1-based（Monaco/前端契约）。charPositionInLine 是 0-based → +1。
+        diagnostics.add(new Diagnostic(line, charPositionInLine + 1, friendly));
+    }
+
+    /** 结构化诊断（含 1-based 行列 + 友好消息）。 */
+    public List<Diagnostic> getDiagnostics() {
+        return new ArrayList<>(diagnostics);
     }
 
     /**

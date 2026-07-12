@@ -107,6 +107,29 @@ class PolicyCompilerTest {
         assertThat(result.isSuccess()).isFalse();
     }
 
+    @Test
+    void compileSurfacesStructuredDiagnosticsWithLineColumnOnSyntaxError() {
+        // 语法错误源码：编译失败并带结构化诊断（含 1-based 行列），供前端精确标错。
+        String badSrc = "Module M.\n\nRule p given x as Int, produce Int:\n  Return x times .";
+        CompilationResult result = policyCompiler.compile(badSrc, "en-US", null);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getDiagnostics()).isNotEmpty();
+        CompilationResult.Diagnostic d = result.getDiagnostics().get(0);
+        // 行列 1-based（>=1），消息非空。
+        assertThat(d.line()).isGreaterThanOrEqualTo(1);
+        assertThat(d.column()).isGreaterThanOrEqualTo(1);
+        assertThat(d.message()).isNotBlank();
+    }
+
+    @Test
+    void compileSuccessHasNoDiagnostics() {
+        String src = "Module M.\n\nRule p given x as Int, produce Int:\n  Return x times 3.";
+        CompilationResult result = policyCompiler.compile(src, "en-US", null);
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getDiagnostics()).isEmpty();
+    }
+
     private PolicyArtifact createArtifact(long versionId, String json) {
         PolicyArtifact artifact = new PolicyArtifact();
         artifact.id = UUID.randomUUID();

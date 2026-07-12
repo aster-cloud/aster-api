@@ -10,6 +10,7 @@ import io.aster.policy.entity.PolicyVersion;
 import io.aster.policy.metrics.PolicyMetrics;
 import io.aster.policy.api.convert.NamedContextMapper;
 import io.aster.policy.api.schema.ParameterSchemaExtractor;
+import io.aster.policy.compiler.CompilationResult;
 import io.aster.policy.parser.DynamicCnlExecutor;
 import io.aster.policy.parser.InProcessCnlParser;
 import io.aster.policy.rest.model.*;
@@ -172,6 +173,9 @@ public class PolicyEvaluationResource {
 
     @Inject
     io.aster.policy.tenant.TenantContext tenantContext;
+
+    @Inject
+    io.aster.policy.compiler.PolicyCompiler policyCompiler;
 
     @ConfigProperty(name = "aster.entry.legacy-evaluate-sentinel", defaultValue = "true")
     boolean legacyEvaluateSentinel;
@@ -676,6 +680,178 @@ public class PolicyEvaluationResource {
                 ANON_PARSE_PERMITS.release();
             }
         }).runSubscriptionOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool());
+    }
+
+    /**
+     * 编译 CNL 源代码（只解析+降级，不执行、不落库）。
+     *
+     * <p>POST /api/v1/policies/compile
+     *
+     * <p>供保存前可编译性校验（cloud defense-in-depth：拒绝落库不可编译的源码）
+     * 与 IDE compile-on-type 使用。匿名只读（同 /schema）：豁免 API-key 边界，
+     * 防护靠 @Size 上限 + 匿名并发闸 + 限流。返回结构化 diagnostics（1-based 行列），
+     * 前端 Monaco 可精确标错。
+     */
+    @POST
+    @Path("/compile")
+    @AnonymousAllowed
+    public Uni<CompileResponse> compile(@Valid CompileRequest request) {
+        LOG.infof("Compiling CNL source (locale=%s, hasAliases=%b)",
+            request.getLocaleOrDefault(),
+            request.aliasSet() != null && !request.aliasSet().isEmpty());
+
+        return Uni.createFrom().item(() -> {
+            if (!tryAcquireAnonParse()) {
+                throw new jakarta.ws.rs.ServiceUnavailableException(
+                    jakarta.ws.rs.core.Response.status(503)
+                        .header("Retry-After", "1")
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity(java.util.Map.of(
+                            "error", "compile_busy",
+                            "message", "Compile service is busy; please retry."))
+                        .build());
+            }
+            try {
+                // aliasSet 大小治理：源码有 16KB 上限，但 aliasSet 是独立 body 字段，
+                // 不受该 @Size 约束——须单独限长，防攻击者把负载塞进 aliasSet 绕过
+                // 成本控制（反序列化+序列化+parse 都吃 CPU）。超限 → 400 快速拒。
+                String aliasSetError = validateAliasSetBounds(request.aliasSet());
+                if (aliasSetError != null) {
+                    throw new jakarta.ws.rs.BadRequestException(
+                        jakarta.ws.rs.core.Response.status(400)
+                            .type(MediaType.APPLICATION_JSON)
+                            .entity(java.util.Map.of("error", "alias_set_too_large",
+                                "message", aliasSetError))
+                            .build());
+                }
+                // 别名 Map → JSON 串。序列化失败 fail-closed（返编译失败），不静默降级
+                // 为无别名（否则依赖别名的源码会被误判解析错误）。
+                String aliasSetJson;
+                try {
+                    aliasSetJson = serializeAliasSet(request.aliasSet());
+                } catch (Exception se) {
+                    return CompileResponse.fail(
+                        java.util.List.of(CompileDiagnostic.error(1, 1, "别名集无法处理，无法编译")),
+                        "别名集序列化失败: " + se.getMessage());
+                }
+                CompilationResult result = policyCompiler.compile(
+                    request.source(), request.getLocaleOrDefault(), aliasSetJson);
+                return toCompileResponse(result);
+            } catch (jakarta.ws.rs.BadRequestException bre) {
+                throw bre; // 400 直接上抛，不吞成编译失败
+            } catch (Exception e) {
+                LOG.warnf("Compile failed: %s", e.getMessage());
+                return CompileResponse.fail(
+                    java.util.List.of(),
+                    "编译失败: " + e.getMessage());
+            } finally {
+                ANON_PARSE_PERMITS.release();
+            }
+        }).runSubscriptionOn(io.smallrye.mutiny.infrastructure.Infrastructure.getDefaultWorkerPool());
+    }
+
+    /** CompilationResult → CompileResponse（对齐 cloud PolicyCompileResponse 契约）。 */
+    private CompileResponse toCompileResponse(CompilationResult result) {
+        if (result.isSuccess()) {
+            return CompileResponse.ok(extractModuleInfo(result.getCoreJson()));
+        }
+        // 结构化诊断优先（含 1-based 行列）；无位置信息的失败回退到行列=1 的兜底诊断，
+        // 保证前端总能拿到至少一条 error 标记。
+        java.util.List<CompileDiagnostic> diags;
+        if (!result.getDiagnostics().isEmpty()) {
+            diags = result.getDiagnostics().stream()
+                .map(d -> CompileDiagnostic.error(d.line(), d.column(), d.message()))
+                .toList();
+        } else {
+            diags = result.getErrors().stream()
+                .map(msg -> CompileDiagnostic.error(1, 1, msg))
+                .toList();
+        }
+        String error = result.getErrors().isEmpty() ? "编译失败" : result.getErrors().get(0);
+        return CompileResponse.fail(diags, error);
+    }
+
+    /** 从 Core IR JSON 提取模块概要 {name, functions[], types[]}（best-effort，失败返回 null）。 */
+    private CompileResponse.ModuleInfo extractModuleInfo(String coreJson) {
+        if (coreJson == null || coreJson.isBlank()) {
+            return null;
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode root =
+                io.aster.common.JacksonMappers.PRETTY.readTree(coreJson);
+            String name = root.path("name").asText(null);
+            java.util.List<String> functions = new java.util.ArrayList<>();
+            root.path("functions").forEach(f -> {
+                String fn = f.path("name").asText(null);
+                if (fn != null) functions.add(fn);
+            });
+            java.util.List<String> types = new java.util.ArrayList<>();
+            root.path("types").forEach(t -> {
+                String tn = t.path("name").asText(null);
+                if (tn != null) types.add(tn);
+            });
+            if (name == null && functions.isEmpty() && types.isEmpty()) {
+                return null;
+            }
+            return new CompileResponse.ModuleInfo(name, functions, types);
+        } catch (Exception e) {
+            LOG.debugf("模块概要提取失败（不影响编译成功判定）: %s", e.getMessage());
+            return null;
+        }
+    }
+
+    /** 匿名 compile 端点的 aliasSet 大小上限（防绕过 16KB 源码限制的成本控制）。 */
+    private static final int MAX_ALIAS_KINDS = 64;
+    private static final int MAX_ALIASES_PER_KIND = 64;
+    private static final int MAX_ALIAS_PHRASE_LENGTH = 256;
+    private static final int MAX_ALIAS_KIND_LENGTH = 128;
+
+    /**
+     * 校验 aliasSet 大小边界。超限返回错误消息（调用方回 400），否则返回 null。
+     * 源码有 @Size 16KB，但 aliasSet 是独立字段不受约束——单独限 kind 数/每 kind
+     * 别名数/单别名长度/kind key 长度，防负载塞进 aliasSet 绕过成本控制。
+     */
+    private static String validateAliasSetBounds(Map<String, java.util.List<String>> aliasSet) {
+        if (aliasSet == null || aliasSet.isEmpty()) {
+            return null;
+        }
+        if (aliasSet.size() > MAX_ALIAS_KINDS) {
+            return "别名 kind 数超过上限（最多 " + MAX_ALIAS_KINDS + "）";
+        }
+        for (var e : aliasSet.entrySet()) {
+            if (e.getKey() != null && e.getKey().length() > MAX_ALIAS_KIND_LENGTH) {
+                return "别名 kind 名长度超过上限（最多 " + MAX_ALIAS_KIND_LENGTH + " 字符）";
+            }
+            java.util.List<String> phrases = e.getValue();
+            if (phrases == null) {
+                continue;
+            }
+            if (phrases.size() > MAX_ALIASES_PER_KIND) {
+                return "单个 kind 的别名数超过上限（最多 " + MAX_ALIASES_PER_KIND + "）";
+            }
+            for (String p : phrases) {
+                if (p != null && p.length() > MAX_ALIAS_PHRASE_LENGTH) {
+                    return "别名短语长度超过上限（最多 " + MAX_ALIAS_PHRASE_LENGTH + " 字符）";
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 请求 aliasSet Map → JSON 串（供 PolicyCompiler）。null/空 → null（无别名）。
+     * 序列化失败**上抛**（fail-closed）——不静默降级为无别名，否则依赖别名的源码
+     * 会被误判为解析错误。调用方 catch 后返回编译失败。
+     */
+    private String serializeAliasSet(Map<String, java.util.List<String>> aliasSet) {
+        if (aliasSet == null || aliasSet.isEmpty()) {
+            return null;
+        }
+        try {
+            return io.aster.common.JacksonMappers.PRETTY.writeValueAsString(aliasSet);
+        } catch (Exception e) {
+            throw new IllegalStateException("aliasSet 序列化失败: " + e.getMessage(), e);
+        }
     }
 
     /**

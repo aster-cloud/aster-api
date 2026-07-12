@@ -223,7 +223,12 @@ public class LlmProxyService {
             .onCompletion().invoke(() ->
                 usageReporter.reportUsage(tenantId, "suggest", model, usageAcc.get(), usedByok, requestId))
             .filter(event -> event.type() == LlmStreamEvent.Type.DELTA && event.delta() != null)
-            .map(event -> event.delta());
+            // 与 generate 对齐：发 JSON delta（{"type":"delta","data":"..."}）而非裸
+            // 文本。裸文本经 SSE TEXT_PLAIN 逐帧传输时，token 前导空格与内部换行
+            // 会被 data: 行首空格规则 / 多行拆分吞掉 → 前端拼出的代码丢空格
+            // （"Return resource" → "Returnresource"）。JSON 把内容包成字符串值，
+            // 前端 JSON.parse 后原样还原，空格/换行全保留。
+            .map(event -> toJson(GeneratePolicyEvent.delta(event.delta())));
     }
 
     /**

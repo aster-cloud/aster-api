@@ -100,7 +100,11 @@ public class PolicyCompiler {
         } catch (InProcessCnlParser.CnlParseException e) {
             String message = "CNL 解析失败: " + e.getMessage();
             LOG.warn(message);
-            return CompilationResult.failure(message);
+            // 透传结构化诊断（含 1-based 行列），供编译端点精确标错。
+            List<CompilationResult.Diagnostic> diags = e.getDiagnostics().stream()
+                .map(d -> new CompilationResult.Diagnostic(d.line(), d.column(), d.message()))
+                .toList();
+            return CompilationResult.failure(java.util.List.of(message), diags);
         } catch (Exception e) {
             String message = "CNL 编译失败: " + e.getMessage();
             LOG.error(message, e);

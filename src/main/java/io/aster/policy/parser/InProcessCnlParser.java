@@ -183,7 +183,9 @@ public class InProcessCnlParser {
             // 级联错误仅记日志供调试，避免把几十条内部消息糊到用户脸上。
             if (errorListener.hasErrors()) {
                 LOG.debugf("CNL 解析原始错误（全集）: %s", errorListener.getRawErrors());
-                throw new CnlParseException("CNL 语法错误 — " + errorListener.getErrors());
+                throw new CnlParseException(
+                    "CNL 语法错误 — " + errorListener.getErrors(),
+                    errorListener.getDiagnostics());
             }
 
             // 5. 构建 AST
@@ -338,12 +340,26 @@ public class InProcessCnlParser {
     public static class CnlParseException extends RuntimeException {
         private static final long serialVersionUID = 1L;
 
+        /** 结构化诊断（含 1-based 行列）。语法错误路径携带；其它路径为空。 */
+        private final transient List<CnlErrorListener.Diagnostic> diagnostics;
+
         public CnlParseException(String message) {
+            this(message, java.util.List.of());
+        }
+
+        public CnlParseException(String message, List<CnlErrorListener.Diagnostic> diagnostics) {
             super(message);
+            this.diagnostics = diagnostics == null ? java.util.List.of() : diagnostics;
         }
 
         public CnlParseException(String message, Throwable cause) {
             super(message, cause);
+            this.diagnostics = java.util.List.of();
+        }
+
+        /** 结构化诊断（含 1-based 行列 + 友好消息）；可能为空。 */
+        public List<CnlErrorListener.Diagnostic> getDiagnostics() {
+            return diagnostics;
         }
     }
 }

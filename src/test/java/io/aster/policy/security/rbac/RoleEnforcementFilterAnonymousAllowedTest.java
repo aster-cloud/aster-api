@@ -134,9 +134,12 @@ class RoleEnforcementFilterAnonymousAllowedTest {
      * 突变端点（evaluate、rollback、cache 等），这里会失败，强制重新评审。
      */
     @Test
-    @DisplayName("允许列表：PolicyEvaluationResource 仅 getSchema/validate 可标 @AnonymousAllowed")
+    @DisplayName("允许列表：PolicyEvaluationResource 仅 getSchema/validate/compile 可标 @AnonymousAllowed")
     void onlyMetadataEndpointsAreAnonymousAllowed() {
-        java.util.Set<String> expected = java.util.Set.of("getSchema", "validate");
+        // compile：只读源码编译（只解析+降级，不执行、不落库、无副作用），与
+        // schema/validate 同性质。防护靠 @Size 16KB 匿名上限 + ANON_PARSE_PERMITS
+        // 并发闸 + 限流。经安全评审加入白名单（供保存前校验 + IDE compile-on-type）。
+        java.util.Set<String> expected = java.util.Set.of("getSchema", "validate", "compile");
         java.util.Set<String> actual = new java.util.TreeSet<>();
         for (Method m : io.aster.policy.rest.PolicyEvaluationResource.class.getDeclaredMethods()) {
             if (m.isAnnotationPresent(AnonymousAllowed.class)) {

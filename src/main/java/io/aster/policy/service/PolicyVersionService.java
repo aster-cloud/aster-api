@@ -163,6 +163,13 @@ public class PolicyVersionService {
         version.sourceToolchainId = toolchain;
         version.sourceEnvelopeSha256 = PolicyVersion.computeSourceEnvelope(
             sourceCnl, version.aliasSet, locale, toolchain);
+
+        // P0-C 稳定性门禁（ADR 0031 M3）：保存 surface——regulated tenant strict（命中白名单才可存
+        // Experimental），普通 tenant warn（不阻断）。tenantId 来自 catalog 归属（非 body 自报）。
+        stabilityEnforcement.enforceVersion(null, policyId, catalog.tenantId,
+            null, sourceCnl, locale, normalizedAliasJson,
+            io.aster.policy.stability.StabilityEnforcement.Surface.SAVE, version.createdBy);
+
         version.persist();
 
         // 双写：同时写入静态文件作为兜底
@@ -520,7 +527,11 @@ public class PolicyVersionService {
      * @param createdBy    创建者
      * @param notes        备注
      * @return 新创建的版本
+     * @deprecated ★仅 test 用（tenantless、直接 active、**不走 P0-C SAVE 门禁**，Codex M3 审查
+     *     标记的潜在旁路）。生产创建须走 catalogId 版本 {@link #createVersion(UUID, String, String,
+     *     String, String, String)}（有 tenant 归属 + SAVE stability enforcement）。禁止生产调用。
      */
+    @Deprecated
     @Transactional
     public PolicyVersion createVersion(
         String policyId,

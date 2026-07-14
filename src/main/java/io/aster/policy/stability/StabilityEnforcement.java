@@ -44,6 +44,9 @@ public class StabilityEnforcement {
     private static final ObjectMapper LENIENT_MAPPER = new ObjectMapper()
         .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
+    @jakarta.inject.Inject
+    jakarta.enterprise.event.Event<io.aster.policy.event.AuditEvent> auditEventPublisher;
+
     /**
      * 受监管租户列表（保存路径 strict）。M2 用配置；后续接真实 tenant profile/plan。
      * ★用 Optional：SmallRye 把 {@code defaultValue=""} 当「无默认」→SRCFG00014 required 缺失
@@ -60,6 +63,68 @@ public class StabilityEnforcement {
             return regulatedTenantsCsv;
         }
         return regulatedTenantsConfig == null ? "" : regulatedTenantsConfig.orElse("");
+    }
+
+    /**
+     * Experimental 放行白名单（ADR 0031 §3.4，M3）——**平台控制面**，非 tenant 可改。
+     * 语法（CSV）：{@code tenantId:policyId:featureId=approvalRef} / {@code tenantId:*:featureId=ref}
+     * / {@code tenantId:featureId=ref}（简写等价 tenantId:*:featureId）。无全局 `*`、无 feature 通配、
+     * 无 {@code tenantId:*}（不整体放行 tenant）。approvalRef 记审计「为何放行」。
+     * ★安全铁律（Codex 设计）：只授权「某 tenant 在某 policy 用某已批准 featureId」，request body
+     * 不得影响匹配；actor 仅审计不参与授权；查失败 fail-closed（当无授权=拒）。
+     */
+    @ConfigProperty(name = "aster.stability.experimental-allow")
+    java.util.Optional<String> experimentalAllowConfig;
+
+    /** 测试直接注入用。 */
+    String experimentalAllowCsv;
+
+    private String experimentalAllow() {
+        if (experimentalAllowCsv != null) {
+            return experimentalAllowCsv;
+        }
+        return experimentalAllowConfig == null ? "" : experimentalAllowConfig.orElse("");
+    }
+
+    /**
+     * 查白名单是否放行「tenant 在 policy 用 featureId」。返回匹配的 approvalRef（放行）或 null（不放行）。
+     * fail-closed：任何解析异常 → 不放行（return null）。
+     */
+    String matchExperimentalAllow(String tenantId, String policyId, String featureId) {
+        String csv = experimentalAllow();
+        if (csv == null || csv.isBlank() || tenantId == null || featureId == null) {
+            return null;
+        }
+        String tp = tenantId + ":" + (policyId == null ? "" : policyId) + ":" + featureId;
+        String tw = tenantId + ":*:" + featureId;
+        String tf = tenantId + ":" + featureId;
+        String wildcardRef = null;
+        for (String raw : csv.split("\\s*,\\s*")) {
+            if (raw.isBlank()) {
+                continue;
+            }
+            int eq = raw.indexOf('=');
+            // ★approvalRef 必填（Codex 审查）：无 '=' 或空 ref = 配置损坏 → 跳过（不放行），
+            //   否则 `tenant:p:feature`（漏 ref）会被当作放行，绕过「为何放行」审计要求。
+            if (eq <= 0) {
+                LOG.warnf("stability 白名单条目缺 approvalRef，忽略（fail-closed）: %s", raw);
+                continue;
+            }
+            String rule = raw.substring(0, eq);
+            String ref = raw.substring(eq + 1).trim();
+            if (ref.isEmpty()) {
+                LOG.warnf("stability 白名单条目 approvalRef 为空，忽略（fail-closed）: %s", raw);
+                continue;
+            }
+            // 精确 tenantId:policyId:featureId 优先命中直接返回。
+            if (rule.equals(tp)) {
+                return ref;
+            }
+            if (rule.equals(tw) || rule.equals(tf)) {
+                wildcardRef = ref;
+            }
+        }
+        return wildcardRef;
     }
 
     /** enforcement surface —— 决定 strict 默认。 */
@@ -234,19 +299,87 @@ public class StabilityEnforcement {
             throw new WebApplicationException(
                 "stability_unscannable: " + e.getMessage(), 422);
         }
-        if (result.blocked()) {
-            List<String> featureIds = result.diagnostics().stream()
-                .map(CompilationResult.Diagnostic::featureId)
-                .filter(f -> f != null)
-                .distinct()
-                .toList();
-            LOG.warnf("stability gate 拒绝 %s：versionId=%d policyId=%s tenant=%s actor=%s features=%s",
-                surface, versionId, policyId, tenantId, actor, featureIds);
-            // ★featureIds 放进 message——GlobalExceptionMapper 丢弃 entity 只保留 getMessage()（Codex L4）。
+        if (!result.blocked()) {
+            return;
+        }
+        // ★scan-then-filter（ADR 0031 §3.4）：每个 W600 featureId 独立查白名单——命中放行（审计
+        //   STABILITY_EXCEPTION_USED），未授权仍拒。整版含多 Experimental 时，只放行命中的、
+        //   其余仍 422（不整体放行）。
+        List<String> allFeatures = result.diagnostics().stream()
+            .map(CompilationResult.Diagnostic::featureId)
+            .filter(f -> f != null)
+            .distinct()
+            .toList();
+        // 防御性不变式（Codex 审查）：blocked 但无可辨识 featureId → 拒（不走白名单放行分支，
+        // 否则 allFeatures 空时 deniedFeatures 也空会误放行一个「被 block 却无 feature」的异常态）。
+        if (allFeatures.isEmpty()) {
             throw new WebApplicationException(
-                "stability_experimental_blocked: Experimental features "
-                    + featureIds + " are not allowed for " + surface.name().toLowerCase(),
-                422);
+                "stability_experimental_blocked: blocked with no identifiable feature（异常态，拒绝）", 422);
+        }
+        List<String> allowedFeatures = new ArrayList<>();
+        List<String> allowRules = new ArrayList<>();
+        List<String> deniedFeatures = new ArrayList<>();
+        for (String featureId : allFeatures) {
+            String approvalRef = matchExperimentalAllow(tenantId, policyId, featureId);
+            if (approvalRef != null) {
+                allowedFeatures.add(featureId);
+                allowRules.add(featureId + "=" + approvalRef);
+            } else {
+                deniedFeatures.add(featureId);
+            }
+        }
+
+        if (deniedFeatures.isEmpty()) {
+            // 全部经白名单放行 → 审计放行，不抛。
+            audit(EventTypeUsed(), tenantId, policyId, versionId, actor, true, null,
+                java.util.Map.of("surface", surface.name(), "allowedFeatureIds", allowedFeatures,
+                    "allowRules", allowRules, "strict", strict));
+            LOG.infof("stability gate 白名单放行 %s：versionId=%d policyId=%s tenant=%s features=%s rules=%s",
+                surface, versionId, policyId, tenantId, allowedFeatures, allowRules);
+            return;
+        }
+
+        // 有未授权 Experimental → 拒 422（审计留痕，含 denied/authorized 区分）。
+        audit(EventTypeDenied(), tenantId, policyId, versionId, actor, false,
+            "stability_experimental_blocked",
+            java.util.Map.of("surface", surface.name(), "deniedFeatureIds", deniedFeatures,
+                "authorizedFeatureIds", allowedFeatures, "strict", strict));
+        LOG.warnf("stability gate 拒绝 %s：versionId=%d policyId=%s tenant=%s actor=%s denied=%s authorized=%s",
+            surface, versionId, policyId, tenantId, actor, deniedFeatures, allowedFeatures);
+        throw new WebApplicationException(
+            "stability_experimental_blocked: Experimental features " + deniedFeatures
+                + " are not allowed for " + surface.name().toLowerCase()
+                + "（如需使用请申请 aster.stability.experimental-allow 白名单授权）",
+            422);
+    }
+
+    private static io.aster.policy.event.EventType EventTypeUsed() {
+        return io.aster.policy.event.EventType.STABILITY_EXCEPTION_USED;
+    }
+
+    private static io.aster.policy.event.EventType EventTypeDenied() {
+        return io.aster.policy.event.EventType.STABILITY_EXCEPTION_DENIED;
+    }
+
+    /** 发稳定性审计事件（放行/拒绝留痕）。审计失败不阻断主流程（记 error log）。 */
+    private void audit(io.aster.policy.event.EventType type, String tenantId, String policyId,
+                       Long versionId, String actor, boolean success, String errorMessage,
+                       java.util.Map<String, Object> metadata) {
+        try {
+            String module = null;
+            String function = null;
+            if (policyId != null && policyId.contains(".")) {
+                int dot = policyId.lastIndexOf('.');
+                module = policyId.substring(0, dot);
+                function = policyId.substring(dot + 1);
+            }
+            io.aster.policy.event.AuditEvent event = new io.aster.policy.event.AuditEvent(
+                type, java.time.Instant.now(), tenantId, module, function, policyId,
+                null, versionId, actor, success, null, errorMessage, metadata,
+                null, null, null, null);
+            auditEventPublisher.fireAsync(event);
+        } catch (Exception e) {
+            LOG.errorf("stability 审计事件发布失败（不阻断）: type=%s policyId=%s err=%s", type, policyId, e.getMessage());
         }
     }
 }

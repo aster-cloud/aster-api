@@ -161,6 +161,71 @@ class StabilityEnforcementTest {
             StabilityEnforcement.Surface.ACTIVATE, "actor");
     }
 
+    private StabilityEnforcement newEnforcementWithAllow(String allowCsv) {
+        StabilityEnforcement e = new StabilityEnforcement();
+        e.regulatedTenantsCsv = "";
+        e.experimentalAllowCsv = allowCsv;
+        return e;
+    }
+
+    @Test
+    @DisplayName("★白名单放行：tenant:policy:featureId 命中 → activate 通过（受控放行）")
+    void whitelistAllowsMatchedFeature() throws Exception {
+        // deprecated-annotation 经白名单授权 → 放行。
+        StabilityEnforcement e = newEnforcementWithAllow("tenant1:test.exp.oldRule:deprecated-annotation=CCO-2026-001");
+        String coreJson = MAPPER.writeValueAsString(compileToCore(EXPERIMENTAL_SRC));
+        // 不抛异常即放行。
+        e.enforceVersion(1L, "test.exp.oldRule", "tenant1", coreJson, null, "en-US", null,
+            StabilityEnforcement.Surface.ACTIVATE, "actor");
+    }
+
+    @Test
+    @DisplayName("★白名单不匹配：别的 tenant/feature → 仍拒 422")
+    void whitelistDoesNotLeakAcrossTenant() throws Exception {
+        // 白名单给 tenant2，但版本是 tenant1 → 不放行。
+        StabilityEnforcement e = newEnforcementWithAllow("tenant2:*:deprecated-annotation=ref");
+        String coreJson = MAPPER.writeValueAsString(compileToCore(EXPERIMENTAL_SRC));
+        WebApplicationException ex = assertThrows(WebApplicationException.class, () ->
+            e.enforceVersion(1L, "test.exp.oldRule", "tenant1", coreJson, null, "en-US", null,
+                StabilityEnforcement.Surface.ACTIVATE, "actor"));
+        assertEquals(422, ex.getResponse().getStatus());
+    }
+
+    @Test
+    @DisplayName("★白名单 tenantId:*:featureId 通配 policy → 放行")
+    void whitelistWildcardPolicy() throws Exception {
+        StabilityEnforcement e = newEnforcementWithAllow("tenant1:*:deprecated-annotation=ref");
+        String coreJson = MAPPER.writeValueAsString(compileToCore(EXPERIMENTAL_SRC));
+        e.enforceVersion(1L, "test.exp.oldRule", "tenant1", coreJson, null, "en-US", null,
+            StabilityEnforcement.Surface.ACTIVATE, "actor");
+    }
+
+    @Test
+    @DisplayName("★matchExperimentalAllow：无白名单/空 → fail-closed（不放行 return null）")
+    void matchFailClosedWhenNoWhitelist() {
+        StabilityEnforcement e = newEnforcementWithAllow("");
+        assertEquals(null, e.matchExperimentalAllow("tenant1", "p", "workflow"));
+        StabilityEnforcement e2 = newEnforcementWithAllow("tenant1:p:workflow=ref");
+        assertEquals("ref", e2.matchExperimentalAllow("tenant1", "p", "workflow"));
+        assertEquals(null, e2.matchExperimentalAllow("tenant1", "p", "pii"), "别的 feature 不放行");
+    }
+
+    @Test
+    @DisplayName("★损坏白名单 fail-closed：缺 approvalRef / 空 ref → 不放行（Codex M3 审查）")
+    void matchFailClosedOnCorruptRule() {
+        // 无 '='（缺 approvalRef）→ 不放行。
+        assertEquals(null, newEnforcementWithAllow("tenant1:p:workflow")
+            .matchExperimentalAllow("tenant1", "p", "workflow"), "缺 approvalRef 不放行");
+        // '=' 但空 ref → 不放行。
+        assertEquals(null, newEnforcementWithAllow("tenant1:p:workflow=")
+            .matchExperimentalAllow("tenant1", "p", "workflow"), "空 approvalRef 不放行");
+        assertEquals(null, newEnforcementWithAllow("tenant1:p:workflow=   ")
+            .matchExperimentalAllow("tenant1", "p", "workflow"), "空白 approvalRef 不放行");
+        // 有效 ref 仍放行（对照）。
+        assertEquals("REF", newEnforcementWithAllow("tenant1:p:workflow=REF")
+            .matchExperimentalAllow("tenant1", "p", "workflow"));
+    }
+
     @Test
     @DisplayName("strictFor：approve/activate 恒 strict；save 仅 regulated tenant；playground warn")
     void strictForSurfaceDefaults() {

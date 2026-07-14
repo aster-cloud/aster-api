@@ -38,10 +38,13 @@ public class PolicyCompiler {
     private static final ObjectMapper MAPPER = JacksonMappers.PRETTY;
 
     private final PolicySourceRepository policySourceRepository;
+    private final io.aster.policy.stability.StabilityEnforcement stabilityEnforcement;
 
     @Inject
-    public PolicyCompiler(PolicySourceRepository policySourceRepository) {
+    public PolicyCompiler(PolicySourceRepository policySourceRepository,
+                          io.aster.policy.stability.StabilityEnforcement stabilityEnforcement) {
         this.policySourceRepository = policySourceRepository;
+        this.stabilityEnforcement = stabilityEnforcement;
     }
 
     /**
@@ -88,6 +91,11 @@ public class PolicyCompiler {
             String coreJson = MAPPER.writeValueAsString(coreModule);
             LOG.debugf("Core JSON 长度: %d 字符", coreJson.length());
 
+            // 3b. P0-C 稳定性扫描（ADR 0031）：裸 compile 是 playground/dev surface = warn 默认，
+            //     W600 warning 随成功返回（前端展示黄标），不阻断探索。strict enforcement 在
+            //     approve/activate（StabilityEnforcement.enforceVersion），保存路径按 regulated。
+            var stability = stabilityEnforcement.scan(coreModule, false);
+
             // 4. 提取元数据
             CompilationMetadata metadata = new CompilationMetadata(
                 null,
@@ -95,14 +103,14 @@ public class PolicyCompiler {
                 null
             );
 
-            return CompilationResult.success(coreJson, metadata);
+            return CompilationResult.success(coreJson, metadata, stability.diagnostics());
 
         } catch (InProcessCnlParser.CnlParseException e) {
             String message = "CNL 解析失败: " + e.getMessage();
             LOG.warn(message);
             // 透传结构化诊断（含 1-based 行列），供编译端点精确标错。
             List<CompilationResult.Diagnostic> diags = e.getDiagnostics().stream()
-                .map(d -> new CompilationResult.Diagnostic(d.line(), d.column(), d.message()))
+                .map(d -> CompilationResult.Diagnostic.error(d.line(), d.column(), d.message()))
                 .toList();
             return CompilationResult.failure(java.util.List.of(message), diags);
         } catch (Exception e) {
@@ -177,7 +185,8 @@ public class PolicyCompiler {
      * **绝不**回落空别名。否则 alias_set 腐化或被篡改后，runtime 会静默用无别名重编译，
      * 正好回到 C2 的原始风险（带别名策略被无别名重解释）。null/空才视为"本就无别名"。
      */
-    private static Map<SemanticTokenKind, List<String>> parseAliasSetJson(String json) {
+    // package-visible：StabilityEnforcement 的 compile-on-demand 复用同一 alias 解析口径（ADR 0031）。
+    public static Map<SemanticTokenKind, List<String>> parseAliasSetJson(String json) {
         if (json == null || json.isBlank()) {
             return Map.of();
         }

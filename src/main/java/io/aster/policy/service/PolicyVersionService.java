@@ -45,6 +45,9 @@ public class PolicyVersionService {
     @Inject
     PlanGateService planGate;
 
+    @Inject
+    io.aster.policy.stability.StabilityEnforcement stabilityEnforcement;
+
     @ConfigProperty(name = "aster.policy.dual-write.enabled", defaultValue = "false")
     boolean dualWriteEnabled;
 
@@ -332,6 +335,12 @@ public class PolicyVersionService {
             );
         }
 
+        // P0-C 稳定性门禁（ADR 0031）：批准=托付生产，Experimental 特性不该无声进批准链。
+        // strict 扫版本 Core IR（coreJson 空则从 content 现编译，fail-closed），检出 W600 → 422。
+        stabilityEnforcement.enforceVersion(versionId, version.policyId, version.tenantId,
+            version.coreJson, version.content, version.locale, version.aliasSet,
+            io.aster.policy.stability.StabilityEnforcement.Surface.APPROVE, approvedBy);
+
         version.status = VersionStatus.APPROVED;
         version.approvedBy = approvedBy;
         version.approvedAt = Instant.now();
@@ -405,6 +414,13 @@ public class PolicyVersionService {
                 String.format("仅已审批通过的版本可激活: versionId=%d, status=%s", versionId, version.status)
             );
         }
+
+        // P0-C 稳定性门禁（ADR 0031）：激活=生产上线，strict 拒 Experimental。回滚也经此路径
+        // （activateVersionInternal），故回滚同受门禁——防已批准的 Experimental 版本经回滚旁路上线。
+        // coreJson 空则从 content 现编译（fail-closed），不漏报。
+        stabilityEnforcement.enforceVersion(versionId, version.policyId, version.tenantId,
+            version.coreJson, version.content, version.locale, version.aliasSet,
+            io.aster.policy.stability.StabilityEnforcement.Surface.ACTIVATE, activatedBy);
 
         // 安全审计 C1：按 (policyId, tenantId) 停用，堵跨租户 DoS——policyId 非租户唯一，
         // tenantless 停用会波及其它租户同 policyId 的 active 版本。

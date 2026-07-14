@@ -753,14 +753,18 @@ public class PolicyEvaluationResource {
     /** CompilationResult → CompileResponse（对齐 cloud PolicyCompileResponse 契约）。 */
     private CompileResponse toCompileResponse(CompilationResult result) {
         if (result.isSuccess()) {
-            return CompileResponse.ok(extractModuleInfo(result.getCoreJson()));
+            // 成功也带诊断——warn-mode 的 W600 稳定性 warning 随成功返回（前端黄标，ADR 0031）。
+            java.util.List<CompileDiagnostic> warnings = result.getDiagnostics().stream()
+                .map(CompileDiagnostic::from)
+                .toList();
+            return CompileResponse.ok(extractModuleInfo(result.getCoreJson()), warnings);
         }
-        // 结构化诊断优先（含 1-based 行列）；无位置信息的失败回退到行列=1 的兜底诊断，
-        // 保证前端总能拿到至少一条 error 标记。
+        // 结构化诊断优先（含 1-based 行列 + W600 code/severity）；无位置信息的失败回退到
+        // 行列=1 的兜底诊断，保证前端总能拿到至少一条标记。
         java.util.List<CompileDiagnostic> diags;
         if (!result.getDiagnostics().isEmpty()) {
             diags = result.getDiagnostics().stream()
-                .map(d -> CompileDiagnostic.error(d.line(), d.column(), d.message()))
+                .map(CompileDiagnostic::from)
                 .toList();
         } else {
             diags = result.getErrors().stream()

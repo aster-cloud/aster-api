@@ -31,7 +31,7 @@ class PolicyCompilerTest {
 
     @BeforeEach
     void setUp() {
-        policyCompiler = new PolicyCompiler(policySourceRepository);
+        policyCompiler = new PolicyCompiler(policySourceRepository, new io.aster.policy.stability.StabilityEnforcement());
     }
 
     @Test

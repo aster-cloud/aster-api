@@ -44,9 +44,23 @@ public class StabilityEnforcement {
     private static final ObjectMapper LENIENT_MAPPER = new ObjectMapper()
         .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
-    /** 受监管租户列表（保存路径 strict）。M2 用配置；后续接真实 tenant profile/plan。 */
-    @ConfigProperty(name = "aster.stability.regulated-tenants", defaultValue = "")
+    /**
+     * 受监管租户列表（保存路径 strict）。M2 用配置；后续接真实 tenant profile/plan。
+     * ★用 Optional：SmallRye 把 {@code defaultValue=""} 当「无默认」→SRCFG00014 required 缺失
+     * 致 app 启动失败（空字符串非有效 String 默认）；Optional 无值时 empty，不 required。
+     */
+    @ConfigProperty(name = "aster.stability.regulated-tenants")
+    java.util.Optional<String> regulatedTenantsConfig;
+
+    /** 测试直接注入用（绕过 Optional 包装）；生产从 regulatedTenantsConfig 读。 */
     String regulatedTenantsCsv;
+
+    private String regulatedTenants() {
+        if (regulatedTenantsCsv != null) {
+            return regulatedTenantsCsv;
+        }
+        return regulatedTenantsConfig == null ? "" : regulatedTenantsConfig.orElse("");
+    }
 
     /** enforcement surface —— 决定 strict 默认。 */
     public enum Surface {
@@ -69,10 +83,11 @@ public class StabilityEnforcement {
     }
 
     private boolean isRegulatedTenant(String tenantId) {
-        if (tenantId == null || regulatedTenantsCsv == null || regulatedTenantsCsv.isBlank()) {
+        String csv = regulatedTenants();
+        if (tenantId == null || csv == null || csv.isBlank()) {
             return false;
         }
-        Set<String> regulated = Set.of(regulatedTenantsCsv.split("\\s*,\\s*"));
+        Set<String> regulated = Set.of(csv.split("\\s*,\\s*"));
         return regulated.contains(tenantId);
     }
 
@@ -89,6 +104,8 @@ public class StabilityEnforcement {
      * strict 把「无法判断」当「稳定」= 漏报 Experimental 进生产）。
      */
     public static final class UnscannableException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
         public UnscannableException(String message) {
             super(message);
         }
@@ -178,10 +195,12 @@ public class StabilityEnforcement {
         try {
             module = compileToCore(content, locale, aliasSetJson);
         } catch (Exception e) {
-            if (strict) {
-                throw new UnscannableException("版本源码无法编译到 Core IR（strict fail-closed）: " + e.getMessage());
-            }
-            LOG.warnf("stability 扫描无法编译 content（warn-mode 跳过）: %s", e.getMessage());
+            // ★content 编译失败 ≠ Experimental：这是编译错误（非 CNL/语法错），是编译校验的
+            //   职责，非 stability gate 的。且 Experimental 特性（Workflow/PII/@deprecated）都是
+            //   合法 CNL 能 lower——只有非 CNL/语法错才编译失败，那种版本本就无法通过编译校验
+            //   激活。故 stability 对「编译失败」放行（不 fail-closed），交编译校验报错。
+            //   （区别于 coreJson 腐化=产物异常仍 fail-closed。）
+            LOG.warnf("stability 扫描无法编译 content（非 stability 职责，放行交编译校验）: %s", e.getMessage());
             return new Result(List.of(), false);
         }
         return scan(module, strict);

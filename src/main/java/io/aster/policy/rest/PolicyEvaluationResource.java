@@ -177,6 +177,9 @@ public class PolicyEvaluationResource {
     @Inject
     io.aster.policy.compiler.PolicyCompiler policyCompiler;
 
+    @Inject
+    io.aster.policy.stability.ToolchainIdentityProvider toolchainIdentityProvider;
+
     @ConfigProperty(name = "aster.entry.legacy-evaluate-sentinel", defaultValue = "true")
     boolean legacyEvaluateSentinel;
 
@@ -418,7 +421,12 @@ public class PolicyEvaluationResource {
     @Path("/evaluate-source")
     public Uni<EvaluationResponse> evaluateSource(
         @Valid SourcePolicyRequest request,
-        @QueryParam("trace") @DefaultValue("false") boolean trace
+        @QueryParam("trace") @DefaultValue("false") boolean trace,
+        // P0-A 回放地基（ADR 0030 附录 A）：replayCapture=true 时在响应体附
+        // replayMetadata（runtimeToolchainId + canonical input/output hash +
+        // traceHash + canonicalizationVersion）。cloud BFF 拿到后写 Execution
+        // 新列（本 API 不直写 cloud DB）。hash 由本侧（Java 权威）计算。
+        @QueryParam("replayCapture") @DefaultValue("false") boolean replayCapture
     ) {
         enforceApiQuota("/api/v1/policies/evaluate-source");
         // Bounded concurrency gate. Acquire before doing any work; if
@@ -499,6 +507,13 @@ public class PolicyEvaluationResource {
                 boolean aliasesTrusted =
                     io.aster.security.apikey.InternalCallerFilter.isHmacVerified(jaxrsCtx);
 
+                // 回放捕获门控（Codex 复审 安全/成本）：replayCapture 只对 HMAC 已验证的内部
+                // 调用方（cloud BFF）生效——回放地基只用于 cloud 持久化 Execution，唯一持久化方
+                // 是 BFF；trial/匿名流量无 Execution 落库，无理由请求 replayCapture。放行匿名会
+                // 让每次评估白算 3 次 canonical 序列化+SHA（大 payload 放大 CPU/内存）。未验证
+                // 调用方即使传 replayCapture=true 也静默忽略（非报错——保持 trial 端点宽容）。
+                boolean effectiveReplayCapture = replayCapture && aliasesTrusted;
+
                 // 使用动态执行器执行 CNL，支持命名上下文格式
                 // executeWithContext 会自动检测并映射命名参数到位置参数
                 DynamicCnlExecutor.ExecutionResult execResult = dynamicCnlExecutor.executeWithTenantContext(
@@ -548,23 +563,58 @@ public class PolicyEvaluationResource {
                 LOG.infof("CNL source evaluation completed in %dms: %s.%s",
                     execResult.executionTimeMs(), execResult.moduleName(), execResult.functionName());
 
-                if (trace) {
-                    var decisionTrace = new io.aster.policy.api.model.DecisionTrace(
+                // 回放 trace：trace=true 或 replayCapture=true 时都构建 DecisionTrace。
+                // 前者供前端展示，后者供 traceHash 计算（回放地基）。当前 steps 为空
+                // （细粒度步骤未接线），但决策级身份（module/function/finalResult）足以
+                // 作为漂移检测锚点——ADR 0030 M1 的最小可行回放单元是决策级而非步骤级。
+                io.aster.policy.api.model.DecisionTrace decisionTrace = null;
+                if (trace || effectiveReplayCapture) {
+                    decisionTrace = new io.aster.policy.api.model.DecisionTrace(
                         execResult.moduleName(),
                         execResult.functionName(),
                         List.of(),
                         execResult.result(),
                         execResult.executionTimeMs()
                     );
-                    recordApiCall("/api/v1/policies/evaluate-source", "success",
-                        System.currentTimeMillis() - apiCallStart, tenantId, performedBy, apiKeyIdSnap);
-                    return EvaluationResponse.success(
-                        execResult.result(), execResult.executionTimeMs(), decisionTrace, execResult.functionName());
                 }
+
                 recordApiCall("/api/v1/policies/evaluate-source", "success",
                     System.currentTimeMillis() - apiCallStart, tenantId, performedBy, apiKeyIdSnap);
-                return EvaluationResponse.success(
-                    execResult.result(), execResult.executionTimeMs(), execResult.functionName());
+
+                // trace 字段只在客户端显式请求 trace=true 时回传（保持既有契约）；
+                // replayCapture 单独走 replayMetadata，不污染 decisionTrace 字段。
+                EvaluationResponse response = EvaluationResponse.success(
+                    execResult.result(),
+                    execResult.executionTimeMs(),
+                    trace ? decisionTrace : null,
+                    execResult.functionName());
+
+                if (effectiveReplayCapture) {
+                    // ★权威 hash 在 Java 评估侧计算（Codex #4）：input=请求级 context，
+                    // output=业务 result，trace=决策级 DecisionTrace（剔 executionTimeMs）。
+                    // ★fail-loud（Codex 复审 P0）：显式请求 replayCapture 时**总是**附 replayMetadata，
+                    // 绝不静默丢——compute 内部对小数走 string-lift、对真正无法 hash 的值落
+                    // NON_REPLAYABLE + reasons，调用方据 replayabilityStatus 判定是否拿到了地基。
+                    // 只有 compute 本身意外抛（不该发生，已内部 fail-loud）才兜底为 NON_REPLAYABLE。
+                    io.aster.policy.replay.ReplayMetadata rm;
+                    try {
+                        rm = io.aster.policy.replay.ReplayMetadata.compute(
+                            toolchainIdentityProvider.currentToolchainId(),
+                            request.context(),
+                            execResult.result(),
+                            decisionTrace);
+                    } catch (Exception rmEx) {
+                        LOG.warnf("replayCapture 元数据计算意外失败，标记 NON_REPLAYABLE: %s", rmEx.getMessage());
+                        rm = new io.aster.policy.replay.ReplayMetadata(
+                            toolchainIdentityProvider.currentToolchainId(),
+                            io.aster.policy.replay.ReplayMetadata.CANONICALIZATION_VERSION,
+                            null, null, null, List.of(),
+                            io.aster.policy.replay.ReplayMetadata.STATUS_NON_REPLAYABLE,
+                            List.of("compute_threw: " + rmEx.getMessage()));
+                    }
+                    response = response.withReplayMetadata(rm);
+                }
+                return response;
 
             } catch (DynamicCnlExecutor.AmbiguousEntryException e) {
                 businessMetrics.endPolicyEvaluation(sample);

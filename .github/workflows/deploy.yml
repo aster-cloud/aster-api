@@ -189,21 +189,26 @@ jobs:
         if: ${{ steps.staleguard.outputs.stale != 'true' }}
         run: |
           set -euo pipefail
-          # preflight：先确认 runner 的 QEMU/binfmt 能模拟 arm64（否则真 arm64 镜像也跑不起来，
+          DIGEST='${{ steps.build.outputs.digest }}'
+          # ★先静默 pull，避免 docker run 的 "Pulling from ..." 进度污染 uname 输出捕获
+          # （之前 2>&1 把 pull 进度混进 $PRE 导致误判 preflight 失败）。pull 出 stdout 丢弃。
+          docker pull -q --platform linux/arm64 alpine:latest >/dev/null 2>&1 || true
+          docker pull -q --platform linux/arm64 "wontlost/aster-api@${DIGEST}" >/dev/null 2>&1 || true
+          # arch 捕获：只取 uname 的 **stdout 最后一行**（2>/dev/null 丢 stderr，tail -n1 防残留）。
+          runcmd() { docker run --rm --platform linux/arm64 "$1" sh -c 'uname -m' 2>/dev/null | tail -n1 | tr -d '[:space:]'; }
+          # preflight：runner 的 QEMU/binfmt 能否模拟 arm64（否则真 arm64 镜像也跑不起来，
           # 会误判成镜像坏）。preflight 失败=CI 环境问题（binfmt 未注册），非镜像 arch 问题。
-          PRE="$(docker run --rm --platform linux/arm64 alpine uname -m 2>&1 || true)"
+          PRE="$(runcmd alpine:latest || true)"
           case "$PRE" in
             aarch64|arm64) echo "preflight OK: runner 可模拟 arm64 ($PRE)" ;;
-            *) echo "::error title=qemu preflight failed::runner QEMU/binfmt 未能模拟 arm64（alpine uname=$PRE）。CI 环境问题非镜像问题。"; exit 1 ;;
+            *) echo "::error title=qemu preflight failed::runner QEMU/binfmt 未能模拟 arm64（alpine uname='$PRE'）。CI 环境问题非镜像问题。"; exit 1 ;;
           esac
-          DIGEST='${{ steps.build.outputs.digest }}'
           echo "Verifying wontlost/aster-api@${DIGEST} is real arm64…"
-          ARCH="$(docker run --rm --platform linux/arm64 \
-            "wontlost/aster-api@${DIGEST}" sh -c 'uname -m' 2>&1 || true)"
-          echo "in-image uname -m = ${ARCH}"
+          ARCH="$(runcmd "wontlost/aster-api@${DIGEST}" || true)"
+          echo "in-image uname -m = '${ARCH}'"
           case "${ARCH}" in
             aarch64|arm64) echo "✓ genuine arm64" ;;
-            *) echo "::error title=arch mismatch::pushed image 标 arm64 但内容是 ${ARCH}（非 aarch64）。QEMU 跨构建产出 mislabeled 镜像，禁止上生产。"; exit 1 ;;
+            *) echo "::error title=arch mismatch::pushed image 标 arm64 但内容是 '${ARCH}'（非 aarch64）。QEMU 跨构建产出 mislabeled 镜像，禁止上生产。"; exit 1 ;;
           esac
 
       # 红队 P2-G：sign / verify 均对 build-push-action 输出的**不可变 digest** 做（非浮动

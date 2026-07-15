@@ -167,9 +167,44 @@ jobs:
           file: Dockerfile.jvm
           platforms: linux/arm64
           push: true
+          # pull:true 每次重拉 base，避免复用过期/错误架构的 base 解析结果（Codex 建议）。
+          pull: true
+          # provenance:false 去掉 build-push-action 默认加的 provenance attestation manifest
+          # （platform=unknown/unknown 条目）。某些 containerd/k3s 版本会误选它 exec，且单平台
+          # 镜像不需要 attestation 索引；去掉让 manifest 干净、诊断不被 unknown 条目干扰。
+          # ★注意：provenance:false 只清 manifest，**不保证 rootfs 是 arm64**——真正的架构约束
+          # 来自 Dockerfile 构建期 `RUN uname -m` 断言 + 下面 push 后 verifier（Codex 复审）。
+          provenance: false
+          sbom: false
           tags: |
             wontlost/aster-api:${{ steps.meta.outputs.tag }}
             wontlost/aster-api:jvm-latest
+
+      # ★arm64 内容校验（2026-07-15 加）：集群节点是 ARM64（VM.Standard.A1.Flex Ampere），
+      # 但曾发生 build-push-action + QEMU 产出**内容是 amd64 却标 arm64** 的镜像 → 节点
+      # `exec /bin/sh: exec format error` → CrashLoopBackOff → rollout 卡「progress deadline」。
+      # manifest 的 architecture 字段会撒谎（标 arm64），故拉真实 arm64 变体在其内 `uname -m`
+      # 必须 aarch64，否则**构建即失败**，杜绝 mislabeled 镜像上生产（补上 pipeline 缺的 arch verifier）。
+      - name: Verify pushed image is genuinely arm64
+        if: ${{ steps.staleguard.outputs.stale != 'true' }}
+        run: |
+          set -euo pipefail
+          # preflight：先确认 runner 的 QEMU/binfmt 能模拟 arm64（否则真 arm64 镜像也跑不起来，
+          # 会误判成镜像坏）。preflight 失败=CI 环境问题（binfmt 未注册），非镜像 arch 问题。
+          PRE="$(docker run --rm --platform linux/arm64 alpine uname -m 2>&1 || true)"
+          case "$PRE" in
+            aarch64|arm64) echo "preflight OK: runner 可模拟 arm64 ($PRE)" ;;
+            *) echo "::error title=qemu preflight failed::runner QEMU/binfmt 未能模拟 arm64（alpine uname=$PRE）。CI 环境问题非镜像问题。"; exit 1 ;;
+          esac
+          DIGEST='${{ steps.build.outputs.digest }}'
+          echo "Verifying wontlost/aster-api@${DIGEST} is real arm64…"
+          ARCH="$(docker run --rm --platform linux/arm64 \
+            "wontlost/aster-api@${DIGEST}" sh -c 'uname -m' 2>&1 || true)"
+          echo "in-image uname -m = ${ARCH}"
+          case "${ARCH}" in
+            aarch64|arm64) echo "✓ genuine arm64" ;;
+            *) echo "::error title=arch mismatch::pushed image 标 arm64 但内容是 ${ARCH}（非 aarch64）。QEMU 跨构建产出 mislabeled 镜像，禁止上生产。"; exit 1 ;;
+          esac
 
       # 红队 P2-G：sign / verify 均对 build-push-action 输出的**不可变 digest** 做（非浮动
       # tag），把签名身份绑定到本 workflow 的 OIDC。这消除了 verify 阶段的 signed-rollback：

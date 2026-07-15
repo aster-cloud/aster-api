@@ -6,10 +6,23 @@
 # Run: podman run -p 8080:8080 aster/policy-api:test
 ####
 
-FROM azul/zulu-openjdk-alpine:25-jre
+# ★--platform=$TARGETPLATFORM 显式绑定 base 到构建目标平台（默认语义即如此，写明更利诊断）。
+# 集群节点是 ARM64（OCI Ampere），必须产出真 arm64 镜像。
+FROM --platform=$TARGETPLATFORM azul/zulu-openjdk-alpine:25-jre
 
 LABEL maintainer="Aster Lang Project"
 LABEL description="Quarkus Policy API - GraphQL Backend"
+
+# ★构建期架构断言（2026-07-15）：曾发生 buildx/QEMU 跨构建静默产出 amd64 却标 arm64 的镜像
+# → 节点 `exec /bin/sh: exec format error` → CrashLoopBackOff → rollout 卡死。此处在 push 前
+# 就断言 rootfs 架构与 target 一致：不一致即**构建失败**（比 push 后校验更早、更快定位）。
+ARG TARGETARCH
+RUN set -eu; \
+    M="$(uname -m)"; \
+    case "$TARGETARCH:$M" in \
+      arm64:aarch64|arm64:arm64|amd64:x86_64) echo "arch OK: TARGETARCH=$TARGETARCH uname=$M" ;; \
+      *) echo "ARCH MISMATCH: TARGETARCH=$TARGETARCH uname=$M（buildx/QEMU 跨构建失效）" >&2; exit 1 ;; \
+    esac
 
 # 创建工作目录
 WORKDIR /work/

@@ -378,7 +378,8 @@ class ReplayMetadataTest {
     @Test
     @DisplayName("★M2.1b 契约：steps.result 必须 canonical-可序列化（非法值落 NON_REPLAYABLE 而非静默错哈希）")
     void nonCanonicalStepResultFailsClosed() {
-        // step.result 塞一个非有限 double（canonical 铁律拒 NaN/Infinity）→ trace hash 失败 → NON_REPLAYABLE。
+        // step.result=非有限 double（canonical 铁律拒 NaN/Infinity）→ canonical 链路（liftDecimals/
+        // canonicalWithHash）拒绝并抛 → tryCanonical 捕获 → trace hash 失败 → NON_REPLAYABLE。
         var badStep = List.of(step(1, "ratio", Double.POSITIVE_INFINITY, true, List.of()));
         ReplayMetadata rm = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(badStep, "OK", 1));
         assertNull(rm.traceHash(), "step.result 非 canonical（Infinity）→ traceHash 须为 null（fail-closed，不静默错哈希）");
@@ -387,5 +388,52 @@ class ReplayMetadataTest {
             "须记 trace_hash_failed 原因：" + rm.replayabilityReasons());
         // 且失败时 canonicalTrace 串也为 null（不吐无对应哈希的半截 payload）。
         assertNull(rm.canonicalTrace());
+    }
+
+    @Test
+    @DisplayName("★M2.1b 契约：字段/顺序敏感——sequence / matched / list 顺序变 → traceHash 变（Codex 审查补）")
+    void stepFieldsAndOrderAffectHash() {
+        String base = ReplayMetadata.compute(TOOLCHAIN, null, "OK",
+            traceWithSteps(List.of(step(1, "a", 1, true, List.of())), "OK", 1)).traceHash();
+
+        // sequence 变（1→2）→ hash 变：防止未来有人认为「list 顺序已够」而从 stable trace 删 sequence。
+        String seqChanged = ReplayMetadata.compute(TOOLCHAIN, null, "OK",
+            traceWithSteps(List.of(step(2, "a", 1, true, List.of())), "OK", 1)).traceHash();
+        assertNotEquals(base, seqChanged, "sequence 变 → traceHash 必须变（sequence 须进 hash）");
+
+        // matched 变（true→false）→ hash 变：钉住「命中的是哪个分支」影响哈希。
+        String matchedChanged = ReplayMetadata.compute(TOOLCHAIN, null, "OK",
+            traceWithSteps(List.of(step(1, "a", 1, false, List.of())), "OK", 1)).traceHash();
+        assertNotEquals(base, matchedChanged, "matched 变 → traceHash 必须变（命中分支须进 hash）");
+
+        // list 顺序变（[A,B]→[B,A]）→ hash 变：steps 是有序序列，顺序即决策路径。
+        var ab = List.of(step(1, "a", 1, true, List.of()), step(2, "b", 2, true, List.of()));
+        var ba = List.of(step(2, "b", 2, true, List.of()), step(1, "a", 1, true, List.of()));
+        String hAb = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(ab, "OK", 1)).traceHash();
+        String hBa = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(ba, "OK", 1)).traceHash();
+        assertNotEquals(hAb, hBa, "steps 顺序变 → traceHash 必须变（有序序列，顺序即路径）");
+    }
+
+    @Test
+    @DisplayName("★M2.1b 契约：children 内容敏感 + result=null 合法 + children 空用 List.of()（形状不漂移，Codex 审查补）")
+    void childrenContentAndNullShapeContract() {
+        // 父同、child 内容不同 → traceHash 变（嵌套子步骤真进 hash，不被忽略）。
+        var childX = List.of(step(1, "p", 1, true, List.of(step(2, "cx", 10, true, List.of()))));
+        var childY = List.of(step(1, "p", 1, true, List.of(step(2, "cy", 20, true, List.of()))));
+        String hX = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(childX, "OK", 1)).traceHash();
+        String hY = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(childY, "OK", 1)).traceHash();
+        assertNotEquals(hX, hY, "child 内容变 → traceHash 必须变（children 真进 hash）");
+
+        // result=null 的 step 合法（规则返回 null/void 在 output 层已认可，step 级同理）→ 可 replayable。
+        var nullResultStep = List.of(step(1, "voidRule", null, true, List.<DecisionTrace.TraceStep>of()));
+        ReplayMetadata rm = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(nullResultStep, "OK", 1));
+        assertNotNull(rm.traceHash(), "step.result=null 是合法值（void 规则），应可 hash 而非失败");
+        assertEquals(ReplayMetadata.STATUS_REPLAYABLE, rm.replayabilityStatus());
+
+        // ★形状契约（Codex）：M2.1b 产出方须用 children=List.of() 而非 null——否则 null/[] 双形态
+        // 会 hash 出不同结构造成伪漂移。此测试钉「空 children 用 List.of() 时可正常 hash」，作为产出方
+        // 规范化到 [] 的锚点（null children 是产出方 bug，本契约不接受 null）。
+        var emptyChildren = List.of(step(1, "leaf", 5, true, List.<DecisionTrace.TraceStep>of()));
+        assertNotNull(ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(emptyChildren, "OK", 1)).traceHash());
     }
 }

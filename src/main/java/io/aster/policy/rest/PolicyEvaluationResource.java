@@ -610,7 +610,9 @@ public class PolicyEvaluationResource {
                             io.aster.policy.replay.ReplayMetadata.CANONICALIZATION_VERSION,
                             null, null, null, List.of(),
                             io.aster.policy.replay.ReplayMetadata.STATUS_NON_REPLAYABLE,
-                            List.of("compute_threw: " + rmEx.getMessage()));
+                            List.of("compute_threw: " + rmEx.getMessage()),
+                            // M2 canonical 串：compute 抛异常兜底路径无 payload。
+                            null, null, null);
                     }
                     response = response.withReplayMetadata(rm);
                 }

@@ -260,4 +260,80 @@ class ReplayMetadataTest {
         // output 独立正常。
         assertNotNull(rm.canonicalOutputHash());
     }
+
+    // ---- M2：canonical payload 串（真回放，docs/m2-replay-payload-contract.md） ----
+
+    @Test
+    @DisplayName("★M2 核心契约：hash(返回的 canonical 串) == 对应返回 hash（cloud 可直接 re-hash 校验）")
+    void canonicalStringHashesToItsHash() throws Exception {
+        Object input = Map.of("creditScore", 680, "income", 50000);
+        Object result = "APPROVED";
+        ReplayMetadata rm = ReplayMetadata.compute(TOOLCHAIN, input, result, trace(result, 42));
+
+        // 三串都产出
+        assertNotNull(rm.canonicalInput());
+        assertNotNull(rm.canonicalOutput());
+        assertNotNull(rm.canonicalTrace());
+
+        // ★铁律：对返回的 canonical 串直接 hash（无需 re-canonicalize）== 对应哈希。
+        // 这正是 cloud 侧 M2 的校验逻辑：sha256(version+"\n"+串)。
+        assertEquals(rm.canonicalInputHash(), hashOfCanonical(rm.canonicalInput()));
+        assertEquals(rm.canonicalOutputHash(), hashOfCanonical(rm.canonicalOutput()));
+        assertEquals(rm.traceHash(), hashOfCanonical(rm.canonicalTrace()));
+    }
+
+    /** 对已 canonical 化的串算 hash：sha256(version + "\n" + 串)——与 CanonicalJson 内部构造一致，
+     *  也是 cloud 侧 M2 的校验构造。 */
+    private static String hashOfCanonical(String canonical) throws Exception {
+        String payload = CanonicalJson.CANONICALIZATION_VERSION + "\n" + canonical;
+        byte[] d = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return java.util.HexFormat.of().formatHex(d);
+    }
+
+    @Test
+    @DisplayName("M2 决定性：同输入 → 同 canonical 串（cloud 重下载字节一致的前提）")
+    void canonicalStringDeterministic() {
+        Object input = Map.of("b", 2, "a", 1);
+        ReplayMetadata rm1 = ReplayMetadata.compute(TOOLCHAIN, input, "OK", trace("OK", 1));
+        ReplayMetadata rm2 = ReplayMetadata.compute(TOOLCHAIN, input, "OK", trace("OK", 999));
+        assertEquals(rm1.canonicalInput(), rm2.canonicalInput());
+        assertEquals(rm1.canonicalOutput(), rm2.canonicalOutput());
+        // trace 剔 executionTimeMs → 同串（耗时不同也一致）。
+        assertEquals(rm1.canonicalTrace(), rm2.canonicalTrace());
+    }
+
+    @Test
+    @DisplayName("M2 null-safe：input==null → canonicalInput==null（不降级，与 inputHash 语义一致）")
+    void nullInputYieldsNullCanonical() {
+        ReplayMetadata rm = ReplayMetadata.compute(TOOLCHAIN, null, "OK", trace("OK", 1));
+        assertNull(rm.canonicalInput());
+        assertNull(rm.canonicalInputHash());
+        assertNotNull(rm.canonicalOutput());
+    }
+
+    @Test
+    @DisplayName("M2 hash 失败 → canonical 串也为 null（不吐半截 payload）")
+    void failedHashYieldsNullCanonical() {
+        ReplayMetadata rm = ReplayMetadata.compute(
+            TOOLCHAIN, Map.of("huge", new java.math.BigDecimal("1E+1000000")), "OK", trace("OK", 1));
+        assertNull(rm.canonicalInputHash());
+        assertNull(rm.canonicalInput(), "hash 失败时 canonical 串不得吐出（否则 cloud 存了个无对应 hash 的串）");
+    }
+
+    @Test
+    @DisplayName("★M2 向后兼容：canonical 串 null 省略键，但既有 hash 字段 null 仍序列化（形状不变，Codex 审查）")
+    void jsonInclusionScopedToNewFieldsOnly() throws Exception {
+        // input=null → canonicalInput（新字段）省略、canonicalInputHash（既有字段）仍为 null 序列化。
+        ReplayMetadata rm = ReplayMetadata.compute(TOOLCHAIN, null, "OK", trace("OK", 1));
+        String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(rm);
+
+        // 新字段：null 时键消失（@JsonInclude NON_NULL 只标它们）。
+        assertTrue(!json.contains("\"canonicalInput\""), "null canonicalInput（新字段）应被省略：" + json);
+        assertTrue(json.contains("\"canonicalOutput\""), "非 null canonicalOutput（新字段）应出现：" + json);
+
+        // ★既有 hash 字段：null 时**仍序列化为 null**（形状与本改动前一致，不因 @JsonInclude 作用域扩大而消失）。
+        assertTrue(json.contains("\"canonicalInputHash\":null"),
+            "既有 canonicalInputHash 为 null 时应仍序列化为 null（M1 兼容形状不变）：" + json);
+    }
 }

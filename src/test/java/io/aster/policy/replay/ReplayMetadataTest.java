@@ -260,4 +260,180 @@ class ReplayMetadataTest {
         // output 独立正常。
         assertNotNull(rm.canonicalOutputHash());
     }
+
+    // ---- M2：canonical payload 串（真回放，docs/m2-replay-payload-contract.md） ----
+
+    @Test
+    @DisplayName("★M2 核心契约：hash(返回的 canonical 串) == 对应返回 hash（cloud 可直接 re-hash 校验）")
+    void canonicalStringHashesToItsHash() throws Exception {
+        Object input = Map.of("creditScore", 680, "income", 50000);
+        Object result = "APPROVED";
+        ReplayMetadata rm = ReplayMetadata.compute(TOOLCHAIN, input, result, trace(result, 42));
+
+        // 三串都产出
+        assertNotNull(rm.canonicalInput());
+        assertNotNull(rm.canonicalOutput());
+        assertNotNull(rm.canonicalTrace());
+
+        // ★铁律：对返回的 canonical 串直接 hash（无需 re-canonicalize）== 对应哈希。
+        // 这正是 cloud 侧 M2 的校验逻辑：sha256(version+"\n"+串)。
+        assertEquals(rm.canonicalInputHash(), hashOfCanonical(rm.canonicalInput()));
+        assertEquals(rm.canonicalOutputHash(), hashOfCanonical(rm.canonicalOutput()));
+        assertEquals(rm.traceHash(), hashOfCanonical(rm.canonicalTrace()));
+    }
+
+    /** 对已 canonical 化的串算 hash：sha256(version + "\n" + 串)——与 CanonicalJson 内部构造一致，
+     *  也是 cloud 侧 M2 的校验构造。 */
+    private static String hashOfCanonical(String canonical) throws Exception {
+        String payload = CanonicalJson.CANONICALIZATION_VERSION + "\n" + canonical;
+        byte[] d = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return java.util.HexFormat.of().formatHex(d);
+    }
+
+    @Test
+    @DisplayName("M2 决定性：同输入 → 同 canonical 串（cloud 重下载字节一致的前提）")
+    void canonicalStringDeterministic() {
+        Object input = Map.of("b", 2, "a", 1);
+        ReplayMetadata rm1 = ReplayMetadata.compute(TOOLCHAIN, input, "OK", trace("OK", 1));
+        ReplayMetadata rm2 = ReplayMetadata.compute(TOOLCHAIN, input, "OK", trace("OK", 999));
+        assertEquals(rm1.canonicalInput(), rm2.canonicalInput());
+        assertEquals(rm1.canonicalOutput(), rm2.canonicalOutput());
+        // trace 剔 executionTimeMs → 同串（耗时不同也一致）。
+        assertEquals(rm1.canonicalTrace(), rm2.canonicalTrace());
+    }
+
+    @Test
+    @DisplayName("M2 null-safe：input==null → canonicalInput==null（不降级，与 inputHash 语义一致）")
+    void nullInputYieldsNullCanonical() {
+        ReplayMetadata rm = ReplayMetadata.compute(TOOLCHAIN, null, "OK", trace("OK", 1));
+        assertNull(rm.canonicalInput());
+        assertNull(rm.canonicalInputHash());
+        assertNotNull(rm.canonicalOutput());
+    }
+
+    @Test
+    @DisplayName("M2 hash 失败 → canonical 串也为 null（不吐半截 payload）")
+    void failedHashYieldsNullCanonical() {
+        ReplayMetadata rm = ReplayMetadata.compute(
+            TOOLCHAIN, Map.of("huge", new java.math.BigDecimal("1E+1000000")), "OK", trace("OK", 1));
+        assertNull(rm.canonicalInputHash());
+        assertNull(rm.canonicalInput(), "hash 失败时 canonical 串不得吐出（否则 cloud 存了个无对应 hash 的串）");
+    }
+
+    @Test
+    @DisplayName("★M2 向后兼容：canonical 串 null 省略键，但既有 hash 字段 null 仍序列化（形状不变，Codex 审查）")
+    void jsonInclusionScopedToNewFieldsOnly() throws Exception {
+        // input=null → canonicalInput（新字段）省略、canonicalInputHash（既有字段）仍为 null 序列化。
+        ReplayMetadata rm = ReplayMetadata.compute(TOOLCHAIN, null, "OK", trace("OK", 1));
+        String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(rm);
+
+        // 新字段：null 时键消失（@JsonInclude NON_NULL 只标它们）。
+        assertTrue(!json.contains("\"canonicalInput\""), "null canonicalInput（新字段）应被省略：" + json);
+        assertTrue(json.contains("\"canonicalOutput\""), "非 null canonicalOutput（新字段）应出现：" + json);
+
+        // ★既有 hash 字段：null 时**仍序列化为 null**（形状与本改动前一致，不因 @JsonInclude 作用域扩大而消失）。
+        assertTrue(json.contains("\"canonicalInputHash\":null"),
+            "既有 canonicalInputHash 为 null 时应仍序列化为 null（M1 兼容形状不变）：" + json);
+    }
+
+    // ---- M2.1b 契约守卫：步骤级 trace 的决定论 invariant（前瞻测试，steps 由 M2.1b 填充） ----
+    // 说明：这些测试用手构造的 DecisionTrace（非真 executor），钉死「一旦 steps 非空」必须满足的
+    // hash 契约——不实现 M2.1b（步骤填充在 executor/truffle 侧，见 docs），只保证 M2.1b 无论走
+    // Option A（truffle 真 trace）还是 B（IR 派生），产出的 steps 都必须过这些 invariant，否则毁回放地基。
+
+    private static DecisionTrace.TraceStep step(int seq, String expr, Object result, boolean matched,
+                                               List<DecisionTrace.TraceStep> children) {
+        return new DecisionTrace.TraceStep(seq, expr, result, matched, children);
+    }
+
+    private static DecisionTrace traceWithSteps(List<DecisionTrace.TraceStep> steps, Object result, long execMs) {
+        return new DecisionTrace("aster.finance.loan", "approveLoan", steps, result, execMs);
+    }
+
+    @Test
+    @DisplayName("★M2.1b 契约：非空 steps 进 traceHash（决策路径不同 → traceHash 不同，M1 决策级无此能力）")
+    void nonEmptyStepsAffectTraceHash() {
+        Object result = "APPROVED";
+        // 同 finalResult、同 module/function，但决策路径（steps）不同 → traceHash 必须不同。
+        var pathA = List.of(step(1, "creditScore >= 680", true, true, List.of()));
+        var pathB = List.of(step(1, "income >= 100000", true, true, List.of()));
+        String hashA = ReplayMetadata.compute(TOOLCHAIN, null, result, traceWithSteps(pathA, result, 1)).traceHash();
+        String hashB = ReplayMetadata.compute(TOOLCHAIN, null, result, traceWithSteps(pathB, result, 1)).traceHash();
+        assertNotEquals(hashA, hashB,
+            "★步骤级价值：同输出但走不同决策分支，traceHash 必须不同（这正是 M1 决策级 trace 缺的能力）");
+    }
+
+    @Test
+    @DisplayName("★M2.1b 契约：steps 决定性——同 steps + 不同耗时 → 同 traceHash（step 内不得含时间戳）")
+    void stepsDeterministicIgnoringTiming() {
+        var steps = List.of(
+            step(1, "creditScore >= 680", true, true, List.of(
+                step(2, "income >= 50000", true, true, List.of()))));  // 嵌套子步骤
+        String h1 = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(steps, "OK", 1)).traceHash();
+        String h2 = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(steps, "OK", 9999)).traceHash();
+        assertEquals(h1, h2, "同 steps 不同 executionTimeMs → traceHash 必须相同（steps 内绝不能含时间戳/非决定性值）");
+    }
+
+    @Test
+    @DisplayName("★M2.1b 契约：steps.result 必须 canonical-可序列化（非法值落 NON_REPLAYABLE 而非静默错哈希）")
+    void nonCanonicalStepResultFailsClosed() {
+        // step.result=非有限 double（canonical 铁律拒 NaN/Infinity）→ canonical 链路（liftDecimals/
+        // canonicalWithHash）拒绝并抛 → tryCanonical 捕获 → trace hash 失败 → NON_REPLAYABLE。
+        var badStep = List.of(step(1, "ratio", Double.POSITIVE_INFINITY, true, List.of()));
+        ReplayMetadata rm = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(badStep, "OK", 1));
+        assertNull(rm.traceHash(), "step.result 非 canonical（Infinity）→ traceHash 须为 null（fail-closed，不静默错哈希）");
+        assertEquals(ReplayMetadata.STATUS_NON_REPLAYABLE, rm.replayabilityStatus());
+        assertTrue(rm.replayabilityReasons().stream().anyMatch(r -> r.startsWith("trace_hash_failed")),
+            "须记 trace_hash_failed 原因：" + rm.replayabilityReasons());
+        // 且失败时 canonicalTrace 串也为 null（不吐无对应哈希的半截 payload）。
+        assertNull(rm.canonicalTrace());
+    }
+
+    @Test
+    @DisplayName("★M2.1b 契约：字段/顺序敏感——sequence / matched / list 顺序变 → traceHash 变（Codex 审查补）")
+    void stepFieldsAndOrderAffectHash() {
+        String base = ReplayMetadata.compute(TOOLCHAIN, null, "OK",
+            traceWithSteps(List.of(step(1, "a", 1, true, List.of())), "OK", 1)).traceHash();
+
+        // sequence 变（1→2）→ hash 变：防止未来有人认为「list 顺序已够」而从 stable trace 删 sequence。
+        String seqChanged = ReplayMetadata.compute(TOOLCHAIN, null, "OK",
+            traceWithSteps(List.of(step(2, "a", 1, true, List.of())), "OK", 1)).traceHash();
+        assertNotEquals(base, seqChanged, "sequence 变 → traceHash 必须变（sequence 须进 hash）");
+
+        // matched 变（true→false）→ hash 变：钉住「命中的是哪个分支」影响哈希。
+        String matchedChanged = ReplayMetadata.compute(TOOLCHAIN, null, "OK",
+            traceWithSteps(List.of(step(1, "a", 1, false, List.of())), "OK", 1)).traceHash();
+        assertNotEquals(base, matchedChanged, "matched 变 → traceHash 必须变（命中分支须进 hash）");
+
+        // list 顺序变（[A,B]→[B,A]）→ hash 变：steps 是有序序列，顺序即决策路径。
+        var ab = List.of(step(1, "a", 1, true, List.of()), step(2, "b", 2, true, List.of()));
+        var ba = List.of(step(2, "b", 2, true, List.of()), step(1, "a", 1, true, List.of()));
+        String hAb = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(ab, "OK", 1)).traceHash();
+        String hBa = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(ba, "OK", 1)).traceHash();
+        assertNotEquals(hAb, hBa, "steps 顺序变 → traceHash 必须变（有序序列，顺序即路径）");
+    }
+
+    @Test
+    @DisplayName("★M2.1b 契约：children 内容敏感 + result=null 合法 + children 空用 List.of()（形状不漂移，Codex 审查补）")
+    void childrenContentAndNullShapeContract() {
+        // 父同、child 内容不同 → traceHash 变（嵌套子步骤真进 hash，不被忽略）。
+        var childX = List.of(step(1, "p", 1, true, List.of(step(2, "cx", 10, true, List.of()))));
+        var childY = List.of(step(1, "p", 1, true, List.of(step(2, "cy", 20, true, List.of()))));
+        String hX = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(childX, "OK", 1)).traceHash();
+        String hY = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(childY, "OK", 1)).traceHash();
+        assertNotEquals(hX, hY, "child 内容变 → traceHash 必须变（children 真进 hash）");
+
+        // result=null 的 step 合法（规则返回 null/void 在 output 层已认可，step 级同理）→ 可 replayable。
+        var nullResultStep = List.of(step(1, "voidRule", null, true, List.<DecisionTrace.TraceStep>of()));
+        ReplayMetadata rm = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(nullResultStep, "OK", 1));
+        assertNotNull(rm.traceHash(), "step.result=null 是合法值（void 规则），应可 hash 而非失败");
+        assertEquals(ReplayMetadata.STATUS_REPLAYABLE, rm.replayabilityStatus());
+
+        // ★形状契约（Codex）：M2.1b 产出方须用 children=List.of() 而非 null——否则 null/[] 双形态
+        // 会 hash 出不同结构造成伪漂移。此测试钉「空 children 用 List.of() 时可正常 hash」，作为产出方
+        // 规范化到 [] 的锚点（null children 是产出方 bug，本契约不接受 null）。
+        var emptyChildren = List.of(step(1, "leaf", 5, true, List.<DecisionTrace.TraceStep>of()));
+        assertNotNull(ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(emptyChildren, "OK", 1)).traceHash());
+    }
 }

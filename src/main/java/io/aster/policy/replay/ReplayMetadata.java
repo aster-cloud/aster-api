@@ -1,6 +1,7 @@
 package io.aster.policy.replay;
 
 import aster.core.canonical.CanonicalJson;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -62,7 +63,15 @@ public record ReplayMetadata(
     String traceHash,
     List<Object> reasonCodes,
     String replayabilityStatus,
-    List<String> replayabilityReasons) {
+    List<String> replayabilityReasons,
+    // M2 回放 payload：post-lift canonical **字符串**（被 hash 的那个串）。null=本次未提供/hash 失败。
+    // cloud 收到后直接 sha256(version+"\n"+串) 校验即等于对应 hash，无需 re-canonicalize
+    // （绕开 liftDecimals 的 TS↔Java parity gap，见 docs/m2-replay-payload-contract.md）。
+    // ★@JsonInclude(NON_NULL) **只标这 3 个新字段**（Codex 审查）：null 时省略键，M1 消费者不受影响；
+    // 但**不动**既有 hash 字段的序列化形状（它们 null 仍序列化为 null，与本改动前一致，避免兼容漂移）。
+    @JsonInclude(JsonInclude.Include.NON_NULL) String canonicalInput,
+    @JsonInclude(JsonInclude.Include.NON_NULL) String canonicalOutput,
+    @JsonInclude(JsonInclude.Include.NON_NULL) String canonicalTrace) {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -90,18 +99,24 @@ public record ReplayMetadata(
     public static ReplayMetadata compute(String runtimeToolchainId, Object input, Object result, DecisionTrace trace) {
         List<String> reasons = new ArrayList<>();
 
-        String inputHash = null;
+        // M2：同时拿 canonical 串 + hash（一次序列化）。null=未提供/失败。串仅在 replayCapture 路径经
+        // withReplayMetadata 进响应，且响应级 HMAC 门控——非授权调用方拿不到 payload（PolicyEvaluationResource）。
+        CanonicalJson.CanonicalPair inputPair = null;
         if (input != null) {
-            inputHash = tryHash(MAPPER.valueToTree(input), "input", reasons);
+            inputPair = tryCanonical(MAPPER.valueToTree(input), "input", reasons);
         }
 
-        // output 必需：result 可能为 null（规则返回 null/void）——那也是确定性输出，hash 之。
-        String outputHash = tryHash(MAPPER.valueToTree(result), "output", reasons);
+        // output 必需：result 可能为 null（规则返回 null/void）——那也是确定性输出，序列化之。
+        CanonicalJson.CanonicalPair outputPair = tryCanonical(MAPPER.valueToTree(result), "output", reasons);
 
-        String traceHash = null;
+        CanonicalJson.CanonicalPair tracePair = null;
         if (trace != null) {
-            traceHash = tryHash(stableTraceNode(trace), "trace", reasons);
+            tracePair = tryCanonical(stableTraceNode(trace), "trace", reasons);
         }
+
+        String inputHash = inputPair != null ? inputPair.hash() : null;
+        String outputHash = outputPair != null ? outputPair.hash() : null;
+        String traceHash = tracePair != null ? tracePair.hash() : null;
 
         // 回放完整判定：output 必须成功；input/trace 若提供了也必须成功。
         boolean replayable = outputHash != null
@@ -116,15 +131,18 @@ public record ReplayMetadata(
             traceHash,
             List.of(),
             replayable ? STATUS_REPLAYABLE : STATUS_NON_REPLAYABLE,
-            List.copyOf(reasons));
+            List.copyOf(reasons),
+            inputPair != null ? inputPair.canonical() : null,
+            outputPair != null ? outputPair.canonical() : null,
+            tracePair != null ? tracePair.canonical() : null);
     }
 
     /**
-     * 对一个 JsonNode 算 canonical hash：先 lift 小数为 string + 收集 decimal paths，再交
-     * canonicalHash（typeCtx）。失败（非 finite / 超限 Decimal / 不支持类型）返回 null 并记原因，
-     * <b>不抛</b>（fail-loud 由上层据返回值判定，不靠异常穿透）。
+     * 对一个 JsonNode 同时算 canonical **串 + hash**（M2：一次 lift + 一次序列化）：先 lift 小数为
+     * string + 收集 decimal paths，再交 canonicalWithHash（typeCtx）。失败（非 finite / 超限 Decimal /
+     * 不支持类型）返回 null 并记原因，<b>不抛</b>（fail-loud 由上层据返回值判定，不靠异常穿透）。
      */
-    private static String tryHash(JsonNode raw, String field, List<String> reasons) {
+    private static CanonicalJson.CanonicalPair tryCanonical(JsonNode raw, String field, List<String> reasons) {
         try {
             Set<String> decimalPaths = new java.util.HashSet<>();
             JsonNode lifted = liftDecimals(raw, "", decimalPaths);
@@ -136,7 +154,7 @@ public record ReplayMetadata(
             CanonicalJson.TypeContext ctx = decimalPaths.isEmpty()
                 ? CanonicalJson.TypeContext.empty()
                 : CanonicalJson.TypeContext.of(decimalPaths.toArray(new String[0]));
-            return CanonicalJson.canonicalHash(lifted, ctx);
+            return CanonicalJson.canonicalWithHash(lifted, ctx);
         } catch (RuntimeException e) {
             reasons.add(field + "_hash_failed: " + e.getMessage());
             return null;

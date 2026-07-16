@@ -58,6 +58,47 @@ class ReplayMetadataTest {
     }
 
     @Test
+    @DisplayName("M2.1b：steps 进入 traceHash，步骤变化必须改变 traceHash")
+    void traceHashIncludesSteps() {
+        Object result = "APPROVED";
+        DecisionTrace a = new DecisionTrace(
+            "aster.finance.loan",
+            "approveLoan",
+            List.of(new DecisionTrace.TraceStep(1, "score >= 680", true, true, List.of())),
+            result,
+            5);
+        DecisionTrace b = new DecisionTrace(
+            "aster.finance.loan",
+            "approveLoan",
+            List.of(new DecisionTrace.TraceStep(1, "score >= 700", false, false, List.of())),
+            result,
+            5);
+
+        ReplayMetadata rmA = ReplayMetadata.compute(TOOLCHAIN, Map.of("x", 1), result, a);
+        ReplayMetadata rmB = ReplayMetadata.compute(TOOLCHAIN, Map.of("x", 1), result, b);
+
+        assertNotEquals(rmA.traceHash(), rmB.traceHash(),
+            "步骤级 trace 接线后，traceHash 必须对 steps 敏感");
+    }
+
+    @Test
+    @DisplayName("M2.1b：drain 标记 trace 不可回放时，不得基于空 steps 伪造 REPLAYABLE")
+    void traceDrainNonReplayableForcesNonReplayableMetadata() {
+        Object result = "APPROVED";
+        DecisionTrace emptyStepsTrace = trace(result, 5);
+
+        ReplayMetadata rm = ReplayMetadata.compute(
+            TOOLCHAIN, Map.of("creditScore", 680), result, emptyStepsTrace, false);
+
+        assertEquals(ReplayMetadata.STATUS_NON_REPLAYABLE, rm.replayabilityStatus());
+        assertNull(rm.traceHash(), "trace 不可回放时必须跳过 traceHash，避免空 steps 假阳性");
+        assertNotNull(rm.canonicalInputHash());
+        assertNotNull(rm.canonicalOutputHash());
+        assertTrue(rm.replayabilityReasons().contains("trace_not_replayable"),
+            "必须把 truffle drain 的不可回放信号传给调用方");
+    }
+
+    @Test
     @DisplayName("输出敏感：result 变则 canonicalOutputHash 变（漏报真漂移是致命的）")
     void outputHashSensitiveToResult() {
         Object input = Map.of("creditScore", 680);

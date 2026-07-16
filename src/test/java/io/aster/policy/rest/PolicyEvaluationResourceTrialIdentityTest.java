@@ -1,6 +1,7 @@
 package io.aster.policy.rest;
 
 import io.aster.billing.ApiQuotaGuard;
+import io.aster.policy.api.model.DecisionTrace;
 import io.aster.policy.security.TrialEndpointGuard;
 import io.aster.policy.tenant.TenantContext;
 import io.vertx.core.http.HttpServerRequest;
@@ -12,8 +13,11 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -77,6 +81,40 @@ class PolicyEvaluationResourceTrialIdentityTest {
         Method m = PolicyEvaluationResource.class.getDeclaredMethod(methodName, sig);
         m.setAccessible(true);
         return m.invoke(target, args);
+    }
+
+    @Test
+    @DisplayName("M2.1b: toTraceSteps 递归转换 truffle drain map shape")
+    @SuppressWarnings("unchecked")
+    void toTraceStepsConvertsNestedDrainMaps() throws Exception {
+        List<Map<String, Object>> rawSteps = List.of(Map.of(
+            "sequence", 1,
+            "expression", "score >= 680",
+            "result", true,
+            "matched", true,
+            "children", List.of(Map.of(
+                "sequence", 2,
+                "expression", "income >= 50000",
+                "result", 50000L,
+                "matched", false,
+                "children", List.of()))));
+
+        List<DecisionTrace.TraceStep> steps =
+            (List<DecisionTrace.TraceStep>) invoke(null, "toTraceSteps", new Class<?>[]{List.class}, rawSteps);
+
+        assertEquals(1, steps.size());
+        DecisionTrace.TraceStep root = steps.get(0);
+        assertEquals(1, root.sequence());
+        assertEquals("score >= 680", root.expression());
+        assertEquals(Boolean.TRUE, root.result());
+        assertTrue(root.matched());
+        assertEquals(1, root.children().size());
+        DecisionTrace.TraceStep child = root.children().get(0);
+        assertEquals(2, child.sequence());
+        assertEquals("income >= 50000", child.expression());
+        assertEquals(50000L, child.result());
+        assertEquals(false, child.matched());
+        assertTrue(child.children().isEmpty());
     }
 
     @Test

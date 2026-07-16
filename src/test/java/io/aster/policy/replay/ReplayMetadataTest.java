@@ -336,4 +336,56 @@ class ReplayMetadataTest {
         assertTrue(json.contains("\"canonicalInputHash\":null"),
             "既有 canonicalInputHash 为 null 时应仍序列化为 null（M1 兼容形状不变）：" + json);
     }
+
+    // ---- M2.1b 契约守卫：步骤级 trace 的决定论 invariant（前瞻测试，steps 由 M2.1b 填充） ----
+    // 说明：这些测试用手构造的 DecisionTrace（非真 executor），钉死「一旦 steps 非空」必须满足的
+    // hash 契约——不实现 M2.1b（步骤填充在 executor/truffle 侧，见 docs），只保证 M2.1b 无论走
+    // Option A（truffle 真 trace）还是 B（IR 派生），产出的 steps 都必须过这些 invariant，否则毁回放地基。
+
+    private static DecisionTrace.TraceStep step(int seq, String expr, Object result, boolean matched,
+                                               List<DecisionTrace.TraceStep> children) {
+        return new DecisionTrace.TraceStep(seq, expr, result, matched, children);
+    }
+
+    private static DecisionTrace traceWithSteps(List<DecisionTrace.TraceStep> steps, Object result, long execMs) {
+        return new DecisionTrace("aster.finance.loan", "approveLoan", steps, result, execMs);
+    }
+
+    @Test
+    @DisplayName("★M2.1b 契约：非空 steps 进 traceHash（决策路径不同 → traceHash 不同，M1 决策级无此能力）")
+    void nonEmptyStepsAffectTraceHash() {
+        Object result = "APPROVED";
+        // 同 finalResult、同 module/function，但决策路径（steps）不同 → traceHash 必须不同。
+        var pathA = List.of(step(1, "creditScore >= 680", true, true, List.of()));
+        var pathB = List.of(step(1, "income >= 100000", true, true, List.of()));
+        String hashA = ReplayMetadata.compute(TOOLCHAIN, null, result, traceWithSteps(pathA, result, 1)).traceHash();
+        String hashB = ReplayMetadata.compute(TOOLCHAIN, null, result, traceWithSteps(pathB, result, 1)).traceHash();
+        assertNotEquals(hashA, hashB,
+            "★步骤级价值：同输出但走不同决策分支，traceHash 必须不同（这正是 M1 决策级 trace 缺的能力）");
+    }
+
+    @Test
+    @DisplayName("★M2.1b 契约：steps 决定性——同 steps + 不同耗时 → 同 traceHash（step 内不得含时间戳）")
+    void stepsDeterministicIgnoringTiming() {
+        var steps = List.of(
+            step(1, "creditScore >= 680", true, true, List.of(
+                step(2, "income >= 50000", true, true, List.of()))));  // 嵌套子步骤
+        String h1 = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(steps, "OK", 1)).traceHash();
+        String h2 = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(steps, "OK", 9999)).traceHash();
+        assertEquals(h1, h2, "同 steps 不同 executionTimeMs → traceHash 必须相同（steps 内绝不能含时间戳/非决定性值）");
+    }
+
+    @Test
+    @DisplayName("★M2.1b 契约：steps.result 必须 canonical-可序列化（非法值落 NON_REPLAYABLE 而非静默错哈希）")
+    void nonCanonicalStepResultFailsClosed() {
+        // step.result 塞一个非有限 double（canonical 铁律拒 NaN/Infinity）→ trace hash 失败 → NON_REPLAYABLE。
+        var badStep = List.of(step(1, "ratio", Double.POSITIVE_INFINITY, true, List.of()));
+        ReplayMetadata rm = ReplayMetadata.compute(TOOLCHAIN, null, "OK", traceWithSteps(badStep, "OK", 1));
+        assertNull(rm.traceHash(), "step.result 非 canonical（Infinity）→ traceHash 须为 null（fail-closed，不静默错哈希）");
+        assertEquals(ReplayMetadata.STATUS_NON_REPLAYABLE, rm.replayabilityStatus());
+        assertTrue(rm.replayabilityReasons().stream().anyMatch(r -> r.startsWith("trace_hash_failed")),
+            "须记 trace_hash_failed 原因：" + rm.replayabilityReasons());
+        // 且失败时 canonicalTrace 串也为 null（不吐无对应哈希的半截 payload）。
+        assertNull(rm.canonicalTrace());
+    }
 }

@@ -1,5 +1,7 @@
 package io.aster.policy.rest;
 
+import aster.truffle.trace.TraceAccess;
+import aster.truffle.trace.TraceCollector;
 import io.aster.billing.ApiQuotaGuard;
 import io.aster.policy.common.PolicySerializer;
 import io.aster.monitoring.BusinessMetrics;
@@ -514,19 +516,36 @@ public class PolicyEvaluationResource {
                 // 调用方即使传 replayCapture=true 也静默忽略（非报错——保持 trial 端点宽容）。
                 boolean effectiveReplayCapture = replayCapture && aliasesTrusted;
 
+                boolean captureTraceSteps = trace || effectiveReplayCapture;
+                TraceAccess.DrainResult traceDrainResult = null;
+                if (captureTraceSteps) {
+                    TraceAccess.armCurrentThread(TraceCollector.withDefaults());
+                } else {
+                    // worker 线程会复用；未请求 trace 时不 arm，但先清掉任何历史残留，避免后续 eval
+                    // 被旧 ThreadLocal 收集器意外捕获。正常路径下 requested 分支的 finally 会负责清理。
+                    TraceAccess.drainCurrentThread();
+                }
+
                 // 使用动态执行器执行 CNL，支持命名上下文格式
                 // executeWithContext 会自动检测并映射命名参数到位置参数
-                DynamicCnlExecutor.ExecutionResult execResult = dynamicCnlExecutor.executeWithTenantContext(
-                    tenantId,
-                    request.source(),
-                    request.context(),  // 直接传递原始 context，让执行器处理格式映射
-                    request.getFunctionNameOrDefault(),
-                    request.getLocaleOrDefault(),
-                    vocabIndex,
-                    legacyEvaluateSentinel,
-                    aliasSet,
-                    aliasesTrusted
-                );
+                DynamicCnlExecutor.ExecutionResult execResult;
+                try {
+                    execResult = dynamicCnlExecutor.executeWithTenantContext(
+                        tenantId,
+                        request.source(),
+                        request.context(),  // 直接传递原始 context，让执行器处理格式映射
+                        request.getFunctionNameOrDefault(),
+                        request.getLocaleOrDefault(),
+                        vocabIndex,
+                        legacyEvaluateSentinel,
+                        aliasSet,
+                        aliasesTrusted
+                    );
+                } finally {
+                    if (captureTraceSteps) {
+                        traceDrainResult = TraceAccess.drainCurrentThread();
+                    }
+                }
 
                 // 记录指标
                 policyMetrics.recordEvaluation(
@@ -564,15 +583,16 @@ public class PolicyEvaluationResource {
                     execResult.executionTimeMs(), execResult.moduleName(), execResult.functionName());
 
                 // 回放 trace：trace=true 或 replayCapture=true 时都构建 DecisionTrace。
-                // 前者供前端展示，后者供 traceHash 计算（回放地基）。当前 steps 为空
-                // （细粒度步骤未接线），但决策级身份（module/function/finalResult）足以
-                // 作为漂移检测锚点——ADR 0030 M1 的最小可行回放单元是决策级而非步骤级。
+                // 前者供前端展示，后者供 traceHash 计算（回放地基）。steps 来自 truffle
+                // 同线程 drain；drain 标记不可回放时，后续 ReplayMetadata 必须诚实降级。
                 io.aster.policy.api.model.DecisionTrace decisionTrace = null;
                 if (trace || effectiveReplayCapture) {
+                    List<io.aster.policy.api.model.DecisionTrace.TraceStep> traceSteps =
+                        traceDrainResult == null ? List.of() : toTraceSteps(traceDrainResult.steps());
                     decisionTrace = new io.aster.policy.api.model.DecisionTrace(
                         execResult.moduleName(),
                         execResult.functionName(),
-                        List.of(),
+                        traceSteps,
                         execResult.result(),
                         execResult.executionTimeMs()
                     );
@@ -602,7 +622,8 @@ public class PolicyEvaluationResource {
                             toolchainIdentityProvider.currentToolchainId(),
                             request.context(),
                             execResult.result(),
-                            decisionTrace);
+                            decisionTrace,
+                            traceDrainResult == null || traceDrainResult.replayable());
                     } catch (Exception rmEx) {
                         LOG.warnf("replayCapture 元数据计算意外失败，标记 NON_REPLAYABLE: %s", rmEx.getMessage());
                         rm = new io.aster.policy.replay.ReplayMetadata(
@@ -1514,6 +1535,57 @@ public class PolicyEvaluationResource {
             LOG.warnf("领域词汇表解析失败，退化为仅内置词汇: %s", e.getMessage());
             return null;
         }
+    }
+
+    private static List<io.aster.policy.api.model.DecisionTrace.TraceStep> toTraceSteps(
+            List<Map<String, Object>> rawSteps) {
+        if (rawSteps == null || rawSteps.isEmpty()) {
+            return List.of();
+        }
+        List<io.aster.policy.api.model.DecisionTrace.TraceStep> steps = new ArrayList<>(rawSteps.size());
+        for (Map<String, Object> raw : rawSteps) {
+            if (raw == null) {
+                continue;
+            }
+            steps.add(new io.aster.policy.api.model.DecisionTrace.TraceStep(
+                traceSequence(raw.get("sequence")),
+                traceExpression(raw.get("expression")),
+                raw.get("result"),
+                Boolean.TRUE.equals(raw.get("matched")),
+                toChildTraceSteps(raw.get("children"))));
+        }
+        return List.copyOf(steps);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<io.aster.policy.api.model.DecisionTrace.TraceStep> toChildTraceSteps(Object rawChildren) {
+        if (!(rawChildren instanceof List<?> children) || children.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> childMaps = new ArrayList<>(children.size());
+        for (Object child : children) {
+            if (child instanceof Map<?, ?> childMap) {
+                childMaps.add((Map<String, Object>) childMap);
+            }
+        }
+        return toTraceSteps(childMaps);
+    }
+
+    private static int traceSequence(Object rawSequence) {
+        if (rawSequence instanceof Number number) {
+            return number.intValue();
+        }
+        if (rawSequence instanceof String text) {
+            return Integer.parseInt(text);
+        }
+        throw new IllegalArgumentException("trace step 缺少 sequence");
+    }
+
+    private static String traceExpression(Object rawExpression) {
+        if (rawExpression instanceof String expression) {
+            return expression;
+        }
+        return rawExpression == null ? "" : String.valueOf(rawExpression);
     }
 
     private void recordLoanDecision(Object result) {

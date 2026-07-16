@@ -97,6 +97,20 @@ public record ReplayMetadata(
      * @param trace              决策 trace（replay-capture 模式必产；null 则 traceHash=null）
      */
     public static ReplayMetadata compute(String runtimeToolchainId, Object input, Object result, DecisionTrace trace) {
+        return compute(runtimeToolchainId, input, result, trace, true);
+    }
+
+    /**
+     * 计算回放元数据，并显式接收执行 trace 自身的可回放性。truffle drain 若发现 async 污染、
+     * 截断或值归一降级，会给出 {@code traceReplayable=false}；此时不能基于空 steps 计算一个
+     * 看似正常的 traceHash，必须返回 NON_REPLAYABLE 并说明原因。
+     */
+    public static ReplayMetadata compute(
+            String runtimeToolchainId,
+            Object input,
+            Object result,
+            DecisionTrace trace,
+            boolean traceReplayable) {
         List<String> reasons = new ArrayList<>();
 
         // M2：同时拿 canonical 串 + hash（一次序列化）。null=未提供/失败。串仅在 replayCapture 路径经
@@ -111,7 +125,13 @@ public record ReplayMetadata(
 
         CanonicalJson.CanonicalPair tracePair = null;
         if (trace != null) {
-            tracePair = tryCanonical(stableTraceNode(trace), "trace", reasons);
+            // M2.1b：drain 判定不可回放（async 污染/截断/归一降级）时**不**算 traceHash，
+            // 避免对空/降级 steps 生成伪可回放 hash——标 reason 并让下方 replayable 判定落 false。
+            if (traceReplayable) {
+                tracePair = tryCanonical(stableTraceNode(trace), "trace", reasons);
+            } else {
+                reasons.add("trace_not_replayable");
+            }
         }
 
         String inputHash = inputPair != null ? inputPair.hash() : null;
@@ -121,7 +141,7 @@ public record ReplayMetadata(
         // 回放完整判定：output 必须成功；input/trace 若提供了也必须成功。
         boolean replayable = outputHash != null
             && (input == null || inputHash != null)
-            && (trace == null || traceHash != null);
+            && (trace == null || (traceReplayable && traceHash != null));
 
         return new ReplayMetadata(
             runtimeToolchainId,
@@ -237,11 +257,9 @@ public record ReplayMetadata(
      * StableDecisionTrace JsonNode（剔除非决定性 executionTimeMs，Codex #3）——traceHash 输入。
      * 保留 moduleName/functionName/steps/finalResult；不含时间。
      *
-     * <p><b>M1 traceHash 是决策级而非步骤级（Codex 复审 #3，诚实标注）：</b>当前 {@code steps}
-     * 恒为空（细粒度执行步骤未接线），故 traceHash 实质只 hash module/function/finalResult，与
-     * outputHash+executedFunction 高度冗余，<b>无法检测「同输出但决策路径不同」</b>。保留该字段
-     * 是为 M2 步骤级 trace 接线预留稳定契约（届时 steps 填充，traceHash 自动获得独立价值），
-     * 不假装当前已有步骤级回放能力。
+     * <p><b>M2.1b traceHash 是步骤级 trace 锚点：</b>{@code steps} 由 truffle 同线程 drain
+     * 填充；若 drain 判定不可回放，调用方必须通过 compute 的 traceReplayable=false 重载让本类
+     * 跳过 traceHash 并标 NON_REPLAYABLE，避免对空 steps 生成伪可回放 hash。
      */
     static JsonNode stableTraceNode(DecisionTrace trace) {
         Map<String, Object> stable = new LinkedHashMap<>();

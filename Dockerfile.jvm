@@ -39,6 +39,13 @@ RUN mkdir -p /work/data
 # 暴露端口
 EXPOSE 8080
 
+# ★运行时构建标识（S0 / m1.5 层1）：由 CI 在构建时用 --build-arg 传入产出该镜像的 github.sha，
+# 烘进镜像 ENV → Quarkus 启动映射 ASTER_RUNTIME_BUILD → aster.runtime.build → toolchainId 的 build= 段。
+# ★不 drift：值与镜像同源（烘在同一层，镜像=构建产物）；本地/未传 --build-arg 时保持 dev（诚实降级，
+# 与 ToolchainIdentityProvider 默认一致）。★部署清单**不应**覆盖此 env（覆盖会重新引入 drift）。
+ARG ASTER_RUNTIME_BUILD=dev
+ENV ASTER_RUNTIME_BUILD=${ASTER_RUNTIME_BUILD}
+
 # 设置环境变量
 ENV JAVA_OPTS="-Xmx512m -Xms256m"
 ENV QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://localhost:5432/aster_policy

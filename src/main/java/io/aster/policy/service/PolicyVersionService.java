@@ -48,18 +48,19 @@ public class PolicyVersionService {
     @Inject
     io.aster.policy.stability.StabilityEnforcement stabilityEnforcement;
 
+    /**
+     * 工具链身份的**唯一**构造源（ADR 0030）：source envelope 侧（本服务）与 runtime evaluate 侧
+     * （PolicyEvaluationResource）共用同一 {@code abi=;core=;validator=;build=} 口径，防两处字符串漂移
+     * 导致「同一构建的 source/runtime 身份串不一致」＝回放地基裂缝。原本服务内私有复制已删。
+     */
+    @Inject
+    io.aster.policy.stability.ToolchainIdentityProvider toolchainIdentityProvider;
+
     @ConfigProperty(name = "aster.policy.dual-write.enabled", defaultValue = "false")
     boolean dualWriteEnabled;
 
     @ConfigProperty(name = "aster.policy.dual-write.base-path", defaultValue = "target/policies")
     String dualWriteBasePath;
-
-    /**
-     * 工具链构建标识（ADR 0022 §11.5 C1/H6）：进入 source envelope，锁定"用哪版引擎编译"。
-     * 部署时应注入镜像 sha/版本（如 wontlost/aster-api:<sha>），使旧版本可识别其原工具链。
-     */
-    @ConfigProperty(name = "aster.runtime.build", defaultValue = "dev")
-    String runtimeBuild;
 
     /**
      * 创建策略版本。
@@ -159,7 +160,7 @@ public class PolicyVersionService {
         version.active = false;
         // 方案 D：冻结规范化别名集 + 计算覆盖完整编译输入的信封哈希 + 记录工具链身份。
         version.aliasSet = normalizedAliasJson;
-        String toolchain = toolchainIdentity();
+        String toolchain = toolchainIdentityProvider.currentToolchainId();
         version.sourceToolchainId = toolchain;
         version.sourceEnvelopeSha256 = PolicyVersion.computeSourceEnvelope(
             sourceCnl, version.aliasSet, locale, toolchain);
@@ -218,31 +219,6 @@ public class PolicyVersionService {
         return canonical;
     }
 
-    /**
-     * 工具链身份串：进 source envelope，锁定编译产物所依赖的引擎版本（ADR 0022 §11.5 H6）。
-     *
-     * <p>含 4 个维度，引擎任一维度升级（改归一/降级逻辑）→ envelope 变 → 旧版本可识别
-     * "非原工具链重编可能产出不同 IR"，避免静默复现失败：
-     * <ul>
-     *   <li>abi —— lexicon SPI ABI 版本（{@link aster.core.lexicon.LexiconAbiVersion}）</li>
-     *   <li>core —— aster-lang-core 引擎实现版本（Canonicalizer/Parser/CoreLowering 所在 jar
-     *       的 Implementation-Version，从 MANIFEST 读；includeBuild 源码模式下为 dev）</li>
-     *   <li>validator —— 用户别名校验器版本（白名单/校验规则变更须反映到 envelope）</li>
-     *   <li>build —— 运行时构建标识（部署注入镜像 sha，{@code aster.runtime.build}）</li>
-     * </ul>
-     */
-    private String toolchainIdentity() {
-        return "abi=" + aster.core.lexicon.LexiconAbiVersion.V1.version
-            + ";core=" + coreEngineVersion()
-            + ";validator=" + io.aster.policy.parser.UserAliasValidator.VERSION
-            + ";build=" + runtimeBuild;
-    }
-
-    /** 读 aster-lang-core 引擎实现版本（jar MANIFEST Implementation-Version），缺失→"dev"。 */
-    private static String coreEngineVersion() {
-        String v = aster.core.canonicalizer.Canonicalizer.class.getPackage().getImplementationVersion();
-        return (v == null || v.isBlank()) ? "dev" : v;
-    }
 
     /**
      * 规范化 sourceKind，未识别值回落到 manual。

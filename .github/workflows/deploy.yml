@@ -166,6 +166,10 @@ jobs:
           context: .
           file: Dockerfile.jvm
           platforms: linux/arm64
+          # ★运行时构建标识（S0 / m1.5 层1）：把产出该镜像的 github.sha 烘进镜像 ENV ASTER_RUNTIME_BUILD
+          # → toolchainId 的 build= 段变真值（原 dev）。值与镜像同源、不 drift；不碰 k3s/image-pin/bot 边界。
+          build-args: |
+            ASTER_RUNTIME_BUILD=${{ github.sha }}
           push: true
           # pull:true 每次重拉 base，避免复用过期/错误架构的 base 解析结果（Codex 建议）。
           pull: true

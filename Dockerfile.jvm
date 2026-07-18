@@ -43,6 +43,9 @@ EXPOSE 8080
 # 烘进镜像 ENV → Quarkus 启动映射 ASTER_RUNTIME_BUILD → aster.runtime.build → toolchainId 的 build= 段。
 # ★不 drift：值与镜像同源（烘在同一层，镜像=构建产物）；本地/未传 --build-arg 时保持 dev（诚实降级，
 # 与 ToolchainIdentityProvider 默认一致）。★部署清单**不应**覆盖此 env（覆盖会重新引入 drift）。
+# ★cache 正确性（本地 buildkit 实测）：build-arg 值变 → buildkit 使此 ENV 层失效 → 烘入新 SHA
+# （CI 用 docker/build-push-action=buildkit）；且上面 COPY quarkus-app 每 commit 必变已先失效缓存，
+# 双重保证 SHA 不陈旧。（注：podman/buildah 本地引擎的 ARG-cache 行为不同，但非 CI 路径。）
 ARG ASTER_RUNTIME_BUILD=dev
 ENV ASTER_RUNTIME_BUILD=${ASTER_RUNTIME_BUILD}
 

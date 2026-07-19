@@ -1,7 +1,5 @@
 package io.aster.policy.rest;
 
-import aster.truffle.trace.TraceAccess;
-import aster.truffle.trace.TraceCollector;
 import io.aster.billing.ApiQuotaGuard;
 import io.aster.policy.common.PolicySerializer;
 import io.aster.monitoring.BusinessMetrics;
@@ -15,10 +13,14 @@ import io.aster.policy.api.schema.ParameterSchemaExtractor;
 import io.aster.policy.compiler.CompilationResult;
 import io.aster.policy.parser.DynamicCnlExecutor;
 import io.aster.policy.parser.InProcessCnlParser;
+import io.aster.policy.replay.ReplayExecutorAdapter;
 import io.aster.policy.rest.model.*;
 import io.aster.policy.service.PolicyVersionService;
 import io.aster.policy.telemetry.NsmEvents;
 import io.aster.policy.telemetry.NsmTelemetry;
+import io.aster.replay.core.ExecutionPhaseResult;
+import io.aster.replay.core.ReplayExecutionCore;
+import io.aster.replay.core.ReplayExecutionRequest;
 import io.micrometer.core.instrument.Timer;
 import io.smallrye.mutiny.Uni;
 import io.vertx.ext.web.RoutingContext;
@@ -171,7 +173,14 @@ public class PolicyEvaluationResource {
     ApiQuotaGuard apiQuotaGuard;
 
     @Inject
-    DynamicCnlExecutor dynamicCnlExecutor;
+    ReplayExecutorAdapter replayExecutorAdapter;
+
+    /**
+     * replay 执行编排的 core 三阶段 API（P0-A S2-1a-0 Task 4，从
+     * aster-replay-core 抽出，无 Quarkus/CDI 依赖，纯值对象——直接 new，
+     * 不走 CDI 生产者（无状态、无需容器管理生命周期）。
+     */
+    private final ReplayExecutionCore replayExecutionCore = new ReplayExecutionCore();
 
     @Inject
     io.aster.policy.tenant.TenantContext tenantContext;
@@ -484,15 +493,6 @@ public class PolicyEvaluationResource {
         // 使用 Uni.createFrom().item() 包装同步执行，避免阻塞主线程
         return Uni.createFrom().item(() -> {
             try {
-                // ADR 0014 线C：策略携带的快照领域词汇 → IdentifierIndex，
-                // 让执行端规范化阶段翻译用户自定义术语。无词汇时为 null。
-                aster.core.identifier.IdentifierIndex vocabIndex =
-                    buildVocabularyIndex(request.vocabulary());
-
-                // ADR 0022：策略携带的别名快照 → SemanticTokenKind map。
-                java.util.Map<aster.core.lexicon.SemanticTokenKind, java.util.List<String>> aliasSet =
-                    buildAliasSet(request.aliasSet());
-
                 // 结构词别名授权口径按调用来源可信度区分（安全边界）：
                 //   - 内部调用方（cloud BFF S2S，带 X-Internal-Caller + HMAC）转发的是**已发布
                 //     版本冻结别名快照**——创建时已 per-user 授权+校验+进 envelope，可信 →
@@ -516,50 +516,36 @@ public class PolicyEvaluationResource {
                 // 调用方即使传 replayCapture=true 也静默忽略（非报错——保持 trial 端点宽容）。
                 boolean effectiveReplayCapture = replayCapture && aliasesTrusted;
 
-                boolean captureTraceSteps = trace || effectiveReplayCapture;
-                TraceAccess.DrainResult traceDrainResult = null;
-                if (captureTraceSteps) {
-                    TraceAccess.armCurrentThread(TraceCollector.withDefaults());
-                } else {
-                    // worker 线程会复用；未请求 trace 时不 arm，但先清掉任何历史残留，避免后续 eval
-                    // 被旧 ThreadLocal 收集器意外捕获。正常路径下 requested 分支的 finally 会负责清理。
-                    TraceAccess.drainCurrentThread();
-                }
-
-                // 使用动态执行器执行 CNL，支持命名上下文格式
-                // executeWithContext 会自动检测并映射命名参数到位置参数
-                DynamicCnlExecutor.ExecutionResult execResult;
-                try {
-                    execResult = dynamicCnlExecutor.executeWithTenantContext(
-                        tenantId,
-                        request.source(),
-                        request.context(),  // 直接传递原始 context，让执行器处理格式映射
-                        request.getFunctionNameOrDefault(),
-                        request.getLocaleOrDefault(),
-                        vocabIndex,
-                        legacyEvaluateSentinel,
-                        aliasSet,
-                        aliasesTrusted
-                    );
-                } finally {
-                    if (captureTraceSteps) {
-                        traceDrainResult = TraceAccess.drainCurrentThread();
-                    }
-                }
+                // 阶段一：建 vocabIndex/aliasSet → arm trace → 调 executor → finally drain
+                // （逐字移入 ReplayExecutionCore.execute，见该类注释）。executor 异常原样
+                // 透传——不在此处捕获，由下方现有四类 catch 处理。
+                ReplayExecutionRequest execRequest = new ReplayExecutionRequest(
+                    tenantId,
+                    request.source(),
+                    request.context(),  // 直接传递原始 context，让执行器处理格式映射
+                    request.getFunctionNameOrDefault(),
+                    request.getLocaleOrDefault(),
+                    request.vocabulary(),
+                    request.aliasSet(),
+                    legacyEvaluateSentinel,
+                    aliasesTrusted,
+                    trace,
+                    effectiveReplayCapture);
+                ExecutionPhaseResult phase = replayExecutionCore.execute(execRequest, replayExecutorAdapter);
 
                 // 记录指标
                 policyMetrics.recordEvaluation(
-                    execResult.moduleName(),
-                    execResult.functionName(),
-                    execResult.executionTimeMs(),
+                    phase.execResult().moduleName(),
+                    phase.execResult().functionName(),
+                    phase.execResult().executionTimeMs(),
                     true
                 );
                 businessMetrics.recordPolicyEvaluation();
                 businessMetrics.endPolicyEvaluation(sample);
 
                 // 记录业务指标（贷款批准/拒绝）
-                if ("aster.finance.loan".equals(execResult.moduleName())) {
-                    recordLoanDecision(execResult.result());
+                if ("aster.finance.loan".equals(phase.execResult().moduleName())) {
+                    recordLoanDecision(phase.execResult().result());
                 }
 
                 // 发布审计事件
@@ -571,32 +557,23 @@ public class PolicyEvaluationResource {
 
                 publishPolicyEvaluationEvent(
                     tenantId,
-                    new EvaluationRequest(execResult.moduleName(), execResult.functionName(), new Object[]{request.context()}),
+                    new EvaluationRequest(phase.execResult().moduleName(), phase.execResult().functionName(), new Object[]{request.context()}),
                     performedBy,
                     true,
-                    execResult.executionTimeMs(),
+                    phase.execResult().executionTimeMs(),
                     null,
                     metadata
                 );
 
                 LOG.infof("CNL source evaluation completed in %dms: %s.%s",
-                    execResult.executionTimeMs(), execResult.moduleName(), execResult.functionName());
+                    phase.execResult().executionTimeMs(), phase.execResult().moduleName(), phase.execResult().functionName());
 
-                // 回放 trace：trace=true 或 replayCapture=true 时都构建 DecisionTrace。
+                // 阶段二：回放 trace：trace=true 或 replayCapture=true 时都构建 DecisionTrace。
                 // 前者供前端展示，后者供 traceHash 计算（回放地基）。steps 来自 truffle
                 // 同线程 drain；drain 标记不可回放时，后续 ReplayMetadata 必须诚实降级。
-                io.aster.policy.api.model.DecisionTrace decisionTrace = null;
-                if (trace || effectiveReplayCapture) {
-                    List<io.aster.policy.api.model.DecisionTrace.TraceStep> traceSteps =
-                        traceDrainResult == null ? List.of() : toTraceSteps(traceDrainResult.steps());
-                    decisionTrace = new io.aster.policy.api.model.DecisionTrace(
-                        execResult.moduleName(),
-                        execResult.functionName(),
-                        traceSteps,
-                        execResult.result(),
-                        execResult.executionTimeMs()
-                    );
-                }
+                io.aster.policy.api.model.DecisionTrace decisionTrace =
+                    replayExecutionCore.buildDecisionTrace(
+                        phase.execResult(), phase.traceDrainResult(), trace || effectiveReplayCapture);
 
                 recordApiCall("/api/v1/policies/evaluate-source", "success",
                     System.currentTimeMillis() - apiCallStart, tenantId, performedBy, apiKeyIdSnap);
@@ -604,37 +581,24 @@ public class PolicyEvaluationResource {
                 // trace 字段只在客户端显式请求 trace=true 时回传（保持既有契约）；
                 // replayCapture 单独走 replayMetadata，不污染 decisionTrace 字段。
                 EvaluationResponse response = EvaluationResponse.success(
-                    execResult.result(),
-                    execResult.executionTimeMs(),
+                    phase.execResult().result(),
+                    phase.execResult().executionTimeMs(),
                     trace ? decisionTrace : null,
-                    execResult.functionName());
+                    phase.execResult().functionName());
 
                 if (effectiveReplayCapture) {
-                    // ★权威 hash 在 Java 评估侧计算（Codex #4）：input=请求级 context，
+                    // 阶段三：★权威 hash 在 Java 评估侧计算（Codex #4）：input=请求级 context，
                     // output=业务 result，trace=决策级 DecisionTrace（剔 executionTimeMs）。
                     // ★fail-loud（Codex 复审 P0）：显式请求 replayCapture 时**总是**附 replayMetadata，
                     // 绝不静默丢——compute 内部对小数走 string-lift、对真正无法 hash 的值落
                     // NON_REPLAYABLE + reasons，调用方据 replayabilityStatus 判定是否拿到了地基。
                     // 只有 compute 本身意外抛（不该发生，已内部 fail-loud）才兜底为 NON_REPLAYABLE。
-                    io.aster.policy.replay.ReplayMetadata rm;
-                    try {
-                        rm = io.aster.policy.replay.ReplayMetadata.compute(
-                            toolchainIdentityProvider.currentToolchainId(),
-                            request.context(),
-                            execResult.result(),
-                            decisionTrace,
-                            traceDrainResult == null || traceDrainResult.replayable());
-                    } catch (Exception rmEx) {
-                        LOG.warnf("replayCapture 元数据计算意外失败，标记 NON_REPLAYABLE: %s", rmEx.getMessage());
-                        rm = new io.aster.policy.replay.ReplayMetadata(
-                            toolchainIdentityProvider.currentToolchainId(),
-                            io.aster.policy.replay.ReplayMetadata.CANONICALIZATION_VERSION,
-                            null, null, null, List.of(),
-                            io.aster.policy.replay.ReplayMetadata.STATUS_NON_REPLAYABLE,
-                            List.of("compute_threw: " + rmEx.getMessage()),
-                            // M2 canonical 串：compute 抛异常兜底路径无 payload。
-                            null, null, null);
-                    }
+                    io.aster.policy.replay.ReplayMetadata rm = replayExecutionCore.computeReplayMetadata(
+                        toolchainIdentityProvider.currentToolchainId(),
+                        request.context(),
+                        phase.execResult(),
+                        decisionTrace,
+                        phase.traceDrainResult());
                     response = response.withReplayMetadata(rm);
                 }
                 return response;
@@ -1486,108 +1450,6 @@ public class PolicyEvaluationResource {
      *
      * @param result 策略评估结果
      */
-    /**
-     * 把请求携带的领域词汇表（Map 形式）构建为 IdentifierIndex。
-     *
-     * <p>ADR 0014 线C：发布的策略可携带其快照领域词汇，使执行端规范化阶段
-     * 能翻译用户自定义术语。词汇为空或格式非法时返回 null（退化为仅内置），
-     * 不阻断执行——执行端解析仍可在 builtin 词汇下进行。
-     *
-     * @param vocabulary 领域词汇 Map（DomainVocabulary 的 JSON 结构），可为 null
-     * @return 构建好的 IdentifierIndex，无有效词汇时返回 null
-     */
-    /**
-     * 把请求里的别名 Map（kind 名 → 短语数组）转成 {@code Map<SemanticTokenKind, List<String>>}。
-     *
-     * <p>ADR 0022。无法识别的 kind 名跳过（不阻断执行；下游 UserAliasValidator 会对无效 kind 拒，
-     * 但冻结版本本就已校验过，这里只做类型转换）。null/空 → null（无用户别名，退化为无别名解析）。
-     */
-    private java.util.Map<aster.core.lexicon.SemanticTokenKind, java.util.List<String>> buildAliasSet(
-            Map<String, java.util.List<String>> aliasSet) {
-        if (aliasSet == null || aliasSet.isEmpty()) {
-            return null;
-        }
-        java.util.Map<aster.core.lexicon.SemanticTokenKind, java.util.List<String>> out =
-            new java.util.EnumMap<>(aster.core.lexicon.SemanticTokenKind.class);
-        for (var e : aliasSet.entrySet()) {
-            if (e.getKey() == null || e.getValue() == null) {
-                continue;
-            }
-            try {
-                out.put(aster.core.lexicon.SemanticTokenKind.valueOf(e.getKey()), e.getValue());
-            } catch (IllegalArgumentException ignored) {
-                // 未知 kind 名跳过——不阻断执行。
-            }
-        }
-        return out.isEmpty() ? null : out;
-    }
-
-    private aster.core.identifier.IdentifierIndex buildVocabularyIndex(Map<String, Object> vocabulary) {
-        if (vocabulary == null || vocabulary.isEmpty()) {
-            return null;
-        }
-        try {
-            aster.core.identifier.DomainVocabulary vocab =
-                aster.core.identifier.VocabularyLoader.loadFromMap(vocabulary);
-            return aster.core.identifier.IdentifierIndex.build(vocab);
-        } catch (Exception e) {
-            // 词汇格式非法不应阻断执行，记录并退化为仅内置。
-            LOG.warnf("领域词汇表解析失败，退化为仅内置词汇: %s", e.getMessage());
-            return null;
-        }
-    }
-
-    private static List<io.aster.policy.api.model.DecisionTrace.TraceStep> toTraceSteps(
-            List<Map<String, Object>> rawSteps) {
-        if (rawSteps == null || rawSteps.isEmpty()) {
-            return List.of();
-        }
-        List<io.aster.policy.api.model.DecisionTrace.TraceStep> steps = new ArrayList<>(rawSteps.size());
-        for (Map<String, Object> raw : rawSteps) {
-            if (raw == null) {
-                continue;
-            }
-            steps.add(new io.aster.policy.api.model.DecisionTrace.TraceStep(
-                traceSequence(raw.get("sequence")),
-                traceExpression(raw.get("expression")),
-                raw.get("result"),
-                Boolean.TRUE.equals(raw.get("matched")),
-                toChildTraceSteps(raw.get("children"))));
-        }
-        return List.copyOf(steps);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static List<io.aster.policy.api.model.DecisionTrace.TraceStep> toChildTraceSteps(Object rawChildren) {
-        if (!(rawChildren instanceof List<?> children) || children.isEmpty()) {
-            return List.of();
-        }
-        List<Map<String, Object>> childMaps = new ArrayList<>(children.size());
-        for (Object child : children) {
-            if (child instanceof Map<?, ?> childMap) {
-                childMaps.add((Map<String, Object>) childMap);
-            }
-        }
-        return toTraceSteps(childMaps);
-    }
-
-    private static int traceSequence(Object rawSequence) {
-        if (rawSequence instanceof Number number) {
-            return number.intValue();
-        }
-        if (rawSequence instanceof String text) {
-            return Integer.parseInt(text);
-        }
-        throw new IllegalArgumentException("trace step 缺少 sequence");
-    }
-
-    private static String traceExpression(Object rawExpression) {
-        if (rawExpression instanceof String expression) {
-            return expression;
-        }
-        return rawExpression == null ? "" : String.valueOf(rawExpression);
-    }
-
     private void recordLoanDecision(Object result) {
         if (result == null) {
             return;

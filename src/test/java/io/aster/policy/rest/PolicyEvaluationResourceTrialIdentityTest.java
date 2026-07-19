@@ -1,7 +1,6 @@
 package io.aster.policy.rest;
 
 import io.aster.billing.ApiQuotaGuard;
-import io.aster.policy.api.model.DecisionTrace;
 import io.aster.policy.security.TrialEndpointGuard;
 import io.aster.policy.tenant.TenantContext;
 import io.vertx.core.http.HttpServerRequest;
@@ -83,39 +82,13 @@ class PolicyEvaluationResourceTrialIdentityTest {
         return m.invoke(target, args);
     }
 
-    @Test
-    @DisplayName("M2.1b: toTraceSteps 递归转换 truffle drain map shape")
-    @SuppressWarnings("unchecked")
-    void toTraceStepsConvertsNestedDrainMaps() throws Exception {
-        List<Map<String, Object>> rawSteps = List.of(Map.of(
-            "sequence", 1,
-            "expression", "score >= 680",
-            "result", true,
-            "matched", true,
-            "children", List.of(Map.of(
-                "sequence", 2,
-                "expression", "income >= 50000",
-                "result", 50000L,
-                "matched", false,
-                "children", List.of()))));
-
-        List<DecisionTrace.TraceStep> steps =
-            (List<DecisionTrace.TraceStep>) invoke(null, "toTraceSteps", new Class<?>[]{List.class}, rawSteps);
-
-        assertEquals(1, steps.size());
-        DecisionTrace.TraceStep root = steps.get(0);
-        assertEquals(1, root.sequence());
-        assertEquals("score >= 680", root.expression());
-        assertEquals(Boolean.TRUE, root.result());
-        assertTrue(root.matched());
-        assertEquals(1, root.children().size());
-        DecisionTrace.TraceStep child = root.children().get(0);
-        assertEquals(2, child.sequence());
-        assertEquals("income >= 50000", child.expression());
-        assertEquals(50000L, child.result());
-        assertEquals(false, child.matched());
-        assertTrue(child.children().isEmpty());
-    }
+    // M2.1b: toTraceSteps 递归转换 truffle drain map shape —— 该私有方法已在
+    // P0-A S2-1a-0 Task 4 移入 io.aster.replay.core.ReplayExecutionCore（trace/vocab/
+    // alias glue 逐字迁移，见该次重构）。等价覆盖迁到
+    // aster-replay-core/src/test/java/io/aster/replay/core/ReplayExecutionCoreTest
+    // ，经其公开入口 buildDecisionTrace(...) 测试同一份嵌套 children 转换逻辑
+    // （比反射调用 private 方法更贴近真实公开契约）。本类不再持有该方法，反射调用
+    // 会因 NoSuchMethodException 失败，故整体删除，不留死测试。
 
     @Test
     @DisplayName("R29: tenantId() 读 TenantContext.trial，跳过 header fallback")

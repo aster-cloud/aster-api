@@ -26,6 +26,26 @@ dependencies {
     // 版本与 aster-api 根 build.gradle 的 quarkus-bom 3.37.2 管理版本对齐（本模块无 BOM，需显式声明）。
     testImplementation 'org.junit.jupiter:junit-jupiter:6.1.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // S2-1a-1：executor/parser 运行所需（core 无 Quarkus BOM，全显式声明，不靠 aster-api transitive）。
+    // 版本已用 aster-api runtimeClasspath 实测校准（非按 brief 猜测直接抄）：
+    // graal-sdk 在 aster-api 实际按版本对齐规则从 25.0.3 降到 23.1.2（构建约束胜出的有效版本），
+    // 其余坐标（polyglot/truffle-api/truffle-runtime/truffle-compiler/compiler/antlr4-runtime/jboss-logging）
+    // 实测与预期一致。
+    implementation 'org.graalvm.polyglot:polyglot:25.0.3'
+    implementation 'org.graalvm.sdk:graal-sdk:23.1.2'
+    implementation 'org.graalvm.truffle:truffle-api:25.0.3'
+    runtimeOnly    'org.graalvm.truffle:truffle-runtime:25.0.3'
+    runtimeOnly    'org.graalvm.truffle:truffle-compiler:25.0.3'
+    runtimeOnly    'org.graalvm.compiler:compiler:25.0.3'
+    implementation 'org.jboss.logging:jboss-logging:3.6.3.Final'
+    implementation 'org.antlr:antlr4-runtime:4.13.2'   // parser 直接 import，无条件
+    // locale SPI（byte-parity 需全 locale parse；hi 是独立 artifact cloud.aster-lang:aster-lang-hi，
+    // 非 locales 包一部分，catalog 已提供 asterLibs.hi 访问器，与根 build.gradle 用法一致）
+    testRuntimeOnly asterLibs.en
+    testRuntimeOnly asterLibs.zh
+    testRuntimeOnly asterLibs.de
+    testRuntimeOnly asterLibs.hi
 }
 
 test {

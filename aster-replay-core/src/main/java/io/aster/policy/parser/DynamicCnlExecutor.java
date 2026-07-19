@@ -7,12 +7,10 @@ import aster.core.lowering.CoreLowering;
 import aster.core.module.LinkException;
 import aster.core.module.ModuleGraphLinker;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.aster.common.JacksonMappers;
 import io.aster.policy.api.convert.NamedContextMapper;
 import io.aster.policy.module.ModuleResolutionException;
-import io.aster.policy.module.ModuleResolver;
-import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
+import io.aster.replay.core.module.ModuleGraphResolver;
+import io.aster.replay.core.parser.ReplayMappers;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.HostAccess;
@@ -39,12 +37,14 @@ import java.util.concurrent.atomic.AtomicLong;
  * 4. 使用 GraalVM Polyglot 执行 JSON
  *
  * 适用于 Dashboard 执行场景，无需预先部署策略
+ *
+ * <p>POJO（S2-1a-1 从 aster-api CDI bean 剥离）：不再持有 CDI 注解，改为构造注入。
+ * aster-api 侧由 Task 3 的 CDI producer 负责生产实例并注入真实 {@link ModuleGraphResolver}。
  */
-@jakarta.enterprise.context.ApplicationScoped
 public class DynamicCnlExecutor {
 
     private static final Logger LOG = Logger.getLogger(DynamicCnlExecutor.class);
-    private static final ObjectMapper MAPPER = JacksonMappers.DEFAULT;
+    private static final ObjectMapper MAPPER = ReplayMappers.DEFAULT;
     private static final int CACHE_MAX = 2048;
 
     // Core IR JSON → cached Truffle Source。Source 是不可变编译单元；Context 仍每次新建，
@@ -59,11 +59,28 @@ public class DynamicCnlExecutor {
     private static final AtomicLong coreIrCacheMisses = new AtomicLong();
     private static final AtomicLong coreIrCacheBypasses = new AtomicLong();
 
-    @Inject
-    ModuleResolver moduleResolver;
+    private final ModuleGraphResolver moduleResolver;
+    private final boolean modulesEnabled;
 
-    @ConfigProperty(name = "aster.modules.enabled", defaultValue = "false")
-    boolean modulesEnabled;
+    /**
+     * 无参构造：无跨模块解析能力（moduleResolver=null）、modules 特性关闭。
+     * 保留给现有测试站点（{@code new DynamicCnlExecutor()}）与无模块场景使用。
+     */
+    public DynamicCnlExecutor() {
+        this(null, false);
+    }
+
+    /**
+     * 构造注入：aster-api 侧由 Task 3 的 CDI producer 传入真实 {@link ModuleGraphResolver}
+     * 实现（{@code ModuleResolver}）与 {@code aster.modules.enabled} 配置值。
+     *
+     * @param moduleResolver 跨模块图解析器，null 表示不支持跨模块 import（modulesEnabled 无关时可为 null）
+     * @param modulesEnabled 是否启用跨模块 import 特性
+     */
+    public DynamicCnlExecutor(ModuleGraphResolver moduleResolver, boolean modulesEnabled) {
+        this.moduleResolver = moduleResolver;
+        this.modulesEnabled = modulesEnabled;
+    }
 
     /**
      * 进程级共享 Engine。GraalVM 推荐模式：Engine 持有 AST/字节码 cache
@@ -283,7 +300,7 @@ public class DynamicCnlExecutor {
     private static ExecutionResult executeInternal(
             String source, Object context, String functionName, String locale, boolean mapNamedContext,
             aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel,
-            String tenantId, ModuleResolver moduleResolver, boolean modulesEnabled) {
+            String tenantId, ModuleGraphResolver moduleResolver, boolean modulesEnabled) {
         return executeInternal(source, context, functionName, locale, mapNamedContext, identifierIndex,
             legacyEvaluateSentinel, tenantId, moduleResolver, modulesEnabled, null, true);
     }
@@ -291,7 +308,7 @@ public class DynamicCnlExecutor {
     private static ExecutionResult executeInternal(
             String source, Object context, String functionName, String locale, boolean mapNamedContext,
             aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel,
-            String tenantId, ModuleResolver moduleResolver, boolean modulesEnabled,
+            String tenantId, ModuleGraphResolver moduleResolver, boolean modulesEnabled,
             Map<aster.core.lexicon.SemanticTokenKind, List<String>> aliasSet) {
         // 兼容重载：默认 aliasSet 可信（既有调用方语义）。
         return executeInternal(source, context, functionName, locale, mapNamedContext, identifierIndex,
@@ -301,7 +318,7 @@ public class DynamicCnlExecutor {
     private static ExecutionResult executeInternal(
             String source, Object context, String functionName, String locale, boolean mapNamedContext,
             aster.core.identifier.IdentifierIndex identifierIndex, boolean legacyEvaluateSentinel,
-            String tenantId, ModuleResolver moduleResolver, boolean modulesEnabled,
+            String tenantId, ModuleGraphResolver moduleResolver, boolean modulesEnabled,
             Map<aster.core.lexicon.SemanticTokenKind, List<String>> aliasSet, boolean aliasesTrusted) {
         long startTime = System.currentTimeMillis();
 
@@ -402,7 +419,7 @@ public class DynamicCnlExecutor {
             String source, String locale, aster.core.identifier.IdentifierIndex identifierIndex,
             Map<aster.core.lexicon.SemanticTokenKind, List<String>> aliasSet, boolean aliasesTrusted,
             String functionName, boolean legacyEvaluateSentinel,
-            String tenantId, ModuleResolver moduleResolver, boolean modulesEnabled) throws Exception {
+            String tenantId, ModuleGraphResolver moduleResolver, boolean modulesEnabled) throws Exception {
         // 1. 解析 CNL → AST（传入 locale 以支持多语言，传入 index 以翻译用户词）。
         //    带用户别名（ADR 0022）时走 parseWithUserAliases。allowStructural 按 aliasesTrusted：
         //    冻结版本可信=true（结构词已授权）；trial 现场输入=false（结构词需授权，防绕过）。

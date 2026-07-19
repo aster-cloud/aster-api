@@ -300,7 +300,7 @@ public class InProcessCnlParser {
             java.util.TreeMap<String, java.util.List<String>> aliases = new java.util.TreeMap<>();
             lexicon.getAliases().forEach((k, v) -> aliases.put(k.name(), v));
             payload.put("aliases", aliases);
-            return io.aster.common.JacksonMappers.DEFAULT.writeValueAsString(payload);
+            return io.aster.replay.core.parser.ReplayMappers.DEFAULT.writeValueAsString(payload);
         } catch (Exception e) {
             // 指纹计算失败（极罕见异常路径）：返回 null，调用方放弃缓存（确定性处理，不引入
             // 随机源）。不抛异常、不阻断执行。

@@ -7,6 +7,7 @@ import aster.core.module.ModuleGraph;
 import aster.core.module.ModuleKey;
 import io.aster.policy.entity.PolicyVersion;
 import io.aster.policy.parser.InProcessCnlParser;
+import io.aster.replay.core.module.ModuleGraphResolver;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.jboss.logging.Logger;
 
@@ -26,11 +27,12 @@ import java.util.Set;
  * Resolves pinned CNL imports into a Core module graph for ADR 0015 linking.
  */
 @ApplicationScoped
-public class ModuleResolver {
+public class ModuleResolver implements ModuleGraphResolver {
 
     private static final Logger LOG = Logger.getLogger(ModuleResolver.class);
     private static final int ROOT_VERSION = 0;
 
+    @Override
     public ModuleGraph resolveGraph(
             String tenantId,
             CoreModel.Module rootCore,

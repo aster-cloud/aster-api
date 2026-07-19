@@ -1,0 +1,32 @@
+// aster-replay-core：从 aster-api 抽出的 replay 执行编排（无 Quarkus/DB）。
+// 依赖 aster-lang core/truffle + Jackson；被 aster-api 与后续 β runner 共同依赖。
+plugins {
+    id 'java-library'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    api asterLibs.core        // CanonicalJson/IdentifierIndex/SemanticTokenKind/VocabularyLoader
+    api asterLibs.truffle     // TraceAccess/TraceCollector
+    implementation asterLibs.runtime
+    // 版本与 aster-api 根 build.gradle 的传递依赖对齐（quarkus-bom 3.37.2 管理的
+    // jackson-bom:2.22.0）；本模块无 Quarkus BOM，需显式声明版本。
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.0'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+}

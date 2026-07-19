@@ -87,6 +87,9 @@ dependencies {
     implementation asterLibs.runtime
     implementation asterLibs.truffle
 
+    // S2-1a-0：replay 执行编排共享模块（本地子模块，见 settings.gradle）
+    implementation project(':aster-replay-core')
+
     // 语言包（通过 SPI 自动发现并注册到 LexiconRegistry）
     runtimeOnly asterLibs.en
     runtimeOnly asterLibs.zh

@@ -85,7 +85,7 @@ class PolicyEvaluationResourceTrialIdentityTest {
     // M2.1b: toTraceSteps 递归转换 truffle drain map shape —— 该私有方法已在
     // P0-A S2-1a-0 Task 4 移入 io.aster.replay.core.ReplayExecutionCore（trace/vocab/
     // alias glue 逐字迁移，见该次重构）。等价覆盖迁到
-    // aster-replay-core/src/test/java/io/aster/replay/core/ReplayExecutionCoreTest
+    // replay/src/test/java/io/aster/replay/core/ReplayExecutionCoreTest
     // ，经其公开入口 buildDecisionTrace(...) 测试同一份嵌套 children 转换逻辑
     // （比反射调用 private 方法更贴近真实公开契约）。本类不再持有该方法，反射调用
     // 会因 NoSuchMethodException 失败，故整体删除，不留死测试。

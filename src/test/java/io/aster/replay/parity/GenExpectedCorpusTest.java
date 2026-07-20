@@ -61,7 +61,8 @@ class GenExpectedCorpusTest {
     private static final String HMAC_KEY = "s2-1a-2-parity-corpus-hmac-key!!";
     private static final String ROLE = "MEMBER";
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    /** ★静态复用：driveAuthority 抽为 package-private static（供 RunnerDistributionParityTest 复用），故 mapper 亦静态。 */
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /**
      * 与 PolicyEvaluationReplayOrderingTest.HmacProfile 同构：关全局签名，强制走 HMAC 校验路径
@@ -107,7 +108,7 @@ class GenExpectedCorpusTest {
     }
 
     /** 发一次 HMAC 已验证内部调用方请求（cloud BFF 视角），replayCapture=true。 */
-    private Response evaluateWithReplayCapture(String body, String tenant, String nonce) {
+    private static Response evaluateWithReplayCapture(String body, String tenant, String nonce) {
         long ts = System.currentTimeMillis() / 1000;
         String sig = sign(canonical(ts, nonce, body, tenant, ROLE));
         return given()
@@ -121,6 +122,49 @@ class GenExpectedCorpusTest {
             .body(body)
             .when()
             .post(PATH + "?trace=false&replayCapture=true");
+    }
+
+    /**
+     * 权威侧 A：把 corpus {@code .req.json}（schema ②：tenantId/source/input/locale/functionName/aliasSet）
+     * 经 HMAC harness 打生产 {@code POST /evaluate-source?trace=false&replayCapture=true}，返回响应体里的
+     * {@code replayMetadata} JsonNode。★package-private static——供 {@link RunnerDistributionParityTest}
+     * 复用同一权威驱动，避免复制 HMAC canonical 构造（DRY）。
+     *
+     * <p>断言生产路径必须 200、无 error、含 replayMetadata（否则 corpus fixture 在生产路径下不可编译执行，直接失败）。
+     * ★与 gen 路径同一映射：{@code context = req.input}（RunnerRequest.input ↔ REST context），tenant/nonce
+     * 由 fixture 名 + nanoTime 生成保 HMAC 不 replay 拦截。
+     *
+     * @param reqJson corpus {@code .req.json} 原文
+     * @return 生产 evaluateSource 的 {@code replayMetadata} JsonNode（权威基线）
+     */
+    static JsonNode driveAuthority(String reqJson) throws IOException {
+        JsonNode req = MAPPER.readTree(reqJson);
+
+        // schema ② 请求 → REST SourcePolicyRequest（source/context/locale/functionName）。
+        ObjectNode body = MAPPER.createObjectNode();
+        body.put("source", req.get("source").asText());
+        body.set("context", req.get("input"));   // 原样透传 input map
+        body.put("locale", req.get("locale").asText());
+        if (req.hasNonNull("functionName")) {
+            body.put("functionName", req.get("functionName").asText());
+        }
+        String bodyJson = MAPPER.writeValueAsString(body);
+
+        String label = req.hasNonNull("tenantId") ? req.get("tenantId").asText() : "corpus";
+        String tenant = "tenant-parity-" + label + "-" + System.nanoTime();
+        String nonce = "drive-authority-" + label + "-" + System.nanoTime();
+        Response resp = evaluateWithReplayCapture(bodyJson, tenant, nonce);
+
+        assertEquals(200, resp.getStatusCode(),
+            "driveAuthority evaluateSource 非 200（corpus fixture 在 aster-api 生产路径下不可编译执行）：body="
+                + resp.getBody().asString());
+        JsonNode root = MAPPER.readTree(resp.getBody().asString());
+        assertTrue(root.get("error") == null || root.get("error").isNull(),
+            "driveAuthority 生产路径返回 error（corpus fixture 编译执行失败）：" + root.path("error").asText());
+        JsonNode rm = root.get("replayMetadata");
+        assertNotNull(rm, "driveAuthority 响应缺 replayMetadata（replayCapture 未生效？检查 HMAC/aliasesTrusted）");
+        assertTrue(rm.isObject() && !rm.isNull(), "driveAuthority replayMetadata 非对象");
+        return rm;
     }
 
     /**
@@ -147,33 +191,9 @@ class GenExpectedCorpusTest {
         List<String> generated = new ArrayList<>();
         for (Path reqFile : reqFiles) {
             String name = reqFile.getFileName().toString().replace(".req.json", "");
-            JsonNode req = mapper.readTree(Files.readString(reqFile, StandardCharsets.UTF_8));
 
-            // schema ② 请求 → REST SourcePolicyRequest（source/context/locale/functionName）。
-            // ★context = corpus 的 input（RunnerRequest.input 对应 REST 的 context）。
-            ObjectNode body = mapper.createObjectNode();
-            body.put("source", req.get("source").asText());
-            body.set("context", req.get("input"));   // 原样透传 input map
-            body.put("locale", req.get("locale").asText());
-            if (req.hasNonNull("functionName")) {
-                body.put("functionName", req.get("functionName").asText());
-            }
-            String bodyJson = mapper.writeValueAsString(body);
-
-            String tenant = "tenant-parity-" + name;
-            String nonce = "gen-expected-" + name + "-" + System.nanoTime();
-            Response resp = evaluateWithReplayCapture(bodyJson, tenant, nonce);
-
-            // 生产路径必须 200 且带 replayMetadata；否则 corpus fixture 在生产路径下不可用，直接失败。
-            assertEquals(200, resp.getStatusCode(),
-                "[" + name + "] evaluateSource 非 200（corpus fixture 在 aster-api 生产路径下不可编译执行）：body="
-                    + resp.getBody().asString());
-            JsonNode root = mapper.readTree(resp.getBody().asString());
-            assertTrue(root.get("error") == null || root.get("error").isNull(),
-                "[" + name + "] 生产路径返回 error（corpus fixture 编译执行失败）：" + root.path("error").asText());
-            JsonNode rm = root.get("replayMetadata");
-            assertNotNull(rm, "[" + name + "] 响应缺 replayMetadata（replayCapture 未生效？检查 HMAC/aliasesTrusted）");
-            assertTrue(rm.isObject() && !rm.isNull(), "[" + name + "] replayMetadata 非对象");
+            // ★复用 driveAuthority（同一 HMAC 权威驱动）——不再复制 canonical 构造。
+            JsonNode rm = driveAuthority(Files.readString(reqFile, StandardCharsets.UTF_8));
 
             // ★corpus 语义要求：parity 门只对可回放 fixture 有意义——权威侧必须 REPLAYABLE。
             assertEquals("REPLAYABLE", rm.get("replayabilityStatus").asText(),
@@ -183,7 +203,7 @@ class GenExpectedCorpusTest {
             if (gen) {
                 // 权威 expected = 完整 replayMetadata 对象逐字写盘（含 toolchainId；byte-compare 时脚本排除）。
                 Path out = corpusDir.resolve(name + ".expected.json");
-                String pretty = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(rm);
+                String pretty = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(rm);
                 Files.writeString(out, pretty + "\n", StandardCharsets.UTF_8);
                 generated.add(out.getFileName().toString());
             }
@@ -202,7 +222,7 @@ class GenExpectedCorpusTest {
      * 解析 corpus 目录：优先系统属性 {@code -Dparity.corpus.dir}（gen-expected.sh 传绝对路径），
      * 缺省回退到 aster-replay-runner 侧的相对路径（便于本地在 aster-api 根目录直接手跑）。
      */
-    private static Path resolveCorpusDir() {
+    static Path resolveCorpusDir() {
         String prop = System.getProperty("parity.corpus.dir");
         if (prop != null && !prop.isBlank()) {
             return Path.of(prop);

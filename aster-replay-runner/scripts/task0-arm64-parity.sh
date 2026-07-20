@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Task 0 风险门：podman 真构建 arm64 runner 镜像，真跑固定 corpus，
+# Task 0 风险门：真构建 arm64 runner 镜像，真跑固定 corpus，
 # 与 aster-api 权威对照 byte-identical（★排除 toolchainId，只比 canonical* + replayabilityStatus + traceHash）。
 #
 # ★对照语义（诚实边界）：
@@ -11,12 +11,38 @@
 #
 # 退出 0 = 门通过（stock JRE+Truffle 真跑 + byte-identical）；
 # 非 0 = 门失败（stock JRE 跑不起 Truffle / arm64 构建失败 / 有分叉）→ 回头改 A/B（可能须 GraalVM JDK 基镜像）。
+#
+# ── 参数化（Slice-2 D-2 CI 复用同一比对逻辑）──────────────────────────────────
+# 默认（无参数）= Task 0 开发者本地手跑：podman 本地 build arm64 镜像再比对（与 Slice-1 byte-identical）。
+# `--no-build`  跳过 installDist + build，直接用外部 $IMAGE（CI 已 push+签的 @DIGEST）比对，不本地构建。
+# 环境变量：
+#   RUNTIME  容器运行时（podman|docker），默认 podman（本地手跑）；CI 传 docker。
+#   IMAGE    镜像引用，默认 aster-replay-runner:task0（本地 build tag）；
+#            --no-build 时须传外部镜像（如 wontlost/aster-replay-runner@sha256:...）。
+# 用法：
+#   本地手跑（不变）:   bash task0-arm64-parity.sh
+#   CI（对 push 的 digest）: IMAGE="wontlost/aster-replay-runner@${DIGEST}" RUNTIME=docker \
+#                            bash task0-arm64-parity.sh --no-build
 set -euo pipefail
 
 cd "$(dirname "$0")/.."   # aster-replay-runner/
 ROOT="$(cd ../ && pwd)"   # aster-api/
 CORPUS_DIR="src/test/resources/parity-corpus"
-IMAGE="aster-replay-runner:task0"
+
+# ── 参数解析：--no-build 关本地构建，用外部 $IMAGE。默认保持 Slice-1 本地行为不变。──
+BUILD=1
+for arg in "$@"; do
+    case "$arg" in
+        --no-build) BUILD=0 ;;
+        *) echo "未知参数：${arg}（仅支持 --no-build）"; exit 2 ;;
+    esac
+done
+
+# RUNTIME/IMAGE 默认值＝Slice-1 本地手跑行为（byte-identical）；CI 用 env 覆盖。
+RUNTIME="${RUNTIME:-podman}"
+IMAGE="${IMAGE:-aster-replay-runner:task0}"
+
+command -v "$RUNTIME" >/dev/null 2>&1 || { echo "❌ 容器运行时不可用：$RUNTIME"; exit 2; }
 
 # 前置：expected.json 必须已由 gen-expected.sh（aster-api 权威路径）产出。
 missing_expected=0
@@ -29,11 +55,15 @@ for req in "$CORPUS_DIR"/*.req.json; do
 done
 [ "$missing_expected" -eq 0 ] || { echo "== Task 0 门前置失败：expected.json 未生成 =="; exit 2; }
 
-echo "== 1. installDist（产 build/install/aster-replay-runner，供 Dockerfile COPY）=="
-(cd "$ROOT" && ./gradlew :aster-replay-runner:installDist -q)
+if [ "$BUILD" -eq 1 ]; then
+    echo "== 1. installDist（产 build/install/aster-replay-runner，供 Dockerfile COPY）=="
+    (cd "$ROOT" && ./gradlew :aster-replay-runner:installDist -q)
 
-echo "== 2. build arm64 image（真 arm64，arch 断言在 Dockerfile 内 fail-closed）=="
-podman build --platform linux/arm64 -t "$IMAGE" .
+    echo "== 2. build arm64 image（真 arm64，arch 断言在 Dockerfile 内 fail-closed）=="
+    "$RUNTIME" build --platform linux/arm64 -t "$IMAGE" .
+else
+    echo "== 1-2. --no-build：跳过本地构建，直接用外部镜像 ${IMAGE}（${RUNTIME}）=="
+fi
 
 echo "== 3. 真跑 corpus，逐个 byte-compare（容器内 stock Zulu JRE 25 + Truffle 解释器）=="
 # 只比 5 个 replay-critical 字段（排除 toolchainId）：canonicalInputHash/canonicalOutputHash/
@@ -44,10 +74,10 @@ for req in "$CORPUS_DIR"/*.req.json; do
     name="$(basename "$req" .req.json)"
 
     # runner 真跑：容器内 stdin JSON → stdout envelope（最后一行完整 JSON）。
-    runner_out="$(podman run --rm -i --platform linux/arm64 "$IMAGE" < "$req" | tail -n 1)"
+    runner_out="$("$RUNTIME" run --rm -i --platform linux/arm64 "$IMAGE" < "$req" | tail -n 1)"
     runner_outcome="$(echo "$runner_out" | jq -r '.outcome // "MISSING"')"
     if [ "$runner_outcome" != "SUCCESS" ]; then
-        echo "❌ RUNNER ERROR: $name（容器内非 SUCCESS，stock-JRE/Truffle 可能跑不起）"
+        echo "❌ RUNNER ERROR: ${name}（容器内非 SUCCESS，stock-JRE/Truffle 可能跑不起）"
         echo "$runner_out" | jq '.' || echo "$runner_out"
         fail=1
         continue

@@ -1,0 +1,266 @@
+name: aster-replay-runner deploy
+
+# β replay runner 镜像发版链（S2-1a-2 §C + D-2）：build（出已 push 的 arm64 digest）→
+# sign（cosign keyless 对 @digest 签+验）→ parity-arm64（D-2：对已 push 的 @digest 跑 arm64
+# corpus parity）→ image-pin-pr（开 PR 到 k3s pin digest）。与 deploy.yml 同机制、同 secrets。
+on:
+  push:
+    branches: [main]
+    # ★★不设 paths 过滤（Codex 整支审 High——发布活性死角）：本 workflow 的 image-pin 前有
+    #   「github.sha == origin/main tip」stale-gate，其正确性前提是「每个 main commit 都有自己的
+    #   run 接手」。若加 paths 白名单，出现死角：runner 提交 A 触发 → 执行中未命中 paths 的提交 B
+    #   前进 main → A 的 stale-gate 看到 tip=B 判过时跳过 pin，B 又不触发本 workflow → A 的已验证
+    #   镜像永不 pin 上 k3s。这正是 deploy.yml 顶部注释明确规避的正确性死角（deploy.yml:5-11）。
+    #   让每个 main commit 都触发：无关提交会走 build→sign→parity→pin，pin 幂等（同 digest 重开 PR
+    #   无害），省算力的收益不值这个发布活性死角。
+  # ★不设 workflow_dispatch（Codex 抓）：sign job 的 cosign verify --certificate-identity-regexp
+  #   硬锁 @refs/heads/main。workflow_dispatch 可从非 main ref 发起 → 非 main dispatch 会在 verify
+  #   阶段失败。runner 镜像发版只随 main push（无手动触发需求），与 deploy.yml 一致（只 push 触发）。
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      # cosign keyless 签名需要 OIDC token（把签名绑定到本 CI 的 GitHub Actions 身份）。
+      # build job 只 push 镜像并出 digest，签名在 sign job 做——但 build 亦需 OIDC 无害，
+      # 与 deploy.yml 一致声明；contents:read 供 checkout。
+      id-token: write
+      contents: read
+    # 把已 push 的不可变 digest 暴露给下游 sign / parity-arm64 / image-pin-pr。
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      # 先检出 aster-api 本体（拿到下面的 local composite action 文件），再由该 action
+      # 检出全部兄弟仓 + JDK + 发布版本目录。★checkout 到 ./aster-api 是 setup-aster-build 的前提
+      # （该 composite action 文件本身在 aster-api 仓内，不先检出主仓路径不存在）。
+      - uses: actions/checkout@v7
+        with:
+          path: aster-api
+
+      - name: Setup Aster build (siblings + JDK + version catalog)
+        uses: ./aster-api/.github/actions/setup-aster-build
+        with:
+          cross-repo-token: ${{ secrets.CROSS_REPO_TOKEN }}
+          # 发版链路 fail-closed：凭据缺失即失败，不静默回退 github.token（与 deploy.yml 一致）。
+          require-cross-repo-token: "true"
+
+      # 产 build/install/aster-replay-runner（application distribution）供 Dockerfile COPY。
+      - name: installDist
+        working-directory: aster-api
+        run: ./gradlew :aster-replay-runner:installDist
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build & Push runner image (arm64)
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          # context = runner 打包工程（Dockerfile COPY build/install/aster-replay-runner/）。
+          context: aster-api/aster-replay-runner
+          file: aster-api/aster-replay-runner/Dockerfile
+          # 集群节点 ARM64（OCI Ampere），必须真 arm64（Dockerfile 内有 arch 断言 fail-closed）。
+          platforms: linux/arm64
+          push: true
+          # pull:true 每次重拉 base，避免复用过期/错误架构的 base 解析结果。
+          pull: true
+          # provenance/sbom:false 清 build-push-action 默认加的 attestation manifest
+          # （platform=unknown 条目会被某些 containerd/k3s 误选 exec）；单平台镜像不需要。
+          provenance: false
+          sbom: false
+          tags: |
+            wontlost/aster-replay-runner:${{ github.sha }}
+            wontlost/aster-replay-runner:jvm-latest
+
+      # ★arm64 内容校验：manifest 的 architecture 字段会撒谎（QEMU 跨构建可产内容 amd64 却标
+      # arm64 的镜像 → 节点 exec format error → CrashLoop）。拉真实 arm64 变体在其内 uname -m
+      # 必须 aarch64，否则构建即失败，杜绝 mislabeled 镜像上生产。
+      # ★不能 `docker run <image> uname`——runner 镜像 ENTRYPOINT 是 /app/bin/aster-replay-runner
+      #   （读 stdin 跑 replay），直接 run 会执行 runner 而非 uname。须 --entrypoint uname override。
+      #   base 镜像 azul/zulu-openjdk-alpine:25-jre（busybox）有 uname。
+      - name: Verify pushed image is genuinely arm64
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "${DIGEST}" || { echo "build 未输出 digest，中止"; exit 1; }
+          # ★先静默 pull，避免 docker run 的 "Pulling from ..." 进度污染 uname 输出捕获。
+          docker pull -q --platform linux/arm64 alpine:latest >/dev/null 2>&1 || true
+          docker pull -q --platform linux/arm64 "wontlost/aster-replay-runner@${DIGEST}" >/dev/null 2>&1 || true
+          # preflight：runner 的 QEMU/binfmt 能否模拟 arm64（否则真 arm64 镜像也跑不起，会误判成镜像坏）。
+          PRE="$(docker run --rm --platform linux/arm64 alpine:latest sh -c 'uname -m' 2>/dev/null | tail -n1 | tr -d '[:space:]' || true)"
+          case "$PRE" in
+            aarch64|arm64) echo "preflight OK: runner 可模拟 arm64 ($PRE)" ;;
+            *) echo "::error title=qemu preflight failed::runner QEMU/binfmt 未能模拟 arm64（alpine uname='$PRE'）。CI 环境问题非镜像问题。"; exit 1 ;;
+          esac
+          echo "Verifying wontlost/aster-replay-runner@${DIGEST} is real arm64…"
+          # ★--entrypoint uname override（否则会跑 runner ENTRYPOINT 而非 uname）。
+          ARCH="$(docker run --rm --platform linux/arm64 --entrypoint uname "wontlost/aster-replay-runner@${DIGEST}" -m 2>/dev/null | tail -n1 | tr -d '[:space:]' || true)"
+          echo "in-image uname -m = '${ARCH}'"
+          case "${ARCH}" in
+            aarch64|arm64) echo "✓ genuine arm64" ;;
+            *) echo "::error title=arch mismatch::pushed image 标 arm64 但内容是 '${ARCH}'（非 aarch64）。QEMU 跨构建产出 mislabeled 镜像，禁止上生产。"; exit 1 ;;
+          esac
+
+  sign:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      # cosign keyless 签名需 OIDC token（Fulcio 证书 + Rekor 透明日志），把签名身份绑定到
+      # 本 workflow 的 GitHub Actions 身份 = repo+workflow。
+      id-token: write
+      contents: read
+    steps:
+      - uses: sigstore/cosign-installer@v3
+      # ★sign 是独立 job——须自己 docker login（cosign 对私有/rate-limited registry 拉 manifest 需认证）。
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Sign + verify pushed digest (keyless)
+        env:
+          COSIGN_YES: "true"
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "${DIGEST}" || { echo "build 未输出 digest，中止"; exit 1; }
+          # signer 身份 = 本 CI 的 OIDC。对不可变 digest 签（非浮动 tag）。
+          cosign sign "wontlost/aster-replay-runner@${DIGEST}"
+          # ★identity-regexp 指向本 workflow 自身文件名（aster-replay-runner-deploy.yml，非 deploy.yml）。
+          #   fail-closed：任何签名/身份不符 → verify 失败。
+          cosign verify "wontlost/aster-replay-runner@${DIGEST}" \
+            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/aster-replay-runner-deploy\.yml@refs/heads/main$" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+
+  # ★ = D-2：对 push+签的 @DIGEST 跑 arm64 corpus parity（全程 docker，不 rebuild）。
+  parity-arm64:
+    needs: [build, sign]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # gen-expected 是 @QuarkusTest，需 postgres+redis。★凭据/镜像逐字对齐 ci.yml build job
+    # （POSTGRES_USER/PASSWORD 都是 postgres，DB aster_policy，port 5432；redis:7-alpine 6379）——
+    # 用错凭据（如 aster/aster）会确定性 CI 失败。
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aster_policy
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: aster-api
+
+      - name: Setup Aster build (siblings + JDK + version catalog)
+        uses: ./aster-api/.github/actions/setup-aster-build
+        with:
+          cross-repo-token: ${{ secrets.CROSS_REPO_TOKEN }}
+          require-cross-repo-token: "true"
+
+      - uses: docker/setup-qemu-action@v4
+      # ★docker login——parity-arm64 是独立 job，docker pull 私有/rate-limited registry 需认证。
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # 经 aster-api evaluateSource 权威路径产 expected.json 基线（@QuarkusTest 驱动固定 corpus）。
+      - name: Gen expected (aster-api 权威路径)
+        working-directory: aster-api
+        env:
+          # ★指向上面的 postgres service，同 ci.yml：让连默认 localhost:5432 的 @QuarkusTest DB 测试稳定。
+          DB_JDBC_URL: "jdbc:postgresql://localhost:5432/aster_policy"
+          DB_REACTIVE_URL: "postgresql://localhost:5432/aster_policy"
+          DB_USERNAME: "postgres"
+          DB_PASSWORD: "postgres"
+          TESTCONTAINERS_RYUK_DISABLED: "true"
+        run: bash aster-replay-runner/scripts/gen-expected.sh
+
+      # 对已 push 的 @DIGEST 跑 arm64 parity（docker 全程，不 rebuild）：复用 task0 脚本的
+      # --no-build 路径，用外部 $IMAGE 而非本地构建。RUNTIME=docker（CI 用 docker，非本地 podman）。
+      - name: arm64 parity against pushed @DIGEST (docker, no rebuild)
+        working-directory: aster-api
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker pull --platform linux/arm64 "wontlost/aster-replay-runner@${DIGEST}"
+          IMAGE="wontlost/aster-replay-runner@${DIGEST}" RUNTIME=docker \
+            bash aster-replay-runner/scripts/task0-arm64-parity.sh --no-build
+
+  image-pin-pr:
+    # ★needs 三者（build/sign/parity-arm64）：直接依赖 build 才能解析 needs.build.outputs.digest；
+    #   依赖 sign+parity-arm64 保证「只 pin 已签+已过 arm64 parity 的 digest」。
+    needs: [build, sign, parity-arm64]
+    # 前置（人工，见 k3s SETUP.md）：本仓需配 vars.IMAGE_PIN_APP_CLIENT_ID +
+    # secrets.IMAGE_PIN_APP_PRIVATE_KEY（image-pin App 的私钥）。未配置则本 job skip。
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.IMAGE_PIN_APP_CLIENT_ID != '' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: image-pin-pr-aster-replay-runner   # per-image：不与 aster-api/aster-cloud 的 job 互相取消
+      cancel-in-progress: true
+    steps:
+      - name: Final stale gate (再确认 github.sha 仍是 origin/main tip)
+        id: staleguard
+        run: |
+          set -euo pipefail
+          # 减少 k3s 端 freshness fail-closed 噪音：开 PR 前再查一次，已过时则不开（下次 push 重建）。
+          tip="$(git ls-remote https://github.com/${{ github.repository }}.git refs/heads/main | cut -f1)"
+          echo "this run: ${GITHUB_SHA}  origin/main tip: ${tip}"
+          if [ "${GITHUB_SHA}" = "$tip" ]; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::main 已前进，本 run 过时 → 跳过 image-pin PR（下次 push 重建固定分支）"
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mint k3s-scoped token (跨 org：App 装在 wontlost-ltd/k3s)
+        if: ${{ steps.staleguard.outputs.stale != 'true' }}
+        id: apptoken
+        uses: actions/create-github-app-token@v3.2.0
+        with:
+          # ★client-id 取代已弃用的 app-id（create-github-app-token@v3 弃用警告）；显式声明 write 权限。
+          client-id: ${{ vars.IMAGE_PIN_APP_CLIENT_ID }}
+          private-key: ${{ secrets.IMAGE_PIN_APP_PRIVATE_KEY }}
+          owner: wontlost-ltd
+          repositories: k3s
+          permission-contents: write
+          permission-pull-requests: write
+
+      # ★image-pin-pr 是独立 job——须自己 checkout 本仓取共享脚本 scripts/ci/open-image-pin-pr.sh。
+      - name: Checkout (for shared script)
+        if: ${{ steps.staleguard.outputs.stale != 'true' }}
+        uses: actions/checkout@v7
+
+      - name: Open/update image-pin PR to k3s
+        if: ${{ steps.staleguard.outputs.stale != 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.apptoken.outputs.token }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+          SOURCE_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          bash scripts/ci/open-image-pin-pr.sh \
+            docker.io/wontlost/aster-replay-runner image-pin/aster-replay-runner

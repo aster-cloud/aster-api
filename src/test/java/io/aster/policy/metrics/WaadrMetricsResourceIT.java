@@ -16,7 +16,11 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.temporal.TemporalAdjusters;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
@@ -55,8 +59,15 @@ class WaadrMetricsResourceIT {
     @Order(1)
     @Transactional
     void insertAdoptedDraftAndRefresh_yieldsWaadrRow() {
-        // 插入 3 条满足 WAADR 条件的版本（同 tenant，同周）
-        Instant week = Instant.parse("2026-04-27T00:00:00Z"); // 周一
+        // 插入 3 条满足 WAADR 条件的版本（同 tenant，同周）。
+        // ★日期必须相对 now：service.fetchWeeklyWaadr(weeks=12) 过滤 week >= now-84天，
+        // 硬编码绝对日期会随时间滚出 12 周窗口导致测试确定性失败（原 2026-04-27 已于运行日
+        // 越过窗口边界）。取本周一（UTC，与视图 date_trunc('week') 的周一分桶对齐），
+        // 稳定落在窗口内。
+        Instant week = LocalDate.now(ZoneOffset.UTC)
+            .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+            .atStartOfDay(ZoneOffset.UTC)
+            .toInstant();
         for (int i = 0; i < 3; i++) {
             PolicyVersion v = new PolicyVersion(
                 "it-waadr-policy-" + i,

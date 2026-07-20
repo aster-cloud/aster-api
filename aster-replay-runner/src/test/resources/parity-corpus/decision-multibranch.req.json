@@ -1,0 +1,10 @@
+{
+  "tenantId": "tenant-parity",
+  "source": "Module dual.engine.control.multibranch.\n\nRule pricing_tier given monthly_spend produce:\n  If monthly_spend less than 100:\n    Return \"free\".\n  If monthly_spend less than 1000:\n    Return \"pro\".\n  If monthly_spend less than 10000:\n    Return \"team\".\n  Otherwise:\n    Return \"enterprise\".",
+  "input": {
+    "monthly_spend": 500
+  },
+  "locale": "en-US",
+  "functionName": "pricing_tier",
+  "aliasSet": null
+}

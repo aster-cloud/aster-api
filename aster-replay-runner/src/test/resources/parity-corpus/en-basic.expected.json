@@ -1,0 +1,13 @@
+{
+  "canonicalInput" : "{\"x\":1}",
+  "canonicalInputHash" : "a2b517202c460ac3cea7abc267809114d1da610cfa1c4e01eab1068ac6451476",
+  "canonicalOutput" : "1",
+  "canonicalOutputHash" : "266f6ccdb5a1a7d2396b92f945559ad7004d782643d4afe087d55f1be1af951a",
+  "canonicalTrace" : "{\"finalResult\":1,\"functionName\":\"main\",\"moduleName\":\"probe\",\"steps\":[{\"children\":[],\"expression\":\"return value\",\"matched\":true,\"result\":1,\"sequence\":1}]}",
+  "canonicalizationVersion" : "aster-canonical-json/v1",
+  "reasonCodes" : [ ],
+  "replayabilityReasons" : [ ],
+  "replayabilityStatus" : "REPLAYABLE",
+  "runtimeToolchainId" : "abi=1.0;core=1.0.14;validator=1;build=dev",
+  "traceHash" : "e13bf8f1335837b9e662181a4da2e74c7ee9af25952561471ff0f941ac6f6cc9"
+}

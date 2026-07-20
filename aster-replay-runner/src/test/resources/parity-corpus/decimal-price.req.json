@@ -1,0 +1,8 @@
+{
+  "tenantId": "tenant-parity",
+  "source": "Module std.decimal.\n\nRule priceWithTax produce Decimal:\n  Return 100.00m times 1.08m.",
+  "input": {},
+  "locale": "en-US",
+  "functionName": "priceWithTax",
+  "aliasSet": null
+}

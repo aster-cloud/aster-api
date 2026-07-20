@@ -1,0 +1,13 @@
+{
+  "canonicalInput" : "{\"iso\":\"2026-07-20\"}",
+  "canonicalInputHash" : "52ddc8362e44d77f415a621f149115bfd5cddb24701b86762b845f8c2e472154",
+  "canonicalOutput" : "2026",
+  "canonicalOutputHash" : "fcd1807c1ede697499474cf7834c9469e8f30cba2b014610ca80dfa0ae7afb3d",
+  "canonicalTrace" : "{\"finalResult\":2026,\"functionName\":\"yearOf\",\"moduleName\":\"std.date\",\"steps\":[{\"children\":[],\"expression\":\"return value\",\"matched\":true,\"result\":2026,\"sequence\":1}]}",
+  "canonicalizationVersion" : "aster-canonical-json/v1",
+  "reasonCodes" : [ ],
+  "replayabilityReasons" : [ ],
+  "replayabilityStatus" : "REPLAYABLE",
+  "runtimeToolchainId" : "abi=1.0;core=1.0.14;validator=1;build=dev",
+  "traceHash" : "eb006fd9588f475f22652260f1e01914ed860e3350fb3d188cc3f506d10adef7"
+}

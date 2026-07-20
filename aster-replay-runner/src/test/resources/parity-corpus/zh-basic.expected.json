@@ -1,0 +1,13 @@
+{
+  "canonicalInput" : "{\"分数\":7}",
+  "canonicalInputHash" : "89cd1b6a93b439696d482951e5cb80ca1f1786628b43c3276a9605abe90f1522",
+  "canonicalOutput" : "7",
+  "canonicalOutputHash" : "17b82734eea2cde1a8ccb99f6da7fd6d7f4f3b26baecda4c51777a110a0a2145",
+  "canonicalTrace" : "{\"finalResult\":7,\"functionName\":\"评估\",\"moduleName\":\"测试模块\",\"steps\":[{\"children\":[],\"expression\":\"return value\",\"matched\":true,\"result\":7,\"sequence\":1}]}",
+  "canonicalizationVersion" : "aster-canonical-json/v1",
+  "reasonCodes" : [ ],
+  "replayabilityReasons" : [ ],
+  "replayabilityStatus" : "REPLAYABLE",
+  "runtimeToolchainId" : "abi=1.0;core=1.0.14;validator=1;build=dev",
+  "traceHash" : "a95800054e35da3b43f0bedc55526452ac4e083d11ff91ae71c959f4de4182ce"
+}

@@ -1,0 +1,10 @@
+{
+  "tenantId": "tenant-parity",
+  "source": "मॉड्यूल adr0029।\nनियम decide दिया गया cond रूप में बूलियन, उत्पन्न पाठ:\n  लौटाएं यदि cond तो \"A\" अन्यथा \"B\"।",
+  "input": {
+    "cond": true
+  },
+  "locale": "hi-IN",
+  "functionName": "decide",
+  "aliasSet": null
+}

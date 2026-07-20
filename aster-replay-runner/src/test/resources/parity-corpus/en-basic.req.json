@@ -1,0 +1,10 @@
+{
+  "tenantId": "tenant-parity",
+  "source": "Module probe.\nRule main given x as Int, produce Int:\n  Return x.",
+  "input": {
+    "x": 1
+  },
+  "locale": "en-US",
+  "functionName": "main",
+  "aliasSet": null
+}

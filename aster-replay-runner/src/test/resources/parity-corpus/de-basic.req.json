@@ -1,0 +1,10 @@
+{
+  "tenantId": "tenant-parity",
+  "source": "Modul TestModul.\nRegel bewerten gegeben punktzahl as Ganzzahl:\n  gib zurueck punktzahl.",
+  "input": {
+    "punktzahl": 42
+  },
+  "locale": "de-DE",
+  "functionName": "bewerten",
+  "aliasSet": null
+}

@@ -6,14 +6,13 @@ name: aster-replay-runner deploy
 on:
   push:
     branches: [main]
-    # 只在 runner 镜像相关路径变更时触发（省算力）：workflow 自身、runner 打包工程、
-    # :replay 复用工程（runner ENTRYPOINT 复用它的 executor）、根 build/settings（含 include 声明）。
-    paths:
-      - '.github/workflows/aster-replay-runner-deploy.yml'
-      - 'aster-replay-runner/**'
-      - 'replay/**'          # runner 复用的 :replay 执行编排工程
-      - 'build.gradle'
-      - 'settings.gradle'
+    # ★★不设 paths 过滤（Codex 整支审 High——发布活性死角）：本 workflow 的 image-pin 前有
+    #   「github.sha == origin/main tip」stale-gate，其正确性前提是「每个 main commit 都有自己的
+    #   run 接手」。若加 paths 白名单，出现死角：runner 提交 A 触发 → 执行中未命中 paths 的提交 B
+    #   前进 main → A 的 stale-gate 看到 tip=B 判过时跳过 pin，B 又不触发本 workflow → A 的已验证
+    #   镜像永不 pin 上 k3s。这正是 deploy.yml 顶部注释明确规避的正确性死角（deploy.yml:5-11）。
+    #   让每个 main commit 都触发：无关提交会走 build→sign→parity→pin，pin 幂等（同 digest 重开 PR
+    #   无害），省算力的收益不值这个发布活性死角。
   # ★不设 workflow_dispatch（Codex 抓）：sign job 的 cosign verify --certificate-identity-regexp
   #   硬锁 @refs/heads/main。workflow_dispatch 可从非 main ref 发起 → 非 main dispatch 会在 verify
   #   阶段失败。runner 镜像发版只随 main push（无手动触发需求），与 deploy.yml 一致（只 push 触发）。

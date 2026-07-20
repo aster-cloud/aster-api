@@ -1,4 +1,4 @@
-// aster-replay-core：从 aster-api 抽出的 replay 执行编排（无 Quarkus/DB）。
+// replay：从 aster-api 抽出的 replay 执行编排（无 Quarkus/DB）。
 // 依赖 aster-lang core/truffle + Jackson；被 aster-api 与后续 β runner 共同依赖。
 plugins {
     id 'java-library'

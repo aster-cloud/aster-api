@@ -20,7 +20,7 @@ import java.util.logging.Logger;
  * {@code PolicyEvaluationResource.evaluateSource} 逐字抽取）。
  *
  * <p>★本类不依赖 Quarkus/CDI/JAX-RS——只依赖 aster-lang core/truffle（已由
- * aster-replay-core 的 build.gradle 声明）。日志用 {@link java.util.logging.Logger}
+ * replay 的 build.gradle 声明）。日志用 {@link java.util.logging.Logger}
  * （JDK 内置，避免为 core 引入新日志依赖）。
  *
  * <p>三阶段对应 evaluateSource 原有的三段编排：

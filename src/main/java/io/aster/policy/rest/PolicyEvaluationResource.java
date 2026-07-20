@@ -177,7 +177,7 @@ public class PolicyEvaluationResource {
 
     /**
      * replay 执行编排的 core 三阶段 API（P0-A S2-1a-0 Task 4，从
-     * aster-replay-core 抽出，无 Quarkus/CDI 依赖，纯值对象——直接 new，
+     * replay 抽出，无 Quarkus/CDI 依赖，纯值对象——直接 new，
      * 不走 CDI 生产者（无状态、无需容器管理生命周期）。
      */
     private final ReplayExecutionCore replayExecutionCore = new ReplayExecutionCore();

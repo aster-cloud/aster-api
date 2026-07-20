@@ -57,7 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *       {@link io.aster.policy.replay.ReplayMetadata#compute} 设计上对任何可序列化输入
  *       都不抛（小数走 string-lift，失败走 tryCanonical 内部 catch 返回 null 而非抛出），
  *       无法从 REST 边界外部构造使其抛出的输入。已用等价单测覆盖：
- *       {@code aster-replay-core/src/test/java/io/aster/policy/replay/ReplayMetadataTest.java}
+ *       {@code replay/src/test/java/io/aster/policy/replay/ReplayMetadataTest.java}
  *       覆盖 compute() 的降级分支；本类第 5 条<b>不假装覆盖</b>，显式标记 deferred。
  * </ol>
  *
@@ -368,7 +368,7 @@ class PolicyEvaluationReplayOrderingTest {
     // 找不到能让 compute() 本身抛出的输入。
     //
     // 该分支（"compute_threw:" reason 降级）已由等价单测覆盖：
-    //   aster-replay-core/src/test/java/io/aster/policy/replay/ReplayMetadataTest.java
+    //   replay/src/test/java/io/aster/policy/replay/ReplayMetadataTest.java
     // 覆盖 compute() 的所有降级路径（input/output/trace hash 各自失败时的 NON_REPLAYABLE +
     // reasons 断言）。evaluateSource 内 catch 块本身的「compute 抛出 → NON_REPLAYABLE +
     // "compute_threw: " 前缀」这层包装逻辑，将在 Task 4 核心抽取完成、evaluateSource 可

@@ -1,4 +1,4 @@
-// aster-replay-runner：standalone β runner。复用 :replay 的 ReplayExecutionCore+DynamicCnlExecutor，
+// runner：standalone β runner。复用 :replay 的 ReplayExecutionCore+DynamicCnlExecutor，
 // 用 application plugin 产启动脚本 + lib/*.jar（非 fat-jar，locale 四 jar 分开保 SPI 零合并）。
 plugins {
     id 'java'

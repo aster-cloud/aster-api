@@ -122,7 +122,7 @@ dependencies {
 
     // D-1 distribution parity：in-JVM 调 RunnerMain.run() 与生产权威路径 byte 比对。
     // 无环：runner→:replay，aster-api→:replay，aster-api-test→runner（runner 不依赖 aster-api）。
-    testImplementation project(':aster-replay-runner')
+    testImplementation project(':runner')
 
     // Testcontainers - PostgreSQL 测试环境（Phase 3.4）
     testImplementation 'org.testcontainers:testcontainers:1.21.4'

@@ -1,0 +1,13 @@
+{
+  "canonicalInput" : "{\"punktzahl\":42}",
+  "canonicalInputHash" : "881a6b37188fe612a6fa857c066aa51664519d99b3f5ef0e76ba92d1e74e4e93",
+  "canonicalOutput" : "42",
+  "canonicalOutputHash" : "d337b218e8ee5eb4a11a38c8a683b0a5382185cab2cea2d08ddd7d308420ee32",
+  "canonicalTrace" : "{\"finalResult\":42,\"functionName\":\"bewerten\",\"moduleName\":\"TestModul\",\"steps\":[{\"children\":[],\"expression\":\"return value\",\"matched\":true,\"result\":42,\"sequence\":1}]}",
+  "canonicalizationVersion" : "aster-canonical-json/v1",
+  "reasonCodes" : [ ],
+  "replayabilityReasons" : [ ],
+  "replayabilityStatus" : "REPLAYABLE",
+  "runtimeToolchainId" : "abi=1.0;core=1.0.14;validator=1;build=dev",
+  "traceHash" : "ac9ec840956d3a6c33006c2c97bfb46076040e53bb6ae09812ba22be0e16aafc"
+}

@@ -1,0 +1,13 @@
+{
+  "canonicalInput" : "{\"cond\":true}",
+  "canonicalInputHash" : "899818de0491949a07d66392e25a8367afa16b66a1f857efac3095f1ad882bb2",
+  "canonicalOutput" : "\"A\"",
+  "canonicalOutputHash" : "5b1c16cac96e0205aa13dfadbd731f5cefebb4eb3a4e3013497b6b32e7eec8b0",
+  "canonicalTrace" : "{\"finalResult\":\"A\",\"functionName\":\"decide\",\"moduleName\":\"adr0029\",\"steps\":[{\"children\":[],\"expression\":\"inline if condition\",\"matched\":true,\"result\":true,\"sequence\":1},{\"children\":[],\"expression\":\"return value\",\"matched\":true,\"result\":\"A\",\"sequence\":2}]}",
+  "canonicalizationVersion" : "aster-canonical-json/v1",
+  "reasonCodes" : [ ],
+  "replayabilityReasons" : [ ],
+  "replayabilityStatus" : "REPLAYABLE",
+  "runtimeToolchainId" : "abi=1.0;core=1.0.14;validator=1;build=dev",
+  "traceHash" : "c9adcadce9aa33f14c6e4d42b4f7a133df93f831e4c68c0d59b8c8715315e82a"
+}

@@ -1,0 +1,10 @@
+{
+  "tenantId": "tenant-parity",
+  "source": "Module std.date.\n\nRule yearOf given iso, produce:\n  Return Date.year(Date.fromISO(iso)).",
+  "input": {
+    "iso": "2026-07-20"
+  },
+  "locale": "en-US",
+  "functionName": "yearOf",
+  "aliasSet": null
+}

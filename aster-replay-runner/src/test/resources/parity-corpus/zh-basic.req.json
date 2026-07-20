@@ -1,0 +1,10 @@
+{
+  "tenantId": "tenant-parity",
+  "source": "模块 测试模块。\n规则 评估 给定 分数 as 整数：\n  返回 分数。",
+  "input": {
+    "分数": 7
+  },
+  "locale": "zh-CN",
+  "functionName": "评估",
+  "aliasSet": null
+}

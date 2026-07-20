@@ -1,5 +1,6 @@
 package io.aster.replay.runner;
 
+import aster.truffle.trace.TraceAccess;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.aster.policy.api.model.DecisionTrace;
 import io.aster.policy.parser.DynamicCnlExecutor;
@@ -30,6 +31,12 @@ public final class RunnerMain {
     public static int run(InputStream in, PrintStream out) {
         RunnerEnvelope envelope;
         try {
+            // ★进程级 trace PE gate（镜像 aster-api TruffleTraceInitializer.onStart）：
+            //   TraceAccess.ENABLED 默认 false（生产关），不开则 armCurrentThread 后引擎仍不采集
+            //   步骤 → drain 出 steps=[] → canonicalTrace/traceHash 与 aster-api（replayCapture 路径
+            //   已 setEnabled(true)）分叉。runner 的职责就是复现生产 replayCapture 路径含 traceHash，
+            //   故必须在执行前打开同一 gate。Task 0 parity 校准实证：不开则每个 fixture traceHash 全分叉。
+            TraceAccess.setEnabled(true);
             LocaleAssertion.assertAllPresent();   // ★启动 fail-closed：缺 locale 立即失败
             RunnerRequest req = MAPPER.readValue(in, RunnerRequest.class);
             envelope = execute(req);

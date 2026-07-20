@@ -40,6 +40,14 @@ class RunnerMainIntegrationTest {
         assertTrue(env.get("replayMetadata").has("canonicalInputHash"));
         // ★trace=true 路径 → traceHash 非 null（与生产 replayCapture 对齐，防 parity 分叉）。
         assertFalse(env.get("replayMetadata").get("traceHash").isNull());
+        // ★根因回归守门（Task 0 校准实证）：仅 traceHash 非 null 不够——若进程级 trace PE gate
+        // （TraceAccess.setEnabled）未开，armCurrentThread 后引擎仍不采集步骤，canonicalTrace 会
+        // 退化为 steps=[]，此时 traceHash 仍非 null 但与 aster-api（步骤非空）逐字节分叉。这里
+        // 直接断言 canonicalTrace 含非空 steps，锁死「有 hash 但未采集有效步骤」的分叉根因。
+        JsonNode canonicalTrace = mapper.readTree(
+            env.get("replayMetadata").get("canonicalTrace").asText());
+        assertTrue(canonicalTrace.get("steps").isArray() && !canonicalTrace.get("steps").isEmpty(),
+            "canonicalTrace.steps 必须非空——空 steps=trace PE gate 未开，与生产 replayCapture 路径分叉");
     }
 
     @Test

@@ -1,0 +1,13 @@
+{
+  "canonicalInput" : "{}",
+  "canonicalInputHash" : "f6f3fa8261aa58e7885494398a1f39dedb8da20bbaf43e294f856f544fafb9e1",
+  "canonicalOutput" : "\"108\"",
+  "canonicalOutputHash" : "e576d510266c5405ba8a0d83264a3729de55bb6ce02e81288f9567ad57e8b277",
+  "canonicalTrace" : "{\"finalResult\":\"108\",\"functionName\":\"priceWithTax\",\"moduleName\":\"std.decimal\",\"steps\":[{\"children\":[],\"expression\":\"return value\",\"matched\":true,\"result\":108,\"sequence\":1}]}",
+  "canonicalizationVersion" : "aster-canonical-json/v1",
+  "reasonCodes" : [ ],
+  "replayabilityReasons" : [ ],
+  "replayabilityStatus" : "REPLAYABLE",
+  "runtimeToolchainId" : "abi=1.0;core=1.0.14;validator=1;build=dev",
+  "traceHash" : "0ee029aeccfb1d3cb9cd5cb9df126c32ab99ea8be34480e00b0b84cba18429cb"
+}

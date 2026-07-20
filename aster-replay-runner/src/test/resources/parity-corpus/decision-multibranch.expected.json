@@ -1,0 +1,13 @@
+{
+  "canonicalInput" : "{\"monthly_spend\":500}",
+  "canonicalInputHash" : "f43ec896e3895722a66e6ffc6bc75b973378a3b429cf0ecc198d607ba703a6e7",
+  "canonicalOutput" : "\"pro\"",
+  "canonicalOutputHash" : "c65a3469c7dca44bdb5d92ad71a8ffe9219bd2e14099c6f6dcb926728fbad75b",
+  "canonicalTrace" : "{\"finalResult\":\"pro\",\"functionName\":\"pricing_tier\",\"moduleName\":\"dual.engine.control.multibranch\",\"steps\":[{\"children\":[],\"expression\":\"if condition\",\"matched\":false,\"result\":false,\"sequence\":1},{\"children\":[],\"expression\":\"if condition\",\"matched\":true,\"result\":true,\"sequence\":2},{\"children\":[],\"expression\":\"return value\",\"matched\":true,\"result\":\"pro\",\"sequence\":3}]}",
+  "canonicalizationVersion" : "aster-canonical-json/v1",
+  "reasonCodes" : [ ],
+  "replayabilityReasons" : [ ],
+  "replayabilityStatus" : "REPLAYABLE",
+  "runtimeToolchainId" : "abi=1.0;core=1.0.14;validator=1;build=dev",
+  "traceHash" : "ae64057526131120d9bafd7b931f6cebbf6f267f9080d928c7856f22a99c4c63"
+}

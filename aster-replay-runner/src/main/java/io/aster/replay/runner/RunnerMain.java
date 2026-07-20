@@ -30,6 +30,7 @@ public final class RunnerMain {
     public static int run(InputStream in, PrintStream out) {
         RunnerEnvelope envelope;
         try {
+            LocaleAssertion.assertAllPresent();   // ★启动 fail-closed：缺 locale 立即失败
             RunnerRequest req = MAPPER.readValue(in, RunnerRequest.class);
             envelope = execute(req);
         } catch (Exception e) {

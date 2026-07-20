@@ -3,6 +3,7 @@ package io.aster.api.workflow;
 import aster.runtime.workflow.WorkflowEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
@@ -84,26 +85,15 @@ abstract class CrashRecoveryTestBase {
     }
 
     /**
-     * 轮询等待 timer 状态变化，遵循 500ms 间隔轮询策略，不依赖 Awaitility。
+     * 在全新事务中读取 timer 明细，观察调度线程独立事务提交的最新值。
+     *
+     * <p>刻意不加 {@code @Transactional} 而是每次调用都用 {@link QuarkusTransaction#requiringNew()}
+     * 开启全新事务：崩溃恢复驱动会在独立事务里提交 timer 状态/retryCount，若持有跨轮询的长事务，
+     * 其快照将无法观察到这些提交（自调用还会绕过 @Transactional 拦截器），从而永远读到旧值。
      */
-    @Transactional
-    boolean waitForTimerStatus(UUID timerId, String expectedStatus, Duration timeout) {
+    WorkflowTimerEntity findTimerByIdFresh(UUID timerId) {
         Objects.requireNonNull(timerId, "timerId");
-        Objects.requireNonNull(expectedStatus, "expectedStatus");
-        Objects.requireNonNull(timeout, "timeout");
-
-        long deadline = System.currentTimeMillis() + timeout.toMillis();
-        while (System.currentTimeMillis() < deadline) {
-            entityManager.clear();
-            WorkflowTimerEntity timer = WorkflowTimerEntity.findById(timerId);
-            if (timer != null && expectedStatus.equals(timer.status)) {
-                return true;
-            }
-            if (!sleepQuietly()) {
-                return false;
-            }
-        }
-        return false;
+        return QuarkusTransaction.requiringNew().call(() -> WorkflowTimerEntity.findById(timerId));
     }
 
     /**

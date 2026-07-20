@@ -3,6 +3,9 @@ rootProject.name = 'aster-api'
 // S2-1a-0：replay 执行编排共享模块（aster-api 与 β runner 复用同一份保 byte-parity）
 include 'replay'
 
+// S2-1a-2：standalone β runner（复用 :replay 的 executor，application distribution 打包）
+include 'aster-replay-runner'
+
 // 共享版本目录（aster-lang-platform，ADR 0012）：aster-lang 生态依赖版本
 // 的单一来源。catalog 本身需从仓库解析，故声明仓库；RepositoriesMode
 // 保持默认 PREFER_PROJECT，build.gradle 里现有的 repositories {} 仍生效。

@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/aster-cloud/aster-api/launcher/internal/httpapi"
 	"github.com/aster-cloud/aster-api/launcher/internal/orchestrator"
@@ -50,8 +51,20 @@ func main() {
 		port = "8080"
 	}
 	log.Printf("runner-launcher 监听 :%s（runner digest=%s ns=%s）", port, digest, orchestrator.Namespace())
+	// ★显式 http.Server 配超时（非默认零值 http.Server，防 slow-loris——最终 review 抓）：
+	//   NetworkPolicy 本 slice 禁用，ClusterIP 集群内任意 workload 可达（非仅 cloudflared），
+	//   零值 Server 的 header 读无上限=慢速连接可耗尽 goroutine。ReadHeaderTimeout 关此面；
+	//   ReadTimeout/IdleTimeout 兜整请求与空闲连接。★不设 WriteTimeout——runJob 可能跑满 30s
+	//   SLA（建 Job+冷启动+读 log），过短 WriteTimeout 会截断合法慢响应。
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 	// ListenAndServe 阻塞；返回即致命（Pod 会被 k8s 重启）。
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("ListenAndServe 退出: %v", err)
 	}
 }

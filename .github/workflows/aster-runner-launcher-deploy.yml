@@ -142,9 +142,10 @@ jobs:
           DIGEST: ${{ needs.build.outputs.digest }}
           SOURCE_SHA: ${{ github.sha }}
           RUN_ID: ${{ github.run_id }}
-          # ★LOCK_PATH/KUSTOMIZATION_PATH 指 aster-runner（非 default cloud/）——pin launcher 自身镜像。
-          LOCK_PATH: apps/aster-lang/aster-runner/image-lock.yaml
-          KUSTOMIZATION_PATH: apps/aster-lang/aster-runner/kustomization.yaml
+          # ★LOCK_PATH/KUSTOMIZATION_PATH 指 runner 目录（非 default cloud/）——pin launcher 自身镜像。
+          #   目录名是短名 runner（ApplicationSet 加 aster- 前缀派生 ns=aster-runner）。
+          LOCK_PATH: apps/aster-lang/runner/image-lock.yaml
+          KUSTOMIZATION_PATH: apps/aster-lang/runner/kustomization.yaml
         run: |
           bash scripts/ci/open-image-pin-pr.sh \
             docker.io/wontlost/aster-runner-launcher image-pin/aster-runner-launcher

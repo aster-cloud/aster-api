@@ -1,0 +1,150 @@
+name: aster-runner-launcher deploy
+
+# runner-launcher 镜像发版链（S2-1a-2 Slice-2b-launch）：build（arm64 digest）→
+# sign（cosign keyless @digest 签+验）→ image-pin-pr（PR 到 k3s pin launcher digest +
+# 第三写目标 patch runner digest env）。镜像 aster-replay-runner-deploy.yml，但去 parity-arm64
+# （launcher 是编排器非 executor，无 corpus parity 语义——诚实边界）。
+on:
+  push:
+    branches: [main]
+    # ★不设 paths 过滤（承 runner workflow 同理由）：image-pin 前的 stale-gate 正确性要求
+    #   每个 main commit 都有自己的 run 接手（paths 白名单会造发布活性死角）。pin 幂等，无害。
+  # ★不设 workflow_dispatch：sign 的 cosign verify --certificate-identity-regexp 硬锁 @refs/heads/main，
+  #   非 main dispatch 会在 verify 阶段失败。launcher 镜像只随 main push。
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # cosign keyless OIDC
+      contents: read
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build & Push launcher image (arm64)
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          # context/file = launcher 子目录（独立 Go，own go.mod/Dockerfile）。
+          context: launcher
+          file: launcher/Dockerfile
+          # 集群节点 ARM64（OCI Ampere），必须真 arm64。
+          platforms: linux/arm64
+          push: true
+          pull: true
+          # 清默认 attestation manifest（platform=unknown 条目会被 k3s 误选）；单平台不需要。
+          provenance: false
+          sbom: false
+          tags: |
+            wontlost/aster-runner-launcher:${{ github.sha }}
+            wontlost/aster-runner-launcher:latest
+
+      # ★arm64 内容校验：distroless static 无 uname——用 buildx imagetools inspect 校验 manifest
+      #   的 platform.architecture == arm64（QEMU 误标兜底；manifest architecture 亦可被撒谎但
+      #   配合 build 期 GOARCH 锁定 + 单平台 push，双重约束足够）。
+      - name: Verify pushed image is arm64 (manifest inspect)
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "${DIGEST}" || { echo "build 未输出 digest，中止"; exit 1; }
+          arch="$(docker buildx imagetools inspect "wontlost/aster-runner-launcher@${DIGEST}" \
+            --format '{{ range .Manifest.Manifests }}{{ println .Platform.Architecture }}{{ end }}' 2>/dev/null \
+            | grep -v '^unknown$' | grep -v '^$' | sort -u | head -n1 || true)"
+          # 单平台 push 时 Manifest.Manifests 可能为空 → 退回顶层 Platform。
+          if [ -z "$arch" ]; then
+            arch="$(docker buildx imagetools inspect "wontlost/aster-runner-launcher@${DIGEST}" \
+              --format '{{ .Manifest.Config.Platform.Architecture }}' 2>/dev/null | tr -d '[:space:]' || true)"
+          fi
+          echo "manifest architecture = '${arch}'"
+          case "${arch}" in
+            arm64|aarch64) echo "✓ arm64" ;;
+            *) echo "::error title=arch mismatch::launcher 镜像 manifest architecture='${arch}'（非 arm64）"; exit 1 ;;
+          esac
+
+  sign:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: sigstore/cosign-installer@v3
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Sign + verify pushed digest (keyless)
+        env:
+          COSIGN_YES: "true"
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "${DIGEST}" || { echo "build 未输出 digest，中止"; exit 1; }
+          cosign sign "wontlost/aster-runner-launcher@${DIGEST}"
+          # ★identity-regexp 指向**本** workflow 文件名（aster-runner-launcher-deploy.yml）。
+          #   与两 launcher CIP 的 subject（Unit 5）逐字对齐。fail-closed。
+          cosign verify "wontlost/aster-runner-launcher@${DIGEST}" \
+            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/aster-runner-launcher-deploy\.yml@refs/heads/main$" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+
+  image-pin-pr:
+    # ★needs build+sign：解析 needs.build.outputs.digest + 只 pin 已签 digest（无 parity job）。
+    needs: [build, sign]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.IMAGE_PIN_APP_CLIENT_ID != '' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: image-pin-pr-aster-runner-launcher   # per-image，不与其他镜像 job 互相取消
+      cancel-in-progress: true
+    steps:
+      - name: Final stale gate (再确认 github.sha 仍是 origin/main tip)
+        id: staleguard
+        run: |
+          set -euo pipefail
+          tip="$(git ls-remote https://github.com/${{ github.repository }}.git refs/heads/main | cut -f1)"
+          echo "this run: ${GITHUB_SHA}  origin/main tip: ${tip}"
+          if [ "${GITHUB_SHA}" = "$tip" ]; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::main 已前进，本 run 过时 → 跳过 image-pin PR"
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mint k3s-scoped token
+        if: ${{ steps.staleguard.outputs.stale != 'true' }}
+        id: apptoken
+        uses: actions/create-github-app-token@v3.2.0
+        with:
+          client-id: ${{ vars.IMAGE_PIN_APP_CLIENT_ID }}
+          private-key: ${{ secrets.IMAGE_PIN_APP_PRIVATE_KEY }}
+          owner: wontlost-ltd
+          repositories: k3s
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Checkout (for shared script)
+        if: ${{ steps.staleguard.outputs.stale != 'true' }}
+        uses: actions/checkout@v7
+
+      - name: Open/update image-pin PR to k3s (launcher digest, LOCK_PATH → aster-runner)
+        if: ${{ steps.staleguard.outputs.stale != 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.apptoken.outputs.token }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+          SOURCE_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          # ★LOCK_PATH/KUSTOMIZATION_PATH 指 aster-runner（非 default cloud/）——pin launcher 自身镜像。
+          LOCK_PATH: apps/aster-lang/aster-runner/image-lock.yaml
+          KUSTOMIZATION_PATH: apps/aster-lang/aster-runner/kustomization.yaml
+        run: |
+          bash scripts/ci/open-image-pin-pr.sh \
+            docker.io/wontlost/aster-runner-launcher image-pin/aster-runner-launcher

@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -16,7 +17,10 @@ func testReq() RunnerRequest {
 
 func TestBuildRunnerJob_ForkC_And_Hardening(t *testing.T) {
 	const digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	job, cm := buildRunnerJob(testReq(), digest)
+	job, cm, err := buildRunnerJob(testReq(), digest)
+	if err != nil {
+		t.Fatalf("buildRunnerJob 意外失败: %v", err)
+	}
 
 	// ConfigMap 持 request.json，且 owner-ref 到 Job（级联 GC）。
 	if _, ok := cm.Data["request.json"]; !ok {
@@ -83,5 +87,42 @@ func TestBuildRunnerJob_ForkC_And_Hardening(t *testing.T) {
 	}
 	if !work || !tmp {
 		t.Fatalf("缺 emptyDir work/tmp: work=%v tmp=%v", work, tmp)
+	}
+}
+
+// TestBuildRunnerJob_NonSerializableInput 守 Codex 抓的静默空请求：req.Input 是 any
+// （cloud 请求体任意 JSON），含不可序列化值（chan/func）时 Marshal 失败——必须返回 error，
+// 绝不产半成品 Job/空 request.json 送给 runner。
+func TestBuildRunnerJob_NonSerializableInput(t *testing.T) {
+	const digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	req := testReq()
+	req.Input = make(chan int) // json.Marshal 对 chan 报 UnsupportedTypeError
+	job, cm, err := buildRunnerJob(req, digest)
+	if err == nil {
+		t.Fatal("不可序列化 Input 应返回 error，却成功")
+	}
+	if job != nil || cm != nil {
+		t.Fatalf("失败时应返回 nil job/cm，却得 job=%v cm=%v", job, cm)
+	}
+}
+
+// TestRunnerEnvelope_MetadataPassthrough 守 Codex 抓的丢字段：runner 的 ReplayMetadata.java
+// 有 11 字段（launcher 的旧 6 字段 struct round-trip 会丢 reasonCodes/replayabilityReasons/
+// M2 canonicalInput/Output/Trace）。用 json.RawMessage 透传后，unmarshal→marshal 不丢任何字段。
+func TestRunnerEnvelope_MetadataPassthrough(t *testing.T) {
+	// 模拟 runner stdout 的 envelope，metadata 含 launcher struct 不认识的额外字段。
+	raw := `{"outcome":"SUCCESS","replayMetadata":{"canonicalInputHash":"a","canonicalOutputHash":"b","canonicalizationVersion":"v1","replayabilityStatus":"REPLAYABLE","traceHash":"t","runtimeToolchainId":"tc","reasonCodes":[],"replayabilityReasons":["x"],"canonicalInput":"CI","canonicalOutput":"CO","canonicalTrace":"CT"}}`
+	var env RunnerEnvelope
+	if err := json.Unmarshal([]byte(raw), &env); err != nil {
+		t.Fatalf("unmarshal 失败: %v", err)
+	}
+	if env.Outcome != "SUCCESS" {
+		t.Fatalf("outcome=%q", env.Outcome)
+	}
+	// 关键：透传后重序列化，M2 字段 canonicalInput/Output/Trace + reasonCodes 必须仍在。
+	for _, field := range []string{"reasonCodes", "replayabilityReasons", "canonicalInput", "canonicalOutput", "canonicalTrace"} {
+		if !strings.Contains(string(env.ReplayMetadata), field) {
+			t.Fatalf("透传丢字段 %q（RawMessage 应原样保留）: %s", field, env.ReplayMetadata)
+		}
 	}
 }

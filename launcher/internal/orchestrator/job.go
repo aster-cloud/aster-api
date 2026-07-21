@@ -22,11 +22,18 @@ const runnerNamespace = "aster-runner"
 //
 // ★硬化镜像 migrate-job.yaml：backoffLimit/ttl/restartPolicy/token/securityContext/emptyDir。
 // digest 形如 "sha256:...."；image = <repo>@<digest>。jobName 用调用方生成的唯一名（见 runJob）。
-func buildRunnerJob(req RunnerRequest, digest string) (*batchv1.Job, *corev1.ConfigMap) {
+// ★返回 error：req.Input 是 any（来自 cloud 请求体的任意 JSON），可能含不可序列化值
+//
+//	（如含循环引用或 chan/func 的 map）——若吞掉 Marshal 错会静默产空 request 送给 runner
+//	（Codex 抓）。故 Marshal 失败即返回 error，由 runJob 归 unavailable，绝不产半成品 Job。
+func buildRunnerJob(req RunnerRequest, digest string) (*batchv1.Job, *corev1.ConfigMap, error) {
 	jobName := newJobName()
 
 	// request.json：runner 逐字读 stdin 的 RunnerRequest JSON（aliasSet 显式 null 对齐 Java）。
-	reqJSON, _ := json.Marshal(req) // req 全为可序列化标量/map，不会失败；防御性忽略 err 由 runJob 前置校验兜底
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, nil, fmt.Errorf("marshal runner request: %w", err)
+	}
 
 	falsePtr := boolPtr(false)
 	truePtr := boolPtr(true)
@@ -103,7 +110,7 @@ func buildRunnerJob(req RunnerRequest, digest string) (*batchv1.Job, *corev1.Con
 		APIVersion: "batch/v1", Kind: "Job", Name: jobName,
 		Controller: truePtr, BlockOwnerDeletion: truePtr,
 	}}
-	return job, cm
+	return job, cm, nil
 }
 
 // hardenedContainerSecurityContext 是容器级硬化（镜像 migrate-job 的 container securityContext）。

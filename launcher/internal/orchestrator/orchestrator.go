@@ -25,3 +25,7 @@ type K8sOrchestrator struct {
 func (o *K8sOrchestrator) Run(ctx context.Context, req RunnerRequest) (RunnerEnvelope, error) {
 	return runJob(ctx, o.Clientset, req, o.Digest)
 }
+
+// Namespace 返回 launcher 建 Job 的目标 ns（runnerNamespace 常量的导出访问器）。
+// ★main.go 用它对 RUNNER_NAMESPACE env 做一致性校验，防 manifest 与代码漂移。
+func Namespace() string { return runnerNamespace }

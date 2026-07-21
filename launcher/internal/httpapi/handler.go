@@ -41,9 +41,17 @@ func (h *LaunchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 预读 body 一次（body 不可重读）：VerifyHMAC 与 JSON 解析共用同一份 raw bytes。
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes))
+	// ★超限必须**显式拒绝**而非静默截断（Codex 抓的认证边界洞）：io.LimitReader 会把超限 body
+	//   截到 maxBodyBytes——攻击者可对恰好 maxBodyBytes 的合法 JSON 前缀签名、再追加未签名尾部，
+	//   handler 验签+解析的都是被截前缀 → HMAC 未覆盖完整 HTTP entity 却被接受。故读 max+1，
+	//   超过 max 即 fail-closed 413，验签前拒绝，绝不让 orchestrator 见到部分请求。
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes+1))
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, errorBody{Error: "read body failed"})
+		return
+	}
+	if int64(len(body)) > maxBodyBytes {
+		writeJSON(w, http.StatusRequestEntityTooLarge, errorBody{Error: "request body too large"})
 		return
 	}
 

@@ -203,3 +203,33 @@ func TestHealthz(t *testing.T) {
 		t.Fatalf("healthz code=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+// TestLaunchHandler_OversizedBodyRejected 守 Codex 抓的认证边界洞：io.LimitReader 静默截断
+// 会让「对合法前缀签名 + 追加未签名尾部」的 body 被验签+接受（HMAC 未覆盖完整 entity）。
+// 修复后：body 超 maxBodyBytes 必 413 fail-closed，验签前拒绝，orchestrator 零调用。
+func TestLaunchHandler_OversizedBodyRejected(t *testing.T) {
+	t.Setenv("ASTER_RUNNER_LAUNCHER_HMAC_KEY", testKey)
+
+	// 构造超限 body：恰好 maxBodyBytes+1 字节（> 上限）。签名对**这个完整 body** 也算，
+	// 但 handler 应在读取阶段就因超限拒绝，根本不进 VerifyHMAC/orchestrator。
+	oversized := make([]byte, (1<<20)+1)
+	for i := range oversized {
+		oversized[i] = 'a'
+	}
+	orch := &mockOrch{env: orchestrator.RunnerEnvelope{Outcome: "SUCCESS"}}
+	h := &LaunchHandler{Orch: orch}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, signRequest(t, "t1", "user", oversized))
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("超限 body 应 413，得 %d", rec.Code)
+	}
+	if orch.gotCalls != 0 {
+		t.Fatalf("超限 body 绝不该调 orchestrator，却调了 %d 次", orch.gotCalls)
+	}
+	// 响应仍是结构化 JSON（reject-proof）。
+	var eb errorBody
+	if err := json.Unmarshal(rec.Body.Bytes(), &eb); err != nil || eb.Error == "" {
+		t.Fatalf("413 响应应是结构化 JSON errorBody，得 %s", rec.Body.String())
+	}
+}

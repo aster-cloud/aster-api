@@ -139,8 +139,27 @@ fi
 rm -rf "$TMP3"
 
 echo ""
+echo "=== Test 4: 只设 ENV_PATCH_* 之一 → 成对 XOR fail-closed（Codex 抓的配置漂移）==="
+# 主流程运行脚本（非 source），只设一个 ENV_PATCH_* + dummy IMAGE/BRANCH。XOR 校验在 clone/写入
+# 之前，故不触网——应 exit 2。DIGEST 给合法形状假值满足前置 :? 与 shape 校验。code 在子壳外捕获。
+DUMMY_DIGEST="sha256:$(printf '0%.0s' {1..64})"
+
+# ★用 || 捕获退出码——test 顶部 set -e 会让非零命令直接 abort，故须 `|| code=$?` 兜住。
+code_only_path=0
+ENV_PATCH_PATH="/tmp/whatever-deployment.yaml" ENV_PATCH_SELECTOR="" \
+  GH_TOKEN="x" DIGEST="$DUMMY_DIGEST" SOURCE_SHA="x" RUN_ID="0" \
+  bash "$TARGET_SCRIPT" docker.io/wontlost/foo image-pin/foo >/dev/null 2>&1 || code_only_path=$?
+assert_eq "只设 ENV_PATCH_PATH → exit 2（成对 XOR fail-closed）" "2" "$code_only_path"
+
+code_only_sel=0
+ENV_PATCH_PATH="" ENV_PATCH_SELECTOR='.spec.template.spec.containers[0].env[] | select(.name == "X")' \
+  GH_TOKEN="x" DIGEST="$DUMMY_DIGEST" SOURCE_SHA="x" RUN_ID="0" \
+  bash "$TARGET_SCRIPT" docker.io/wontlost/foo image-pin/foo >/dev/null 2>&1 || code_only_sel=$?
+assert_eq "只设 ENV_PATCH_SELECTOR → exit 2（成对 XOR fail-closed）" "2" "$code_only_sel"
+
+echo ""
 if [[ "$FAILED" == "0" ]]; then
-  echo "全部通过（零改动回归 + 第三目标激活 + fail-closed 校验）。"
+  echo "全部通过（零改动回归 + 第三目标激活 + fail-closed 校验 + XOR 成对校验）。"
   exit 0
 else
   echo "存在失败用例，见上方 ✗。"

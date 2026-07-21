@@ -60,6 +60,15 @@ patch_targets() {
 # ── --source-only：供单测 source 本脚本只取函数定义，不跑主流程 ──
 if [[ "${1:-}" == "--source-only" ]]; then return 0 2>/dev/null || exit 0; fi
 
+# ★成对 XOR fail-closed（Codex 抓）：ENV_PATCH_PATH 与 ENV_PATCH_SELECTOR 必须**同时为空或同时非空**。
+#   只设其一=配置漂移——会让 runner image-lock/kustomization 已更新而 launcher RUNNER_IMAGE_DIGEST env
+#   未更新（digest 不一致）。故只设其一时**在任何写入前**立即失败，绝不静默跳过第三目标。
+#   （放在 --source-only guard 之后：sourcing 取函数不触发；主流程首先校验。）
+if { [[ -n "$ENV_PATCH_PATH" ]] && [[ -z "$ENV_PATCH_SELECTOR" ]]; } || { [[ -z "$ENV_PATCH_PATH" ]] && [[ -n "$ENV_PATCH_SELECTOR" ]]; }; then
+  echo "::error::ENV_PATCH_PATH 与 ENV_PATCH_SELECTOR 必须成对设置（同时空或同时非空）——只设其一=配置漂移，拒绝"
+  exit 2
+fi
+
 IMAGE="${1:?usage: open-image-pin-pr.sh <IMAGE> <BRANCH>}"
 BRANCH="${2:?usage: open-image-pin-pr.sh <IMAGE> <BRANCH>}"
 K3S_REPO="${K3S_REPO:-wontlost-ltd/k3s}"

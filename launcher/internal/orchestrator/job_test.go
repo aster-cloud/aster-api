@@ -119,10 +119,15 @@ func TestRunnerEnvelope_MetadataPassthrough(t *testing.T) {
 	if env.Outcome != "SUCCESS" {
 		t.Fatalf("outcome=%q", env.Outcome)
 	}
-	// 关键：透传后重序列化，M2 字段 canonicalInput/Output/Trace + reasonCodes 必须仍在。
+	// ★真正的 round-trip：handler 会把 env 重序列化转给 cloud。故断言 json.Marshal(env)
+	//   后的输出（非只 RawMessage 本身）仍含全部额外字段——证透传经完整 unmarshal→marshal 不丢。
+	out, err := json.Marshal(env)
+	if err != nil {
+		t.Fatalf("重序列化 envelope 失败: %v", err)
+	}
 	for _, field := range []string{"reasonCodes", "replayabilityReasons", "canonicalInput", "canonicalOutput", "canonicalTrace"} {
-		if !strings.Contains(string(env.ReplayMetadata), field) {
-			t.Fatalf("透传丢字段 %q（RawMessage 应原样保留）: %s", field, env.ReplayMetadata)
+		if !strings.Contains(string(out), field) {
+			t.Fatalf("round-trip 丢字段 %q（RawMessage 应原样保留）: %s", field, out)
 		}
 	}
 }

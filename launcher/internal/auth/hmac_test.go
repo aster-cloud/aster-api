@@ -69,6 +69,10 @@ func TestVerifyHMAC(t *testing.T) {
 		//   MinInt64/MaxInt64 都远超 ±300s 窗口，必须 401——溢出安全比较守此。
 		{"min-int64-ts-401", math.MinInt64, nil, http.StatusUnauthorized},
 		{"max-int64-ts-401", math.MaxInt64, nil, http.StatusUnauthorized},
+		// ★精确回归（Codex 复审指出）：旧 abs64 漏洞的确切触发值 = now+MinInt64，
+		//   使旧代码 now-ts 回绕为恰好 math.MinInt64 → abs64 溢出回负 → 越窗被绕过。
+		//   新的边界比较必 401（now+MinInt64 远在 [now-300,now+300] 外）。此用例精确钉住原洞。
+		{"overflow-exact-trigger-401", now + math.MinInt64, nil, http.StatusUnauthorized},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

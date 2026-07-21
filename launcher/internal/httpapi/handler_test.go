@@ -1,0 +1,205 @@
+package httpapi
+
+import (
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/aster-cloud/aster-api/launcher/internal/orchestrator"
+)
+
+const testKey = "test-runner-launcher-hmac-key"
+
+// mockOrch 是 Orchestrator 的测试替身：按预设返回 env/err 或 panic。
+type mockOrch struct {
+	env      orchestrator.RunnerEnvelope
+	err      error
+	doPanic  bool
+	gotReq   orchestrator.RunnerRequest
+	gotCalls int
+}
+
+func (m *mockOrch) Run(ctx context.Context, req orchestrator.RunnerRequest) (orchestrator.RunnerEnvelope, error) {
+	m.gotCalls++
+	m.gotReq = req
+	if m.doPanic {
+		panic("simulated orchestrator panic")
+	}
+	return m.env, m.err
+}
+
+// signRequest 造带全套签名头的 *http.Request（复刻 client signRunnerLauncherHeaders）。
+func signRequest(t *testing.T, tenant, role string, body []byte) *http.Request {
+	t.Helper()
+	const method, path, nonce = "POST", "/api/v1/runner/launch", "0123456789abcdef0123456789abcdef"
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
+	sum := sha256.Sum256(body)
+	bodyHash := hex.EncodeToString(sum[:])
+	canonical := strings.Join([]string{method, path, ts, nonce, bodyHash, tenant, role}, "\n")
+	mac := hmac.New(sha256.New, []byte(testKey))
+	mac.Write([]byte(canonical))
+	sig := hex.EncodeToString(mac.Sum(nil))
+
+	r := httptest.NewRequest(method, path, strings.NewReader(string(body)))
+	r.Header.Set("X-Internal-Caller", "cloud-runner-launcher")
+	r.Header.Set("X-Aster-Timestamp", ts)
+	r.Header.Set("X-Aster-Nonce", nonce)
+	r.Header.Set("X-Aster-Tenant", tenant)
+	r.Header.Set("X-Aster-Role", role)
+	r.Header.Set("X-Internal-Signature", sig)
+	return r
+}
+
+func TestLaunchHandler(t *testing.T) {
+	t.Setenv("ASTER_RUNNER_LAUNCHER_HMAC_KEY", testKey)
+	validBody := []byte(`{"tenantId":"t1","source":"Module M","input":{"x":1},"locale":"en-US","functionName":"f","aliasSet":null}`)
+
+	// ★ReplayMetadata 是 orchestrator.RunnerEnvelope 的 json.RawMessage 字段（Task 2.1 Codex
+	// 加固：完整 runner ReplayMetadata.java 有 11 个字段，launcher 不解析成有类型 struct 再
+	// 重序列化，逐字节透传）。这里用一段刻意包含「未在任何 launcher 类型中建模」字段
+	// （reasonCodes/replayabilityReasons/canonicalInput 等）的原始 JSON，验证 handler 原样
+	// 转发、不丢字段、不重排。
+	rawReplayMetadata := []byte(`{"canonicalInputHash":"h","canonicalOutputHash":"o","canonicalizationVersion":"v1","replayabilityStatus":"REPLAYABLE","traceHash":"t","reasonCodes":["R1"],"replayabilityReasons":["x"],"canonicalInput":"CI"}`)
+	successEnv := orchestrator.RunnerEnvelope{
+		Outcome:        "SUCCESS",
+		ReplayMetadata: rawReplayMetadata,
+	}
+	errorEnv := orchestrator.RunnerEnvelope{
+		Outcome: "ERROR", ErrorCode: "EXECUTION", Message: "boom", Phase: "execute",
+	}
+
+	cases := []struct {
+		name       string
+		req        func() *http.Request
+		orch       *mockOrch
+		wantStatus int
+		wantBody   func(t *testing.T, body []byte)
+	}{
+		{
+			name:       "valid-success-200-passthrough",
+			req:        func() *http.Request { return signRequest(t, "t1", "user", validBody) },
+			orch:       &mockOrch{env: successEnv},
+			wantStatus: 200,
+			wantBody: func(t *testing.T, body []byte) {
+				var got orchestrator.RunnerEnvelope
+				if err := json.Unmarshal(body, &got); err != nil || got.Outcome != "SUCCESS" || got.ReplayMetadata == nil {
+					t.Fatalf("body 非 SUCCESS envelope: %s (err=%v)", body, err)
+				}
+				// ★关键断言：replayMetadata 原始字节逐字节透传，不因 launcher 类型窄而丢字段。
+				if string(got.ReplayMetadata) != string(rawReplayMetadata) {
+					t.Fatalf("replayMetadata 未原样透传:\n got=%s\nwant=%s", got.ReplayMetadata, rawReplayMetadata)
+				}
+			},
+		},
+		{
+			name:       "runner-error-200-not-http-error",
+			req:        func() *http.Request { return signRequest(t, "t1", "user", validBody) },
+			orch:       &mockOrch{env: errorEnv},
+			wantStatus: 200, // ★关键：runner 业务错也是 200，client 按 outcome 分类
+			wantBody: func(t *testing.T, body []byte) {
+				var got orchestrator.RunnerEnvelope
+				_ = json.Unmarshal(body, &got)
+				if got.Outcome != "ERROR" || got.ErrorCode != "EXECUTION" || got.Phase != "execute" {
+					t.Fatalf("ERROR envelope 字段丢失: %s", body)
+				}
+			},
+		},
+		{
+			name:       "unavailable-503",
+			req:        func() *http.Request { return signRequest(t, "t1", "user", validBody) },
+			orch:       &mockOrch{err: orchestrator.ErrUnavailable},
+			wantStatus: 503,
+		},
+		{
+			name:       "panic-in-orchestrator-503-not-500",
+			req:        func() *http.Request { return signRequest(t, "t1", "user", validBody) },
+			orch:       &mockOrch{doPanic: true},
+			wantStatus: 503, // ★reject-proof：panic 也被 recover 成结构化 503，绝不裸 500
+		},
+		{
+			name: "bad-hmac-403",
+			req: func() *http.Request {
+				r := signRequest(t, "t1", "user", validBody)
+				r.Header.Set("X-Internal-Signature", "deadbeef"+r.Header.Get("X-Internal-Signature")[8:])
+				return r
+			},
+			orch:       &mockOrch{env: successEnv},
+			wantStatus: 403,
+		},
+		{
+			name: "wrong-caller-401",
+			req: func() *http.Request {
+				r := signRequest(t, "t1", "user", validBody)
+				r.Header.Set("X-Internal-Caller", "cloud-bff")
+				return r
+			},
+			orch:       &mockOrch{env: successEnv},
+			wantStatus: 401,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := &LaunchHandler{Orch: tc.orch}
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, tc.req())
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status=%d want=%d body=%s", rec.Code, tc.wantStatus, rec.Body.String())
+			}
+			// ★reject-proof 断言：任何响应都是合法 JSON，绝不是裸 stacktrace 文本。
+			var probe map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &probe); err != nil {
+				t.Fatalf("响应非结构化 JSON（疑似裸 500 stacktrace）: %s", rec.Body.String())
+			}
+			// 拒绝态（401/403/503）不得调用 orchestrator（bad-HMAC 在验签阶段 fail-fast）。
+			if tc.wantStatus == 401 || tc.wantStatus == 403 {
+				if tc.orch.gotCalls != 0 {
+					t.Fatalf("验签失败不应调用 orchestrator，实际调用 %d 次", tc.orch.gotCalls)
+				}
+			}
+			if tc.wantBody != nil {
+				tc.wantBody(t, rec.Body.Bytes())
+			}
+		})
+	}
+}
+
+// key-not-configured-500 单独一测（须清空 env，与主表驱动共用 env 会互相干扰）。
+// ★VerifyHMAC 对未配置 key 返回 500；handler 必须转成结构化 503（launcher 对外只暴露
+// 「可用/不可用」，不吐内部 500），且不得调用 orchestrator。
+func TestLaunchHandler_KeyNotConfigured(t *testing.T) {
+	t.Setenv("ASTER_RUNNER_LAUNCHER_HMAC_KEY", "")
+	validBody := []byte(`{"tenantId":"t1","source":"Module M","input":{"x":1},"locale":"en-US","functionName":"f","aliasSet":null}`)
+	orch := &mockOrch{env: orchestrator.RunnerEnvelope{Outcome: "SUCCESS"}}
+	h := &LaunchHandler{Orch: orch}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, signRequest(t, "t1", "user", validBody))
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d want=503 body=%s", rec.Code, rec.Body.String())
+	}
+	var probe map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &probe); err != nil {
+		t.Fatalf("响应非结构化 JSON: %s", rec.Body.String())
+	}
+	if orch.gotCalls != 0 {
+		t.Fatalf("key 未配置不应调用 orchestrator，实际调用 %d 次", orch.gotCalls)
+	}
+}
+
+// Healthz 恒 200 + {"status":"ok"}（k8s liveness/readiness）。
+func TestHealthz(t *testing.T) {
+	rec := httptest.NewRecorder()
+	Healthz(rec, httptest.NewRequest("GET", "/healthz", nil))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "ok") {
+		t.Fatalf("healthz code=%d body=%s", rec.Code, rec.Body.String())
+	}
+}

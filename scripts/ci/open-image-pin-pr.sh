@@ -19,7 +19,7 @@
 #   YQ_VERSION   默认 v4.44.3
 #   YQ_SHA256    yq_linux_amd64 的 sha256（提供则校验；强烈建议在 workflow 传入）
 #   ENV_PATCH_PATH      第三写目标（Fork A）：待 patch 的 Deployment manifest 路径，如
-#                       apps/aster-lang/aster-runner/deployment.yaml。★不设则第三目标完全跳过
+#                       apps/aster-lang/runner/deployment.yaml。★不设则第三目标完全跳过
 #                       （零改动铁律：现有 aster-api/migrate/cloud pin 路径不受影响）。
 #   ENV_PATCH_SELECTOR  配合 ENV_PATCH_PATH：yq 选择器，需命中恰 1 个 env 项（含 .value 子键），
 #                       如 '.spec.template.spec.containers[0].env[] | select(.name == "RUNNER_IMAGE_DIGEST")'
@@ -27,7 +27,7 @@ set -euo pipefail
 
 # ── 顶部：新增可选第三写目标 env（Fork A：patch launcher Deployment 的 RUNNER_IMAGE_DIGEST env）──
 # ★零改动铁律：不设 ENV_PATCH_PATH → 第三目标完全跳过，脚本行为等同现状（现有 aster-api/migrate pin 不受影响）。
-ENV_PATCH_PATH="${ENV_PATCH_PATH:-}"                # 如 apps/aster-lang/aster-runner/deployment.yaml
+ENV_PATCH_PATH="${ENV_PATCH_PATH:-}"                # 如 apps/aster-lang/runner/deployment.yaml
 ENV_PATCH_SELECTOR="${ENV_PATCH_SELECTOR:-}"        # yq 选择器，选到 env 项（含 .value 子键）
 
 # patch_targets：写 image-lock（验签真相）+ kustomization（部署真相）+ 可选 deployment env（Fork A 第三目标）。

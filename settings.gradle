@@ -4,7 +4,7 @@ rootProject.name = 'aster-api'
 include 'replay'
 
 // S2-1a-2：standalone β runner（复用 :replay 的 executor，application distribution 打包）
-include 'aster-replay-runner'
+include 'runner'
 
 // 共享版本目录（aster-lang-platform，ADR 0012）：aster-lang 生态依赖版本
 // 的单一来源。catalog 本身需从仓库解析，故声明仓库；RepositoriesMode

@@ -16,7 +16,7 @@
 #   （@QuarkusTest 需 DB；缺 DB 会 Failed to start quarkus）。
 set -euo pipefail
 
-cd "$(dirname "$0")/.."   # aster-replay-runner/
+cd "$(dirname "$0")/.."   # runner/
 ROOT="$(cd ../ && pwd)"   # aster-api/
 CORPUS_DIR="$PWD/src/test/resources/parity-corpus"
 
@@ -25,7 +25,7 @@ echo "   corpus dir = $CORPUS_DIR"
 
 # -Dparity.gen.expected=true 开写盘门控；-Dparity.corpus.dir 传 corpus 绝对路径。
 # ★用 :test（root project 测试任务）——GenExpectedCorpusTest 在 aster-api 根 src/test，
-#   非 runner 子模块；裸 `test` 会连带跑 :aster-replay-runner:test 且 --tests 无匹配报错。
+#   非 runner 子模块；裸 `test` 会连带跑 :runner:test 且 --tests 无匹配报错。
 (cd "$ROOT" && ./gradlew :test \
     --tests "io.aster.replay.parity.GenExpectedCorpusTest" \
     -Dparity.corpus.dir="$CORPUS_DIR" \

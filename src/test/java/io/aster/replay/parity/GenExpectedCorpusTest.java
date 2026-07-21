@@ -51,7 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 在 aster-api 生产路径下真能编译执行（双 oracle 之一：runner 集成测试是另一个）。
  *
  * <p><b>corpus 目录</b>：{@code -Dparity.corpus.dir} 指定 parity-corpus 目录绝对路径（由
- * gen-expected.sh 传入 aster-replay-runner 侧路径）。缺省回退到常规相对路径，便于本地手跑。
+ * gen-expected.sh 传入 runner 侧路径）。缺省回退到常规相对路径，便于本地手跑。
  */
 @QuarkusTest
 @TestProfile(GenExpectedCorpusTest.HmacProfile.class)
@@ -220,14 +220,14 @@ class GenExpectedCorpusTest {
 
     /**
      * 解析 corpus 目录：优先系统属性 {@code -Dparity.corpus.dir}（gen-expected.sh 传绝对路径），
-     * 缺省回退到 aster-replay-runner 侧的相对路径（便于本地在 aster-api 根目录直接手跑）。
+     * 缺省回退到 runner 侧的相对路径（便于本地在 aster-api 根目录直接手跑）。
      */
     static Path resolveCorpusDir() {
         String prop = System.getProperty("parity.corpus.dir");
         if (prop != null && !prop.isBlank()) {
             return Path.of(prop);
         }
-        return Path.of("aster-replay-runner", "src", "test", "resources", "parity-corpus")
+        return Path.of("runner", "src", "test", "resources", "parity-corpus")
             .toAbsolutePath();
     }
 }

@@ -44,10 +44,10 @@ jobs:
           # 发版链路 fail-closed：凭据缺失即失败，不静默回退 github.token（与 deploy.yml 一致）。
           require-cross-repo-token: "true"
 
-      # 产 build/install/aster-replay-runner（application distribution）供 Dockerfile COPY。
+      # 产 build/install/runner（application distribution）供 Dockerfile COPY。
       - name: installDist
         working-directory: aster-api
-        run: ./gradlew :aster-replay-runner:installDist
+        run: ./gradlew :runner:installDist
 
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
@@ -60,9 +60,9 @@ jobs:
         id: build
         uses: docker/build-push-action@v7
         with:
-          # context = runner 打包工程（Dockerfile COPY build/install/aster-replay-runner/）。
-          context: aster-api/aster-replay-runner
-          file: aster-api/aster-replay-runner/Dockerfile
+          # context = runner 打包工程（Dockerfile COPY build/install/runner/）。
+          context: aster-api/runner
+          file: aster-api/runner/Dockerfile
           # 集群节点 ARM64（OCI Ampere），必须真 arm64（Dockerfile 内有 arch 断言 fail-closed）。
           platforms: linux/arm64
           push: true
@@ -79,7 +79,7 @@ jobs:
       # ★arm64 内容校验：manifest 的 architecture 字段会撒谎（QEMU 跨构建可产内容 amd64 却标
       # arm64 的镜像 → 节点 exec format error → CrashLoop）。拉真实 arm64 变体在其内 uname -m
       # 必须 aarch64，否则构建即失败，杜绝 mislabeled 镜像上生产。
-      # ★不能 `docker run <image> uname`——runner 镜像 ENTRYPOINT 是 /app/bin/aster-replay-runner
+      # ★不能 `docker run <image> uname`——runner 镜像 ENTRYPOINT 是 /app/bin/runner
       #   （读 stdin 跑 replay），直接 run 会执行 runner 而非 uname。须 --entrypoint uname override。
       #   base 镜像 azul/zulu-openjdk-alpine:25-jre（busybox）有 uname。
       - name: Verify pushed image is genuinely arm64
@@ -196,7 +196,7 @@ jobs:
           DB_USERNAME: "postgres"
           DB_PASSWORD: "postgres"
           TESTCONTAINERS_RYUK_DISABLED: "true"
-        run: bash aster-replay-runner/scripts/gen-expected.sh
+        run: bash runner/scripts/gen-expected.sh
 
       # 对已 push 的 @DIGEST 跑 arm64 parity（docker 全程，不 rebuild）：复用 task0 脚本的
       # --no-build 路径，用外部 $IMAGE 而非本地构建。RUNTIME=docker（CI 用 docker，非本地 podman）。
@@ -208,7 +208,7 @@ jobs:
           set -euo pipefail
           docker pull --platform linux/arm64 "wontlost/aster-replay-runner@${DIGEST}"
           IMAGE="wontlost/aster-replay-runner@${DIGEST}" RUNTIME=docker \
-            bash aster-replay-runner/scripts/task0-arm64-parity.sh --no-build
+            bash runner/scripts/task0-arm64-parity.sh --no-build
 
   image-pin-pr:
     # ★needs 三者（build/sign/parity-arm64）：直接依赖 build 才能解析 needs.build.outputs.digest；

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -26,7 +27,7 @@ var ErrUnavailable = errors.New("runner job unavailable")
 //	才存在（buildRunnerJob 只能填 Name/Kind/APIVersion，UID 留空）。绝不能以空 UID 的
 //	owner-ref 创建 ConfigMap——否则 Job 删除后 ConfigMap 变孤儿，级联 GC 失效、泄漏
 //	per-invocation ConfigMap。故顺序恒为：create Job → 回填 UID → create ConfigMap。
-func runJob(ctx context.Context, clientset kubernetes.Interface, req RunnerRequest, digest string) (RunnerEnvelope, error) {
+func runJob(ctx context.Context, clientset kubernetes.Interface, req RunnerRequest, digest string) (env RunnerEnvelope, retErr error) {
 	job, cm, err := buildRunnerJob(req, digest)
 	if err != nil {
 		return RunnerEnvelope{}, fmt.Errorf("%w: build job: %v", ErrUnavailable, err)
@@ -38,6 +39,22 @@ func runJob(ctx context.Context, clientset kubernetes.Interface, req RunnerReque
 		return RunnerEnvelope{}, fmt.Errorf("%w: create job: %v", ErrUnavailable, err)
 	}
 
+	// ★中途失败/超时清理（Codex 抓的泄漏）：ttlSecondsAfterFinished 只回收**已终态** Job；
+	//   若本函数超时/失败时 Job 仍 Active/Pending，TTL 永不触发 → Job + ConfigMap 泄漏。
+	//   故**仅在返回 error 时**（放弃编排）best-effort 删 Job（Background 传播使 ConfigMap
+	//   经 owner-ref 级联删）。成功路径**不删**——Job 已 Complete，交 ttlSecondsAfterFinished
+	//   原生 GC（保留短暂日志便于审计）。用独立 context（父 ctx 可能已超时取消）+ 短超时。
+	defer func() {
+		if retErr == nil {
+			return // 成功：留给 TTL GC，不主动删
+		}
+		delCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		bg := metav1.DeletePropagationBackground
+		_ = clientset.BatchV1().Jobs(runnerNamespace).Delete(
+			delCtx, created.Name, metav1.DeleteOptions{PropagationPolicy: &bg})
+	}()
+
 	// 2) 回填 ConfigMap owner-ref 的 UID（buildRunnerJob 留空，此处补齐）。
 	cm.OwnerReferences[0].UID = created.UID
 
@@ -46,10 +63,10 @@ func runJob(ctx context.Context, clientset kubernetes.Interface, req RunnerReque
 		return RunnerEnvelope{}, fmt.Errorf("%w: create configmap: %v", ErrUnavailable, err)
 	}
 
-	// watch 到终态（Succeeded/Failed），受 ctx timeout（30s SLA budget）约束。
-	terminal, err := waitForJobTerminal(ctx, clientset, created.Name)
+	// watch 到 Job **真终态**（Complete/Failed condition，非 Status.Failed 计数），受 ctx timeout 约束。
+	jobFailed, err := waitForJobTerminal(ctx, clientset, created.Name)
 	if err != nil {
-		return RunnerEnvelope{}, err // 已含 ErrUnavailable 包装
+		return RunnerEnvelope{}, err // 已含 ErrUnavailable 包装（defer 会清理 Job）
 	}
 
 	// 读 Pod log 末行 envelope。★不 2>/dev/null——读全 log 保诊断，从末尾找首条合法 envelope。
@@ -57,23 +74,43 @@ func runJob(ctx context.Context, clientset kubernetes.Interface, req RunnerReque
 	if err != nil {
 		return RunnerEnvelope{}, fmt.Errorf("%w: read pod log: %v", ErrUnavailable, err)
 	}
-	env, parseErr := lastEnvelopeLine(logs)
+	parsed, parseErr := lastEnvelopeLine(logs)
 	if parseErr != nil {
 		// 日志截断/不可解析 → fail-closed 到 unavailable（Fork C）。
-		return RunnerEnvelope{}, fmt.Errorf("%w: unparseable envelope (exit=%d, jobSucceeded=%v): %v",
-			ErrUnavailable, exitCode, terminal, parseErr)
+		return RunnerEnvelope{}, fmt.Errorf("%w: unparseable envelope (exit=%d, jobFailed=%v): %v",
+			ErrUnavailable, exitCode, jobFailed, parseErr)
 	}
-	// exit code 作 SUCCESS/ERROR/序列化失败权威（RunnerMain 0/1/3）：与 envelope.outcome 交叉校验。
-	// exit==3（序列化失败）→ envelope 不可信 → unavailable。
-	if exitCode == 3 {
-		return RunnerEnvelope{}, fmt.Errorf("%w: runner serialize failure (exit 3)", ErrUnavailable)
+
+	// ★exit code × outcome 一致性矩阵（Codex 抓：原只特判 exit3，放行矛盾组合）。
+	//   RunnerMain 契约：exit0=SUCCESS，exit1=ERROR，exit3=序列化失败。矛盾=runner 损坏，fail-closed。
+	if err := reconcileExitAndOutcome(exitCode, parsed.Outcome); err != nil {
+		return RunnerEnvelope{}, err
 	}
-	return env, nil
+	return parsed, nil
 }
 
-// waitForJobTerminal poll Job 到 Succeeded>0 或 Failed>0；ctx 超时返回 ErrUnavailable。
-// ★用 poll 而非 watch informer：单发短命 Job，poll 简单且无 informer 生命周期负担（复杂度 <3 层）。
-func waitForJobTerminal(ctx context.Context, clientset kubernetes.Interface, name string) (succeeded bool, err error) {
+// reconcileExitAndOutcome 交叉校验 runner 容器 exit code 与 envelope.outcome。
+// RunnerMain 契约（run() 尾）：SUCCESS→0，ERROR→1，序列化失败→3。任何不匹配组合都表示
+// runner 输出损坏（如日志被截断取到错行、或 runner 异常），fail-closed 到 unavailable，绝不透传矛盾结果。
+func reconcileExitAndOutcome(exitCode int32, outcome string) error {
+	switch {
+	case exitCode == 0 && outcome == "SUCCESS":
+		return nil
+	case exitCode == 1 && outcome == "ERROR":
+		return nil
+	default:
+		// 含 exit3（序列化失败）、exit0+ERROR、exit1+SUCCESS、未知 exit code 等一切矛盾。
+		return fmt.Errorf("%w: exit code %d 与 outcome %q 不一致（runner 输出损坏）",
+			ErrUnavailable, exitCode, outcome)
+	}
+}
+
+// waitForJobTerminal poll Job 到**真终态**：Complete condition（成功）或 Failed condition
+// （backoff 耗尽，非首次 Pod 失败）。★不用 Status.Failed>0——那是失败 Pod 计数，backoffLimit=2
+//
+//	下首次失败即触发会**提前**读 log（漏重试），Codex 抓。返回 jobFailed=true 表示 Job 终态失败
+//	（仍读 log 拿 runner ERROR envelope）；ctx 超时返回 ErrUnavailable。
+func waitForJobTerminal(ctx context.Context, clientset kubernetes.Interface, name string) (jobFailed bool, err error) {
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -85,11 +122,17 @@ func waitForJobTerminal(ctx context.Context, clientset kubernetes.Interface, nam
 			if gerr != nil {
 				return false, fmt.Errorf("%w: get job: %v", ErrUnavailable, gerr)
 			}
-			if j.Status.Succeeded > 0 {
-				return true, nil
-			}
-			if j.Status.Failed > 0 {
-				return false, nil // Failed 也是终态——仍去读 log 拿 runner 的 ERROR envelope
+			// 只认 Job condition 作终态：Complete=成功终态，Failed=backoff 耗尽的失败终态。
+			for _, c := range j.Status.Conditions {
+				if c.Status != corev1.ConditionTrue {
+					continue
+				}
+				switch c.Type {
+				case batchv1.JobComplete:
+					return false, nil // 成功终态
+				case batchv1.JobFailed:
+					return true, nil // 失败终态（backoff 耗尽）——仍去读 log 拿 runner ERROR envelope
+				}
 			}
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -86,9 +87,27 @@ func TestRunJob_ConfigMapOwnerRefUIDBackfilled(t *testing.T) {
 		return false, nil, nil // 不 short-circuit：交给默认 tracker 完成真正的 create/持久化。
 	})
 
+	// ★在 ConfigMap **create 时**捕获它的 owner-ref——不依赖 runJob 返回后的状态
+	//   （runJob 失败路径会 best-effort 删 Job 并级联删 ConfigMap，故 post-return list 不可靠；
+	//   本契约要验的是「create ConfigMap 那一刻 owner-ref 已带真实 UID」）。
+	var capturedOwnerUID types.UID
+	var capturedRefCount int
+	cs.PrependReactor("create", "configmaps", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if createAction, ok := action.(k8stesting.CreateAction); ok {
+			if cm, ok := createAction.GetObject().(*corev1.ConfigMap); ok {
+				capturedRefCount = len(cm.OwnerReferences)
+				if capturedRefCount == 1 {
+					capturedOwnerUID = cm.OwnerReferences[0].UID
+				}
+			}
+		}
+		return false, nil, nil
+	})
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// 驱动 Job 到 Complete 终态（让 runJob 走过 create ConfigMap 后的路径）。
 	go func() {
 		for i := 0; i < 50; i++ {
 			jobs, _ := cs.BatchV1().Jobs(runnerNamespace).List(ctx, metav1.ListOptions{})
@@ -103,33 +122,18 @@ func TestRunJob_ConfigMapOwnerRefUIDBackfilled(t *testing.T) {
 		}
 	}()
 
+	// runJob 会因 fake log 不可解析而返回 error（预期）——但 create ConfigMap 已在此前发生并被捕获。
 	_, _ = runJob(ctx, cs, testReq(), digest)
 
-	jobs, err := cs.BatchV1().Jobs(runnerNamespace).List(context.Background(), metav1.ListOptions{})
-	if err != nil || len(jobs.Items) != 1 {
-		t.Fatalf("期望恰好 1 个 job，得 items=%v err=%v", jobs, err)
+	// 契约断言：create ConfigMap 那一刻 owner-ref 恰 1 条且 UID == 注入的 Job UID（非空）。
+	if capturedRefCount != 1 {
+		t.Fatalf("create ConfigMap 时 owner-ref 数=%d（期望 1）——runJob 未创建 ConfigMap 或 owner-ref 缺失", capturedRefCount)
 	}
-	if jobs.Items[0].UID != injectedUID {
-		t.Fatalf("job UID=%q 与注入值=%q 不符（reactor 未生效）", jobs.Items[0].UID, injectedUID)
+	if capturedOwnerUID == "" {
+		t.Fatal("create ConfigMap 时 owner-ref UID 为空——违反 Codex 强制契约（级联 GC 失效）")
 	}
-
-	cms, err := cs.CoreV1().ConfigMaps(runnerNamespace).List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		t.Fatalf("list configmaps: %v", err)
-	}
-	if len(cms.Items) != 1 {
-		t.Fatalf("期望恰好 1 个 configmap，得 %d", len(cms.Items))
-	}
-	cm := cms.Items[0]
-	if len(cm.OwnerReferences) != 1 {
-		t.Fatalf("configmap 缺 owner-ref: %+v", cm.OwnerReferences)
-	}
-	ownerUID := cm.OwnerReferences[0].UID
-	if ownerUID == "" {
-		t.Fatal("configmap owner-ref UID 为空——违反 Codex 强制契约（级联 GC 失效）")
-	}
-	if ownerUID != injectedUID {
-		t.Fatalf("configmap owner-ref UID=%q 与 job UID=%q 不一致", ownerUID, injectedUID)
+	if capturedOwnerUID != injectedUID {
+		t.Fatalf("create ConfigMap 时 owner-ref UID=%q 与 job UID=%q 不一致（回填未生效）", capturedOwnerUID, injectedUID)
 	}
 }
 
@@ -144,5 +148,36 @@ func TestLastEnvelopeLine(t *testing.T) {
 	}
 	if _, err := lastEnvelopeLine("no json here\ntruncated {\"outcome\""); err == nil {
 		t.Fatal("截断 log 应 error")
+	}
+}
+
+// TestReconcileExitAndOutcome 守 Codex 抓的矛盾组合放行：只有 (0,SUCCESS)/(1,ERROR) 合法，
+// 其余（含 exit3、0+ERROR、1+SUCCESS、未知 exit）一律 ErrUnavailable（runner 输出损坏 fail-closed）。
+func TestReconcileExitAndOutcome(t *testing.T) {
+	cases := []struct {
+		exit    int32
+		outcome string
+		wantErr bool
+	}{
+		{0, "SUCCESS", false},
+		{1, "ERROR", false},
+		{3, "SUCCESS", true},  // 序列化失败
+		{0, "ERROR", true},    // 矛盾：exit0 却 ERROR
+		{1, "SUCCESS", true},  // 矛盾：exit1 却 SUCCESS
+		{2, "SUCCESS", true},  // 未知 exit code
+		{-1, "SUCCESS", true}, // exit code 读取失败（-1 哨兵）
+		{0, "", true},         // 空 outcome
+	}
+	for _, tc := range cases {
+		err := reconcileExitAndOutcome(tc.exit, tc.outcome)
+		if tc.wantErr && err == nil {
+			t.Fatalf("exit=%d outcome=%q 期望 error 却 nil", tc.exit, tc.outcome)
+		}
+		if !tc.wantErr && err != nil {
+			t.Fatalf("exit=%d outcome=%q 期望 nil 却 %v", tc.exit, tc.outcome, err)
+		}
+		if tc.wantErr && err != nil && !errors.Is(err, ErrUnavailable) {
+			t.Fatalf("exit=%d outcome=%q 错误应 wrap ErrUnavailable，得 %v", tc.exit, tc.outcome, err)
+		}
 	}
 }

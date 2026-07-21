@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -231,5 +232,41 @@ func TestLaunchHandler_OversizedBodyRejected(t *testing.T) {
 	var eb errorBody
 	if err := json.Unmarshal(rec.Body.Bytes(), &eb); err != nil || eb.Error == "" {
 		t.Fatalf("413 响应应是结构化 JSON errorBody，得 %s", rec.Body.String())
+	}
+}
+
+// TestLaunchHandler_SignedPrefixUnsignedTailRejected 精确复现 Codex 描述的攻击：对**恰好 max
+// 的合法 JSON 前缀**签名（bodyHash 只覆盖前缀），再追加未签名尾部使总长 > max。修复前 LimitReader
+// 会截回前缀 → 验签通过被接受（HMAC 未覆盖完整 entity）；修复后总长超限直接 413，orchestrator 零调用。
+func TestLaunchHandler_SignedPrefixUnsignedTailRejected(t *testing.T) {
+	t.Setenv("ASTER_RUNNER_LAUNCHER_HMAC_KEY", testKey)
+
+	// 合法前缀：恰好 maxBodyBytes 的可解析 JSON（padding 塞进一个字符串字段撑到上限）。
+	const maxBody = 1 << 20
+	head := `{"tenantId":"t1","source":"m","input":{},"locale":"en-US","functionName":"f","aliasSet":null,"pad":"`
+	tail := `"}`
+	padLen := maxBody - len(head) - len(tail)
+	prefix := head + strings.Repeat("x", padLen) + tail
+	if len(prefix) != maxBody {
+		t.Fatalf("前缀长度=%d 期望=%d（构造错）", len(prefix), maxBody)
+	}
+
+	// 对**前缀**签名（模拟攻击者只对合法前缀签名）。
+	r := signRequest(t, "t1", "user", []byte(prefix))
+	// 再追加未签名尾部，使 HTTP body 总长 > max（签名仍是前缀的）。
+	full := prefix + strings.Repeat("Z", 100)
+	r.Body = io.NopCloser(strings.NewReader(full))
+	r.ContentLength = int64(len(full))
+
+	orch := &mockOrch{env: orchestrator.RunnerEnvelope{Outcome: "SUCCESS"}}
+	h := &LaunchHandler{Orch: orch}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("签名前缀+未签名尾部应 413（总长超限），得 %d", rec.Code)
+	}
+	if orch.gotCalls != 0 {
+		t.Fatalf("超限 body 绝不该调 orchestrator，却调了 %d 次", orch.gotCalls)
 	}
 }

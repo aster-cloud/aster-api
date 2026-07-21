@@ -18,7 +18,47 @@
 #   LOCK_PATH    默认 apps/aster-lang/cloud/image-lock.yaml
 #   YQ_VERSION   默认 v4.44.3
 #   YQ_SHA256    yq_linux_amd64 的 sha256（提供则校验；强烈建议在 workflow 传入）
+#   ENV_PATCH_PATH      第三写目标（Fork A）：待 patch 的 Deployment manifest 路径，如
+#                       apps/aster-lang/aster-runner/deployment.yaml。★不设则第三目标完全跳过
+#                       （零改动铁律：现有 aster-api/migrate/cloud pin 路径不受影响）。
+#   ENV_PATCH_SELECTOR  配合 ENV_PATCH_PATH：yq 选择器，需命中恰 1 个 env 项（含 .value 子键），
+#                       如 '.spec.template.spec.containers[0].env[] | select(.name == "RUNNER_IMAGE_DIGEST")'
 set -euo pipefail
+
+# ── 顶部：新增可选第三写目标 env（Fork A：patch launcher Deployment 的 RUNNER_IMAGE_DIGEST env）──
+# ★零改动铁律：不设 ENV_PATCH_PATH → 第三目标完全跳过，脚本行为等同现状（现有 aster-api/migrate pin 不受影响）。
+ENV_PATCH_PATH="${ENV_PATCH_PATH:-}"                # 如 apps/aster-lang/aster-runner/deployment.yaml
+ENV_PATCH_SELECTOR="${ENV_PATCH_SELECTOR:-}"        # yq 选择器，选到 env 项（含 .value 子键）
+
+# patch_targets：写 image-lock（验签真相）+ kustomization（部署真相）+ 可选 deployment env（Fork A 第三目标）。
+# 参数：$1=digest $2=source_sha $3=run_id。用全局 LOCK_PATH/KUSTOMIZATION_PATH/IMAGE/ENV_PATCH_*。
+patch_targets() {
+  local digest="$1" source_sha="$2" run_id="$3"
+  # (1) image-lock：改本 entry 的 digest/sourceSha/runId（原 L70-74）。
+  DIGEST="$digest" SOURCE_SHA="$source_sha" RUN_ID="$run_id" IMAGE="$IMAGE" yq -i '
+    (.images[] | select(.image == strenv(IMAGE))).digest    = strenv(DIGEST)  |
+    (.images[] | select(.image == strenv(IMAGE))).sourceSha = strenv(SOURCE_SHA) |
+    (.images[] | select(.image == strenv(IMAGE))).runId     = strenv(RUN_ID)
+  ' "$LOCK_PATH"
+  # (2) kustomization：改本镜像 digest（原 L76-78）。
+  DIGEST="$digest" IMAGE="$IMAGE" yq -i '
+    (.images[] | select(.name == strenv(IMAGE))).digest = strenv(DIGEST)
+  ' "$KUSTOMIZATION_PATH"
+  # (3) ★可选第三写目标（Fork A）：patch 指定 Deployment env 的 value = digest。
+  #     仅当 ENV_PATCH_PATH+ENV_PATCH_SELECTOR 都设时执行；否则完全跳过（零改动）。
+  if [[ -n "$ENV_PATCH_PATH" && -n "$ENV_PATCH_SELECTOR" ]]; then
+    [[ -f "$ENV_PATCH_PATH" ]] || { echo "::error::ENV_PATCH_PATH 不存在: $ENV_PATCH_PATH"; return 1; }
+    # 校验选择器命中恰 1 项（防误 patch 多个 env / 漂移）。
+    local n
+    n="$(DIGEST="$digest" yq "[${ENV_PATCH_SELECTOR}] | length" "$ENV_PATCH_PATH")"
+    [[ "$n" == "1" ]] || { echo "::error::ENV_PATCH_SELECTOR 命中 ${n} 项(需恰 1): $ENV_PATCH_SELECTOR"; return 1; }
+    DIGEST="$digest" yq -i "(${ENV_PATCH_SELECTOR}).value = strenv(DIGEST)" "$ENV_PATCH_PATH"
+    echo "第三写目标已 patch: ${ENV_PATCH_PATH} ← ${digest}"
+  fi
+}
+
+# ── --source-only：供单测 source 本脚本只取函数定义，不跑主流程 ──
+if [[ "${1:-}" == "--source-only" ]]; then return 0 2>/dev/null || exit 0; fi
 
 IMAGE="${1:?usage: open-image-pin-pr.sh <IMAGE> <BRANCH>}"
 BRANCH="${2:?usage: open-image-pin-pr.sh <IMAGE> <BRANCH>}"
@@ -65,24 +105,17 @@ count="$(IMAGE="$IMAGE" yq '.images | map(select(.image == strenv(IMAGE))) | len
 kcount="$(IMAGE="$IMAGE" yq '.images | map(select(.name == strenv(IMAGE))) | length' "$KUSTOMIZATION_PATH")"
 [[ "$kcount" == "1" ]] || { echo "::error::kustomization 中 ${IMAGE} 的 images entry 数=${kcount} (需恰好 1)"; exit 1; }
 
-# ── 从最新 origin/main 重建固定分支，双写本 entry（image-lock 验签真相 + kustomization 部署真相）──
+# ── 从最新 origin/main 重建固定分支，写目标 entry（image-lock 验签真相 + kustomization 部署真相 +
+#    可选第三写目标——见顶部 patch_targets()）──
 git checkout -B "$BRANCH" origin/main
-DIGEST="$DIGEST" SOURCE_SHA="$SOURCE_SHA" RUN_ID="$RUN_ID" IMAGE="$IMAGE" yq -i '
-  (.images[] | select(.image == strenv(IMAGE))).digest    = strenv(DIGEST)  |
-  (.images[] | select(.image == strenv(IMAGE))).sourceSha = strenv(SOURCE_SHA) |
-  (.images[] | select(.image == strenv(IMAGE))).runId     = strenv(RUN_ID)
-' "$LOCK_PATH"
-# kustomization：只改本镜像的 digest（部署真相），k3s verify 校验 == image-lock digest。
-DIGEST="$DIGEST" IMAGE="$IMAGE" yq -i '
-  (.images[] | select(.name == strenv(IMAGE))).digest = strenv(DIGEST)
-' "$KUSTOMIZATION_PATH"
+patch_targets "$DIGEST" "$SOURCE_SHA" "$RUN_ID"
 
 open_pr_number() {
   gh pr list -R "$K3S_REPO" --head "$BRANCH" --base main --state open \
     --json number --jq '.[0].number // empty'
 }
 
-if git diff --quiet -- "$LOCK_PATH" "$KUSTOMIZATION_PATH"; then
+if git diff --quiet -- "$LOCK_PATH" "$KUSTOMIZATION_PATH" ${ENV_PATCH_PATH:+"$ENV_PATCH_PATH"}; then
   # 无变更：main 已是本 digest。若恰有 open PR 则确保 auto-merge,否则干净退出（不 create）。
   pr="$(open_pr_number)"
   if [[ -n "$pr" ]]; then
@@ -99,6 +132,7 @@ fi
 git config user.name  "aster-image-pin[bot]"
 git config user.email "301590099+aster-image-pin[bot]@users.noreply.github.com"
 git add "$LOCK_PATH" "$KUSTOMIZATION_PATH"
+[[ -n "$ENV_PATCH_PATH" ]] && git add "$ENV_PATCH_PATH" || true
 git commit -m "chore(image-pin): ${IMAGE##*/} → ${DIGEST} (sha ${SOURCE_SHA})"
 
 # ── force-with-lease 用远端实际 SHA 作基线（防同 App 并发 run 互相覆盖）──

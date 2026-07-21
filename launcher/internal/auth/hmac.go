@@ -56,7 +56,13 @@ func VerifyHMAC(r *http.Request, body []byte) (tenant, role string, status int) 
 	if err != nil {
 		return "", "", http.StatusUnauthorized
 	}
-	if abs64(nowUnix()-ts) > TimestampWindowSeconds {
+	// ★不用 abs64(now-ts)：now-ts 会对极端 ts（如 math.MinInt64）整型溢出，
+	//   且 abs64(math.MinInt64) 溢出回负数 → 越窗判断被绕过（Codex 抓）。
+	//   改为直接比较 ts 是否落在 [now-窗, now+窗]，两侧用不会溢出的形式：
+	//   ts < now-窗  等价  now-ts > 窗，但仍可能溢出——故拆成 ts 与边界直接比。
+	//   now 是当前 unix 秒（正常量级），now±窗 不会溢出；ts 是任意 int64。
+	now := nowUnix()
+	if ts < now-TimestampWindowSeconds || ts > now+TimestampWindowSeconds {
 		return "", "", http.StatusUnauthorized
 	}
 
@@ -81,11 +87,4 @@ func VerifyHMAC(r *http.Request, body []byte) (tenant, role string, status int) 
 func headerPresent(r *http.Request, name string) bool {
 	_, ok := r.Header[http.CanonicalHeaderKey(name)]
 	return ok
-}
-
-func abs64(v int64) int64 {
-	if v < 0 {
-		return -v
-	}
-	return v
 }

@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -64,6 +65,10 @@ func TestVerifyHMAC(t *testing.T) {
 		{"wrong-caller-401", now, func(h http.Header) { h.Set("X-Internal-Caller", "cloud-bff") }, http.StatusUnauthorized},
 		{"missing-header-401", now, func(h http.Header) { h.Del("X-Aster-Nonce") }, http.StatusUnauthorized},
 		{"nan-ts-401", now, func(h http.Header) { h.Set("X-Aster-Timestamp", "abc") }, http.StatusUnauthorized},
+		// ★int64 极值：防 now-ts 溢出绕过窗口（Codex 抓 abs64(MinInt64) 回负数漏洞）。
+		//   MinInt64/MaxInt64 都远超 ±300s 窗口，必须 401——溢出安全比较守此。
+		{"min-int64-ts-401", math.MinInt64, nil, http.StatusUnauthorized},
+		{"max-int64-ts-401", math.MaxInt64, nil, http.StatusUnauthorized},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -261,6 +261,13 @@ jobs:
           DIGEST: ${{ needs.build.outputs.digest }}
           SOURCE_SHA: ${{ github.sha }}
           RUN_ID: ${{ github.run_id }}
+          # ★LOCK_PATH/KUSTOMIZATION_PATH 指 aster-runner（runner 镜像的 pin 落 runner-ns，Fork A）。
+          LOCK_PATH: apps/aster-lang/aster-runner/image-lock.yaml
+          KUSTOMIZATION_PATH: apps/aster-lang/aster-runner/kustomization.yaml
+          # ★Fork A 第三写目标：把 runner digest 同步 patch 进 launcher Deployment 的 RUNNER_IMAGE_DIGEST env。
+          #   launcher 读此 env 构 runner 镜像引用——故 runner pin 一次同时更新 image-lock/kustomization/launcher-env。
+          ENV_PATCH_PATH: apps/aster-lang/aster-runner/deployment.yaml
+          ENV_PATCH_SELECTOR: '.spec.template.spec.containers[0].env[] | select(.name == "RUNNER_IMAGE_DIGEST")'
         run: |
           bash scripts/ci/open-image-pin-pr.sh \
             docker.io/wontlost/aster-replay-runner image-pin/aster-replay-runner

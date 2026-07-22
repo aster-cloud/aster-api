@@ -48,28 +48,39 @@ jobs:
             wontlost/aster-runner-launcher:${{ github.sha }}
             wontlost/aster-runner-launcher:latest
 
-      # ★arm64 内容校验：distroless static 无 uname——用 buildx imagetools inspect 校验 manifest
-      #   的 platform.architecture == arm64（QEMU 误标兜底；manifest architecture 亦可被撒谎但
-      #   配合 build 期 GOARCH 锁定 + 单平台 push，双重约束足够）。
+      # ★arm64 内容校验：distroless static 无 uname——用 buildx imagetools inspect 校验 architecture
+      #   （QEMU 误标兜底；配合 build 期 GOARCH 锁定 + 单平台 push 双重约束）。
+      #   ★两种镜像形态分开取（Codex 审 + OCI spec 核实）：
+      #   - index（多 arch/含 attestation）：--raw 的 .manifests[].platform.architecture（去 unknown）；
+      #     须验**完整集合仅 arm64**（非只取首项——防 arm64+其它混排误过）。
+      #   - 单 image manifest（本 launcher 单平台 push 的产物）：--raw 顶层**无** .architecture
+      #     （arch 在 config blob；OCI image manifest 只有 config/layers）。用 --format '{{json .Image}}'
+      #     取 buildx 的 image config 上下文，其顶层有 .architecture。
       - name: Verify pushed image is arm64 (manifest inspect)
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
           test -n "${DIGEST}" || { echo "build 未输出 digest，中止"; exit 1; }
-          arch="$(docker buildx imagetools inspect "wontlost/aster-runner-launcher@${DIGEST}" \
-            --format '{{ range .Manifest.Manifests }}{{ println .Platform.Architecture }}{{ end }}' 2>/dev/null \
-            | grep -v '^unknown$' | grep -v '^$' | sort -u | head -n1 || true)"
-          # 单平台 push 时 Manifest.Manifests 可能为空 → 退回顶层 Platform。
-          if [ -z "$arch" ]; then
-            arch="$(docker buildx imagetools inspect "wontlost/aster-runner-launcher@${DIGEST}" \
-              --format '{{ .Manifest.Config.Platform.Architecture }}' 2>/dev/null | tr -d '[:space:]' || true)"
+          ref="wontlost/aster-runner-launcher@${DIGEST}"
+          raw="$(docker buildx imagetools inspect "$ref" --raw)"
+          if jq -e 'has("manifests")' <<<"$raw" >/dev/null; then
+            # index：完整 arch 集合须仅 arm64/aarch64（unknown 已滤）。
+            arches="$(jq -c '[.manifests[].platform.architecture | select(. != "unknown")] | unique' <<<"$raw")"
+            echo "index architectures = ${arches}"
+            case "$arches" in
+              '["arm64"]'|'["aarch64"]'|'["aarch64","arm64"]') echo "✓ arm64" ;;
+              *) echo "::error title=arch mismatch::launcher index architectures=${arches}（须仅 arm64）"; exit 1 ;;
+            esac
+          else
+            # 单 image manifest：arch 在 config blob——用 --format '{{json .Image}}' 取 image config。
+            arch="$(docker buildx imagetools inspect "$ref" --format '{{json .Image}}' | jq -er '.architecture')"
+            echo "image config architecture = '${arch}'"
+            case "$arch" in
+              arm64|aarch64) echo "✓ arm64" ;;
+              *) echo "::error title=arch mismatch::launcher 镜像 architecture='${arch}'（非 arm64）"; exit 1 ;;
+            esac
           fi
-          echo "manifest architecture = '${arch}'"
-          case "${arch}" in
-            arm64|aarch64) echo "✓ arm64" ;;
-            *) echo "::error title=arch mismatch::launcher 镜像 manifest architecture='${arch}'（非 arm64）"; exit 1 ;;
-          esac
 
   sign:
     needs: build

@@ -66,8 +66,16 @@ patch_targets() {
     local n
     n="$(DIGEST="$digest" yq "[${ENV_PATCH_SELECTOR}] | length" "$ENV_PATCH_PATH")"
     [[ "$n" == "1" ]] || { echo "::error::ENV_PATCH_SELECTOR 命中 ${n} 项(需恰 1): $ENV_PATCH_SELECTOR"; return 1; }
+    # ★命中项的 .name 必须是 RUNNER_IMAGE_DIGEST（Codex 抓：只校验「命中 1 项」不够——错配的
+    #   selector 若恰命中别的 env（有 .value）会 patch 错 env，RUNNER_IMAGE_DIGEST 反而不更新。
+    #   虽 k3s verifier 硬编码 RUNNER_IMAGE_DIGEST 会兜底拒（部署真相不一致），但脚本层 fail-fast
+    #   给明确错误、避免产出注定被 verifier 拒的 PR（防御纵深 + 免浪费一轮）。env 部署真相载体名固定。
+    local matched_name
+    matched_name="$(DIGEST="$digest" yq "${ENV_PATCH_SELECTOR} | .name" "$ENV_PATCH_PATH")"
+    [[ "$matched_name" == "RUNNER_IMAGE_DIGEST" ]] \
+      || { echo "::error::ENV_PATCH_SELECTOR 命中的 env 名=${matched_name}（须 RUNNER_IMAGE_DIGEST）——env 部署真相载体固定为该 env，拒绝 patch 别的 env"; return 1; }
     DIGEST="$digest" yq -i "(${ENV_PATCH_SELECTOR}).value = strenv(DIGEST)" "$ENV_PATCH_PATH"
-    echo "第三写目标已 patch: ${ENV_PATCH_PATH} ← ${digest}"
+    echo "第三写目标已 patch: ${ENV_PATCH_PATH} ← ${digest}（env=RUNNER_IMAGE_DIGEST）"
   fi
 }
 

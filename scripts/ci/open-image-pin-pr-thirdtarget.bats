@@ -138,6 +138,49 @@ else
 fi
 rm -rf "$TMP3"
 
+# ── Test 3b（★Codex 抓）：selector 命中恰 1 项但命中的是**别的 env**（非 RUNNER_IMAGE_DIGEST）
+#    → 名字校验 fail-closed（防错配 selector 静默 patch 错 env 而 RUNNER_IMAGE_DIGEST 不更新）──
+echo "=== Test 3b: selector 命中 1 项但非 RUNNER_IMAGE_DIGEST（如 PORT）→ 名字校验 fail-closed ==="
+TMP3B="$(mktemp -d)"
+setup_fixture "$TMP3B"
+# 造一个含第二个 env（PORT）的 deployment，供错配 selector 命中。
+cat > "$TMP3B/deployment.yaml" <<'YAML'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runner-launcher
+spec:
+  template:
+    spec:
+      containers:
+        - name: runner-launcher
+          env:
+            - name: PORT
+              value: "8080"
+            - name: RUNNER_IMAGE_DIGEST
+              value: sha256:0000000000000000000000000000000000000000000000000000000000000000
+YAML
+set +e
+(
+  source "$TARGET_SCRIPT" --source-only
+  LOCK_PATH="$TMP3B/image-lock.yaml" KUSTOMIZATION_PATH="$TMP3B/kustomization.yaml" \
+    IMAGE="docker.io/wontlost/aster-replay-runner" \
+    ENV_PATCH_PATH="$TMP3B/deployment.yaml" \
+    ENV_PATCH_SELECTOR='.spec.template.spec.containers[0].env[] | select(.name == "PORT")' \
+    patch_targets "sha256:$(printf 'd%.0s' $(seq 1 64))" "seed-sha" "999"
+)
+rc=$?
+set -e
+# 校验：既非零退出，且 RUNNER_IMAGE_DIGEST env 未被改（仍是占位全零，证明没 patch 错 env）。
+rid_after="$(yq '.spec.template.spec.containers[0].env[] | select(.name == "RUNNER_IMAGE_DIGEST") | .value' "$TMP3B/deployment.yaml")"
+if [[ "$rc" != "0" && "$rid_after" == "sha256:0000000000000000000000000000000000000000000000000000000000000000" ]]; then
+  echo "  ✓ 错配 selector（命中 PORT）→ 名字校验拒 + RUNNER_IMAGE_DIGEST 未被误改（fail-closed）"
+else
+  echo "  ✗ 错配 selector 未被名字校验拦（rc=$rc, RUNNER_IMAGE_DIGEST=$rid_after）"
+  FAILED=1
+fi
+rm -rf "$TMP3B"
+
 echo ""
 echo "=== Test 4: 只设 ENV_PATCH_* 之一 → 成对 XOR fail-closed（Codex 抓的配置漂移）==="
 # 主流程运行脚本（非 source），只设一个 ENV_PATCH_* + dummy IMAGE/BRANCH。XOR 校验在 clone/写入

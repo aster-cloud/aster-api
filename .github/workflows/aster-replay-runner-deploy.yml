@@ -261,12 +261,17 @@ jobs:
           DIGEST: ${{ needs.build.outputs.digest }}
           SOURCE_SHA: ${{ github.sha }}
           RUN_ID: ${{ github.run_id }}
-          # ★LOCK_PATH/KUSTOMIZATION_PATH 指 runner 目录（runner 镜像的 pin 落 runner-ns，Fork A）。
-          #   目录名是短名 runner（ApplicationSet 加 aster- 前缀派生 ns=aster-runner）。
+          # ★PIN_DEPLOY_BINDING=env（full B）：runner 是运行时启动镜像（launcher 经 RUNNER_IMAGE_DIGEST
+          #   env 注入），**不是**静态容器镜像——不在 kustomization.images，故其部署真相是该 env 非 kustomization
+          #   transformer。env 模式：脚本跳 kcount gate（runner 不在 kustomization 必 kcount=0）+ 不写 kustomization
+          #   + 要求 ENV_PATCH_* present。★k3s verify-image-pin.sh 对 env-bound 镜像验 RUNNER_IMAGE_DIGEST env
+          #   value == cosign 验过的 image-lock digest（PR#104 已上线）。
+          PIN_DEPLOY_BINDING: env
+          # LOCK_PATH 指 runner 目录（runner 镜像 pin 落 runner-ns）。目录短名 runner（ApplicationSet 加 aster- 前缀）。
           LOCK_PATH: apps/aster-lang/runner/image-lock.yaml
-          KUSTOMIZATION_PATH: apps/aster-lang/runner/kustomization.yaml
-          # ★Fork A 第三写目标：把 runner digest 同步 patch 进 launcher Deployment 的 RUNNER_IMAGE_DIGEST env。
-          #   launcher 读此 env 构 runner 镜像引用——故 runner pin 一次同时更新 image-lock/kustomization/launcher-env。
+          # ★Fork A 第三写目标（env 模式的部署真相载体）：把 runner digest patch 进 launcher Deployment 的
+          #   RUNNER_IMAGE_DIGEST env。launcher 读此 env 构 runner 镜像引用（runner@${RUNNER_IMAGE_DIGEST}）。
+          #   env 模式下 runner pin 写 image-lock（验签真相）+ 此 env（部署真相），**不写 kustomization**。
           ENV_PATCH_PATH: apps/aster-lang/runner/deployment.yaml
           ENV_PATCH_SELECTOR: '.spec.template.spec.containers[0].env[] | select(.name == "RUNNER_IMAGE_DIGEST")'
         run: |
